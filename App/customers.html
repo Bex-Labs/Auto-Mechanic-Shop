@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Customers — GearShift</title>
+<link rel="stylesheet" href="../css/main.css">
+<link rel="stylesheet" href="../css/app.css">
+<style>
+.cust-list-item {
+  display:flex; align-items:center; gap:12px; padding:12px 14px;
+  background:var(--app-surface); border:1px solid var(--app-border);
+  border-radius:var(--r-sm); cursor:pointer; transition:all var(--t-fast);
+  border-left:3px solid transparent;
+}
+.cust-list-item:hover { background:var(--app-surface2); border-left-color:var(--rust); }
+.cust-list-item.active { border-left-color:var(--amber); background:rgba(232,160,32,0.05); }
+.cust-card {
+  background:var(--app-surface); border:1px solid var(--app-border);
+  border-radius:var(--r-sm); padding:20px 22px; cursor:pointer;
+  transition:all var(--t-fast); border-left:3px solid transparent;
+}
+.cust-card:hover { border-left-color:var(--rust); background:var(--app-surface2); }
+.cust-card.selected { border-left-color:var(--amber); background:rgba(232,160,32,0.05); }
+.cust-card-header { display:flex; align-items:center; gap:14px; margin-bottom:10px; }
+.cust-avatar {
+  width:42px; height:42px; border-radius:50%; background:var(--rust);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--ff-display); font-size:18px; color:var(--white); flex-shrink:0;
+}
+.cust-name { font-size:14px; font-weight:700; color:var(--app-text); }
+.cust-email { font-size:12px; color:var(--app-muted); margin-top:1px; }
+.cust-meta { display:flex; gap:8px; flex-wrap:wrap; }
+.cust-meta-chip {
+  font-family:var(--ff-mono); font-size:10px; padding:3px 9px;
+  background:var(--app-surface2); border:1px solid var(--app-border);
+  color:var(--app-muted); border-radius:20px;
+}
+.profile-section { margin-bottom:var(--space-5); }
+.profile-section-title {
+  font-family:var(--ff-display); font-size:14px; letter-spacing:1.5px;
+  color:var(--app-muted); margin-bottom:12px; padding-bottom:8px;
+  border-bottom:1px solid var(--app-border);
+}
+.detail-row { display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid rgba(48,54,61,0.4); font-size:13px; }
+.detail-row:last-child { border-bottom:none; }
+.detail-label { color:var(--app-muted); }
+.detail-val { color:var(--app-text); font-weight:500; text-align:right; }
+.vehicle-card {
+  background:var(--app-surface2); border:1px solid var(--app-border);
+  border-radius:var(--r-sm); padding:14px 16px; margin-bottom:10px;
+  display:flex; justify-content:space-between; align-items:center;
+}
+.vehicle-make { font-size:13px; font-weight:700; color:var(--app-text); }
+.vehicle-detail { font-size:11px; color:var(--app-muted); margin-top:3px; font-family:var(--ff-mono); }
+.hist-row {
+  display:flex; gap:12px; align-items:flex-start;
+  padding:12px 0; border-bottom:1px solid rgba(48,54,61,0.4);
+}
+.hist-row:last-child { border-bottom:none; }
+.hist-id { font-family:var(--ff-mono); font-size:11px; color:var(--amber); width:72px; flex-shrink:0; }
+.hist-desc { font-size:12px; color:var(--app-text); flex:1; line-height:1.5; }
+.hist-date { font-family:var(--ff-mono); font-size:10px; color:var(--app-muted); }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="app-sidebar">
+    <div class="sidebar-logo">
+      <span class="sidebar-logo-text">GEAR<span>SHIFT</span></span>
+      <a href="../index.html" class="sidebar-back">← Site</a>
+    </div>
+    <nav class="sidebar-nav"><!-- populated by RBAC.initSidebar --></nav>
+    <div class="sidebar-footer">
+      <div class="theme-toggle">
+        <span class="theme-toggle-label">☾ Dark</span>
+        <button class="theme-toggle-switch" onclick="Theme.toggle()" aria-label="Switch to light mode"></button>
+      </div>
+      
+      <div class="sidebar-user"><div class="user-avatar" id="userAvatar">?</div><div><div class="user-name" id="userName">Loading…</div><div class="user-role" id="userRole">—</div></div></div>
+      <button class="btn-logout" onclick="Auth.signOut().then(()=>window.location='dashboard.html')">Sign Out</button>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <div class="app-topbar">
+      <span class="topbar-title">CUSTOMERS</span>
+      <div class="topbar-actions">
+        <button class="app-btn app-btn-ghost app-btn-sm" onclick="openAddVehicle()">+ Add Vehicle</button>
+        <button class="app-btn app-btn-primary" onclick="openNewCustomer()">+ New Customer</button>
+      </div>
+    </div>
+    <div class="app-sub-nav">
+      <button class="app-sub-link active" data-pane="pane-customers" onclick="switchPane(this)">Customer List</button>
+      <button class="app-sub-link"        data-pane="pane-vehicles"  onclick="switchPane(this)">Vehicle Registry</button>
+    </div>
+
+    <div class="app-content">
+
+      <!-- CUSTOMER LIST PANE -->
+      <div class="view-pane active" id="pane-customers">
+        <div style="display:grid;grid-template-columns:340px 1fr;gap:var(--space-4);align-items:start;">
+          <!-- Left: list -->
+          <div>
+            <div class="filter-bar" style="margin-bottom:12px;">
+              <input class="search-box" style="max-width:100%;flex:1" id="custSearch" placeholder="Search by name, email…" oninput="renderCustList()">
+            </div>
+            <div id="custList" style="display:flex;flex-direction:column;gap:8px;"></div>
+          </div>
+          <!-- Right: profile -->
+          <div class="panel" id="custProfile">
+            <div class="empty-state" style="padding:64px 24px">
+              <div class="empty-icon">👤</div>
+              <div class="empty-title">SELECT A CUSTOMER</div>
+              <div class="empty-body">Click any customer on the left to view their full profile, vehicles, and service history.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VEHICLE REGISTRY PANE -->
+      <div class="view-pane" id="pane-vehicles">
+        <div class="filter-bar">
+          <input class="search-box" id="vehSearch" placeholder="Search VIN, make, model, plate…" oninput="renderVehicleTable()">
+          <select class="filter-select" id="vehMakeFilter" onchange="renderVehicleTable()">
+            <option value="">All Makes</option>
+          </select>
+        </div>
+        <div class="panel">
+          <table class="data-table">
+            <thead><tr><th>Vehicle</th><th>Year</th><th>VIN</th><th>Plate</th><th>Owner</th><th>Mileage</th><th>Color</th><th>Actions</th></tr></thead>
+            <tbody id="vehTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- NEW CUSTOMER MODAL -->
+<div class="modal-backdrop" id="newCustModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="custModalTitle">NEW CUSTOMER</span>
+      <button class="modal-close" onclick="Modal.close('newCustModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="app-form-row">
+        <div class="app-form-group"><label class="app-label">First Name</label><input class="app-input" id="c-fn" placeholder="Jane"></div>
+        <div class="app-form-group"><label class="app-label">Last Name</label><input class="app-input" id="c-ln" placeholder="Smith"></div>
+      </div>
+      <div class="app-form-row">
+        <div class="app-form-group"><label class="app-label">Email Address</label><input class="app-input" type="email" id="c-email" placeholder="jane@email.com"></div>
+        <div class="app-form-group"><label class="app-label">Phone Number</label><input class="app-input" id="c-phone" placeholder="555-0100"></div>
+      </div>
+      <div class="app-form-group"><label class="app-label">Address</label><input class="app-input" id="c-addr" placeholder="123 Main St, Detroit, MI"></div>
+      <div class="app-form-group"><label class="app-label">Notes</label><textarea class="app-input" id="c-notes" placeholder="Any relevant notes about this customer…"></textarea></div>
+      <div id="veh-section">
+      <div class="divider-dark"></div>
+      <div style="font-family:var(--ff-display);font-size:16px;letter-spacing:1px;color:var(--app-text);margin-bottom:16px;">ADD FIRST VEHICLE <span style="font-size:12px;color:var(--app-muted);font-family:var(--ff-body);letter-spacing:0">(optional)</span></div>
+      <div class="app-form-row-3">
+        <div class="app-form-group"><label class="app-label">Make</label><input class="app-input" id="v-make" placeholder="Toyota"></div>
+        <div class="app-form-group"><label class="app-label">Model</label><input class="app-input" id="v-model" placeholder="Camry"></div>
+        <div class="app-form-group"><label class="app-label">Year</label><input class="app-input" type="number" id="v-year" placeholder="2020" min="1980" max="2027"></div>
+      </div>
+      <div class="app-form-row">
+        <div class="app-form-group"><label class="app-label">VIN</label><input class="app-input" id="v-vin" placeholder="17 characters" maxlength="17"></div>
+        <div class="app-form-group"><label class="app-label">License Plate</label><input class="app-input" id="v-plate" placeholder="ABC 1234"></div>
+      </div>
+      <div class="app-form-row">
+        <div class="app-form-group"><label class="app-label">Color</label><input class="app-input" id="v-color" placeholder="Silver"></div>
+        <div class="app-form-group"><label class="app-label">Current Mileage</label><input class="app-input" type="number" id="v-miles" placeholder="0"></div>
+      </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('newCustModal')">Cancel</button>
+      <button class="app-btn app-btn-primary" onclick="saveCustomer()">Save Customer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD / EDIT VEHICLE MODAL -->
+<div class="modal-backdrop" id="addVehicleModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="vehModalTitle">ADD VEHICLE</span>
+      <button class="modal-close" onclick="Modal.close('addVehicleModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="app-form-group" id="av-cust-group"><label class="app-label">Customer</label><select class="app-input" id="av-cust"></select></div>
+      <div class="app-form-row-3">
+        <div class="app-form-group"><label class="app-label">Make</label><input class="app-input" id="av-make" placeholder="Toyota"></div>
+        <div class="app-form-group"><label class="app-label">Model</label><input class="app-input" id="av-model" placeholder="Camry"></div>
+        <div class="app-form-group"><label class="app-label">Year</label><input class="app-input" type="number" id="av-year" placeholder="2020"></div>
+      </div>
+      <div class="app-form-row">
+        <div class="app-form-group"><label class="app-label">VIN</label><input class="app-input" id="av-vin" placeholder="17 characters" maxlength="17"></div>
+        <div class="app-form-group"><label class="app-label">Plate</label><input class="app-input" id="av-plate" placeholder="ABC 1234"></div>
+      </div>
+      <div class="app-form-row">
+        <div class="app-form-group"><label class="app-label">Color</label><input class="app-input" id="av-color" placeholder="White"></div>
+        <div class="app-form-group"><label class="app-label">Mileage</label><input class="app-input" type="number" id="av-miles" placeholder="0"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('addVehicleModal')">Cancel</button>
+      <button class="app-btn app-btn-primary" id="vehSaveBtn" onclick="saveVehicle()">Add Vehicle</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/theme.js"></script>
+<script src="../js/main.js"></script>
+<script src="../js/supabase.js"></script>
+<script src="../js/rbac.js"></script>
+<script>
+let customerData       = [];
+let vehicleData        = [];
+let selectedCustomerId = null;
+let editingCustomerId  = null;
+let editingVehicleId   = null;
+
+/* ── INIT ── */
+async function initPage() {
+  const user = await RBAC.guardPage('customers');
+  if (!user) return;
+  await RBAC.initSidebar('customers');
+  await loadAll();
+  Realtime.subscribe('customers', { onInsert: loadAll, onUpdate: loadAll, onDelete: loadAll });
+}
+
+async function loadAll() {
+  [customerData, vehicleData] = await Promise.all([GS.getCustomers(), GS.getVehicles()]);
+  renderCustList();
+  renderVehicleTable();
+  populateVehMakeFilter();
+  if (selectedCustomerId) renderCustomerProfile(selectedCustomerId);
+}
+
+/* ── PANE SWITCHER ── */
+function switchPane(btn) {
+  document.querySelectorAll('.view-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.app-sub-link').forEach(b => b.classList.remove('active'));
+  document.getElementById(btn.dataset.pane)?.classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ── CUSTOMER LIST ── */
+function renderCustList() {
+  const q    = (document.getElementById('custSearch')?.value || '').toLowerCase();
+  const list = customerData.filter(c =>
+    `${c.first_name} ${c.last_name} ${c.email||''} ${c.phone||''}`.toLowerCase().includes(q)
+  );
+  const el = document.getElementById('custList');
+  if (!list.length) {
+    el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--app-muted);font-size:14px">No customers found.</div>`;
+    return;
+  }
+  el.innerHTML = list.map(c => {
+    const name     = `${c.first_name||''} ${c.last_name||''}`.trim();
+    const initials = ((c.first_name?.[0]||'') + (c.last_name?.[0]||'')).toUpperCase() || '?';
+    const vCount   = vehicleData.filter(v => v.customer_id === c.id).length;
+    const active   = c.id === selectedCustomerId;
+    return `<div class="cust-list-item ${active?'active':''}" onclick="selectCustomer('${c.id}')">
+      <div class="cust-avatar">${initials}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:14px;color:var(--app-text)">${name}</div>
+        <div style="font-size:12px;color:var(--app-muted);font-family:var(--ff-mono)">${c.phone||c.email||'—'}</div>
+      </div>
+      <div style="font-size:11px;color:var(--app-muted);flex-shrink:0">${vCount} vehicle${vCount!==1?'s':''}</div>
+    </div>`;
+  }).join('');
+}
+
+function selectCustomer(id) {
+  selectedCustomerId = id;
+  renderCustList();
+  renderCustomerProfile(id);
+}
+
+function renderCustomerProfile(id) {
+  const c = customerData.find(x => x.id === id);
+  if (!c) return;
+  const name     = `${c.first_name||''} ${c.last_name||''}`.trim();
+  const initials = ((c.first_name?.[0]||'') + (c.last_name?.[0]||'')).toUpperCase() || '?';
+  const vehicles = vehicleData.filter(v => v.customer_id === id);
+
+  document.getElementById('custProfile').innerHTML = `
+    <div class="panel-header">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div class="cust-avatar" style="width:48px;height:48px;font-size:18px;flex-shrink:0">${initials}</div>
+        <div>
+          <div style="font-family:var(--ff-display);font-size:20px;letter-spacing:1px;color:var(--app-text)">${name}</div>
+          <div style="font-size:12px;color:var(--app-muted);font-family:var(--ff-mono)">${c.email||'—'} · ${c.phone||'—'}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="app-btn app-btn-ghost app-btn-sm" onclick="openEditCustomer('${id}')">✏️ Edit</button>
+        <button class="app-btn app-btn-ghost app-btn-sm" style="color:var(--danger)" onclick="deleteCustomer('${id}')">Delete</button>
+      </div>
+    </div>
+    <div style="padding:14px 20px;border-bottom:1px solid var(--app-border)">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
+        <div><span style="color:var(--app-muted);font-family:var(--ff-mono);font-size:11px;text-transform:uppercase;letter-spacing:1px">Address</span><div style="margin-top:4px">${c.address||'—'}</div></div>
+        <div><span style="color:var(--app-muted);font-family:var(--ff-mono);font-size:11px;text-transform:uppercase;letter-spacing:1px">Notes</span><div style="margin-top:4px">${c.notes||'—'}</div></div>
+      </div>
+    </div>
+    <div class="panel-header" style="margin-top:4px">
+      <span class="panel-title">VEHICLES (${vehicles.length})</span>
+      <button class="app-btn app-btn-ghost app-btn-sm" onclick="openAddVehicle('${id}')">+ Add Vehicle</button>
+    </div>
+    ${vehicles.length ? vehicles.map(v => `
+      <div style="display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid rgba(48,54,61,0.4)">
+        <div style="font-size:22px">🚗</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:14px;color:var(--app-text)">${v.year||''} ${v.make||''} ${v.model||''}</div>
+          <div style="font-size:12px;color:var(--app-muted);font-family:var(--ff-mono)">
+            ${v.plate?'Plate: '+v.plate:''} ${v.vin?'· VIN: '+v.vin:''} ${v.color?'· '+v.color:''}
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--app-muted);flex-shrink:0">${v.mileage?Number(v.mileage).toLocaleString()+' km':''}</div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="app-btn app-btn-ghost app-btn-sm" onclick="openEditVehicle('${v.id}')">✏️ Edit</button>
+          <button class="app-btn app-btn-ghost app-btn-sm" style="color:var(--danger)" onclick="deleteVehicleConfirm('${v.id}')">✕</button>
+        </div>
+      </div>`).join('') :
+      `<div style="padding:24px;text-align:center;color:var(--app-muted);font-size:13px">No vehicles yet.</div>`
+    }`;
+}
+
+/* ── VEHICLE TABLE ── */
+function renderVehicleTable() {
+  const q    = (document.getElementById('vehSearch')?.value || '').toLowerCase();
+  const make = document.getElementById('vehMakeFilter')?.value || '';
+  const list = vehicleData.filter(v => {
+    const owner = v.customers ? `${v.customers.first_name} ${v.customers.last_name}` : '';
+    return `${v.make} ${v.model} ${v.year} ${v.vin||''} ${v.plate||''} ${owner}`.toLowerCase().includes(q)
+        && (!make || v.make === make);
+  });
+  const tbody = document.getElementById('vehTableBody');
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--app-muted)">No vehicles found.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(v => {
+    const owner = v.customers ? `${v.customers.first_name} ${v.customers.last_name}` : '—';
+    return `<tr>
+      <td><strong>${v.make||'—'} ${v.model||''}</strong></td>
+      <td>${v.year||'—'}</td>
+      <td style="font-family:var(--ff-mono);font-size:12px">${v.vin||'—'}</td>
+      <td>${v.plate||'—'}</td>
+      <td>${owner}</td>
+      <td>${v.mileage?Number(v.mileage).toLocaleString():'—'}</td>
+      <td>${v.color||'—'}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="app-btn app-btn-ghost app-btn-sm" onclick="openEditVehicle('${v.id}')">Edit</button>
+          <button class="app-btn app-btn-ghost app-btn-sm" style="color:var(--danger)" onclick="deleteVehicleConfirm('${v.id}')">Delete</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function populateVehMakeFilter() {
+  const makes = [...new Set(vehicleData.map(v => v.make).filter(Boolean))].sort();
+  const sel   = document.getElementById('vehMakeFilter');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = `<option value="">All Makes</option>` + makes.map(m => `<option value="${m}">${m}</option>`).join('');
+  sel.value = cur;
+}
+
+/* ── NEW / EDIT CUSTOMER MODAL ── */
+function openNewCustomer() {
+  editingCustomerId = null;
+  document.getElementById('custModalTitle').textContent = 'NEW CUSTOMER';
+  document.querySelector('#newCustModal .app-btn-primary').textContent = 'Save Customer';
+  ['c-fn','c-ln','c-email','c-phone','c-addr','c-notes','v-make','v-model','v-vin','v-plate','v-color'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  ['v-year','v-miles'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('veh-section').style.display = 'block';
+  Modal.open('newCustModal');
+}
+
+function openEditCustomer(id) {
+  const c = customerData.find(x => x.id === id);
+  if (!c) return;
+  editingCustomerId = id;
+  document.getElementById('custModalTitle').textContent = 'EDIT CUSTOMER';
+  document.querySelector('#newCustModal .app-btn-primary').textContent = 'Save Changes';
+  document.getElementById('c-fn').value    = c.first_name || '';
+  document.getElementById('c-ln').value    = c.last_name  || '';
+  document.getElementById('c-email').value = c.email      || '';
+  document.getElementById('c-phone').value = c.phone      || '';
+  document.getElementById('c-addr').value  = c.address    || '';
+  document.getElementById('c-notes').value = c.notes      || '';
+  document.getElementById('veh-section').style.display = 'none';
+  Modal.open('newCustModal');
+}
+
+async function saveCustomer() {
+  const fn    = document.getElementById('c-fn').value.trim();
+  const ln    = document.getElementById('c-ln').value.trim();
+  const email = document.getElementById('c-email').value.trim();
+  const phone = document.getElementById('c-phone').value.trim();
+  const addr  = document.getElementById('c-addr').value.trim();
+  const notes = document.getElementById('c-notes').value.trim();
+  if (!fn && !ln) { Toast.show('Please enter at least a first or last name', 'error'); return; }
+
+  const btn = document.querySelector('#newCustModal .app-btn-primary');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    const user   = await RBAC.getCurrentUser();
+    const shopId = user?.shop_id;
+    const payload = { first_name: fn, last_name: ln, email: email||null, phone: phone||null, address: addr||null, notes: notes||null, shop_id: shopId };
+
+    let customerId = editingCustomerId;
+    if (editingCustomerId) {
+      await GS.updateCustomer(editingCustomerId, payload);
+      Toast.show('Customer updated', 'success');
+    } else {
+      const newCust = await GS.createCustomer(payload);
+      customerId = newCust.id;
+      Toast.show('Customer added', 'success');
+      const vMake = document.getElementById('v-make').value.trim();
+      const vModel = document.getElementById('v-model').value.trim();
+      if (vMake || vModel) {
+        await GS.createVehicle({
+          customer_id: customerId, shop_id: shopId,
+          make: vMake||null, model: vModel||null,
+          year: document.getElementById('v-year').value ? parseInt(document.getElementById('v-year').value) : null,
+          vin:  document.getElementById('v-vin').value.trim()||null,
+          plate: document.getElementById('v-plate').value.trim()||null,
+          color: document.getElementById('v-color').value.trim()||null,
+          mileage: document.getElementById('v-miles').value ? parseInt(document.getElementById('v-miles').value) : null,
+        });
+      }
+    }
+    Modal.close('newCustModal');
+    await loadAll();
+    if (customerId) selectCustomer(customerId);
+  } catch(err) {
+    console.error(err);
+    Toast.show(err.message || 'Failed to save customer', 'error');
+  } finally {
+    const isEdit = !!editingCustomerId;
+    btn.disabled = false;
+    btn.textContent = isEdit ? 'Save Changes' : 'Save Customer';
+  }
+}
+
+/* ── ADD / EDIT VEHICLE MODAL ── */
+function openAddVehicle(presetCustomerId = null) {
+  if (!customerData.length) { Toast.show('Add a customer first', 'error'); return; }
+  editingVehicleId = null;
+  document.getElementById('vehModalTitle').textContent    = 'ADD VEHICLE';
+  document.getElementById('vehSaveBtn').textContent       = 'Add Vehicle';
+  document.getElementById('av-cust-group').style.display  = 'block';
+  const sel = document.getElementById('av-cust');
+  sel.innerHTML = customerData.map(c =>
+    `<option value="${c.id}" ${c.id===presetCustomerId?'selected':''}>${c.first_name} ${c.last_name}</option>`
+  ).join('');
+  ['av-make','av-model','av-vin','av-plate','av-color'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('av-year').value  = '';
+  document.getElementById('av-miles').value = '';
+  Modal.open('addVehicleModal');
+}
+
+function openEditVehicle(id) {
+  const v = vehicleData.find(x => x.id === id);
+  if (!v) return;
+  editingVehicleId = id;
+  document.getElementById('vehModalTitle').textContent   = 'EDIT VEHICLE';
+  document.getElementById('vehSaveBtn').textContent      = 'Save Changes';
+  document.getElementById('av-cust-group').style.display = 'none';
+  document.getElementById('av-make').value  = v.make    || '';
+  document.getElementById('av-model').value = v.model   || '';
+  document.getElementById('av-year').value  = v.year    || '';
+  document.getElementById('av-vin').value   = v.vin     || '';
+  document.getElementById('av-plate').value = v.plate   || '';
+  document.getElementById('av-color').value = v.color   || '';
+  document.getElementById('av-miles').value = v.mileage || '';
+  Modal.open('addVehicleModal');
+}
+
+async function saveVehicle() {
+  const make  = document.getElementById('av-make').value.trim();
+  const model = document.getElementById('av-model').value.trim();
+  if (!make && !model) { Toast.show('Please enter at least a make or model', 'error'); return; }
+
+  const btn = document.getElementById('vehSaveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    const user   = await RBAC.getCurrentUser();
+    const shopId = user?.shop_id;
+    const payload = {
+      make: make||null, model: model||null,
+      year:    document.getElementById('av-year').value  ? parseInt(document.getElementById('av-year').value)  : null,
+      vin:     document.getElementById('av-vin').value.trim()   || null,
+      plate:   document.getElementById('av-plate').value.trim() || null,
+      color:   document.getElementById('av-color').value.trim() || null,
+      mileage: document.getElementById('av-miles').value ? parseInt(document.getElementById('av-miles').value) : null,
+    };
+
+    if (editingVehicleId) {
+      await GS.updateVehicle(editingVehicleId, payload);
+      Toast.show('Vehicle updated', 'success');
+    } else {
+      const custId = document.getElementById('av-cust').value;
+      if (!custId) { Toast.show('Please select a customer', 'error'); btn.disabled = false; btn.textContent = 'Add Vehicle'; return; }
+      await GS.createVehicle({ ...payload, customer_id: custId, shop_id: shopId });
+      Toast.show('Vehicle added', 'success');
+      selectedCustomerId = custId;
+    }
+    Modal.close('addVehicleModal');
+    await loadAll();
+    if (selectedCustomerId) selectCustomer(selectedCustomerId);
+  } catch(err) {
+    console.error(err);
+    Toast.show(err.message || 'Failed to save vehicle', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = editingVehicleId ? 'Save Changes' : 'Add Vehicle';
+  }
+}
+
+/* ── DELETE ── */
+async function deleteCustomer(id) {
+  confirmAction('Delete this customer? Their vehicles will also be deleted.', async () => {
+    try {
+      await GS.deleteCustomer(id);
+      Toast.show('Customer deleted', 'info');
+      selectedCustomerId = null;
+      document.getElementById('custProfile').innerHTML = `
+        <div class="empty-state" style="padding:64px 24px">
+          <div class="empty-icon">👤</div><div class="empty-title">SELECT A CUSTOMER</div>
+          <div class="empty-body">Click any customer on the left to view their profile.</div>
+        </div>`;
+      await loadAll();
+    } catch(err) { Toast.show(err.message, 'error'); }
+  });
+}
+
+async function deleteVehicleConfirm(id) {
+  confirmAction('Delete this vehicle?', async () => {
+    try {
+      await GS.deleteVehicle(id);
+      Toast.show('Vehicle removed', 'info');
+      await loadAll();
+      if (selectedCustomerId) selectCustomer(selectedCustomerId);
+    } catch(err) { Toast.show(err.message, 'error'); }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', initPage);
+</script>
+</body>
+</html>

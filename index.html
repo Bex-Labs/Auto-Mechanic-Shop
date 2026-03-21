@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GearShift — Auto Shop Management System</title>
+<meta name="description" content="The complete web-based management system for auto mechanic shops. Work orders, inventory, supply chain, invoicing and more — all connected.">
+<link rel="stylesheet" href="css/main.css">
+<style>
+/* ── HERO ── */
+.hero {
+  min-height: 100vh;
+  background: var(--ink);
+  display: flex;
+  align-items: center;
+  padding: 120px var(--space-7) 80px;
+  position: relative;
+  overflow: hidden;
+}
+.hero-bg-grid {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none;
+}
+.hero-bg-word {
+  position: absolute; right: -60px; top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--ff-display);
+  font-size: clamp(200px, 28vw, 440px);
+  line-height: 1;
+  color: rgba(201,75,30,0.05);
+  pointer-events: none;
+  user-select: none;
+  letter-spacing: -6px;
+}
+.hero-inner { max-width: 1240px; margin: 0 auto; width: 100%; position: relative; z-index: 2; }
+.hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: rgba(232,160,32,0.12);
+  border: 1px solid rgba(232,160,32,0.3);
+  color: var(--amber); padding: 6px 16px; border-radius: 20px;
+  font-family: var(--ff-mono); font-size: 11px; letter-spacing: 2.5px;
+  text-transform: uppercase; margin-bottom: 28px;
+}
+.hero-eyebrow::before { content:''; width:6px; height:6px; background:var(--amber); border-radius:50%; animation: pulse 2s infinite; }
+.hero-headline { color: var(--white); margin-bottom: 10px; }
+.hero-headline .line-rust { color: var(--rust); }
+.hero-sub {
+  font-size: clamp(16px, 2vw, 20px);
+  color: var(--chrome);
+  max-width: 540px;
+  line-height: 1.75;
+  margin-bottom: 44px;
+  font-weight: 300;
+}
+.hero-actions { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 72px; }
+.hero-stats {
+  display: flex; gap: 0;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  padding-top: 40px;
+}
+.hero-stat {
+  padding: 0 48px 0 0;
+  border-right: 1px solid rgba(255,255,255,0.08);
+  margin-right: 48px;
+}
+.hero-stat:last-child { border-right: none; margin-right: 0; }
+.hero-stat-n {
+  font-family: var(--ff-display);
+  font-size: 52px; line-height: 1;
+  color: var(--white);
+}
+.hero-stat-l { font-size: 13px; color: var(--chrome); margin-top: 4px; }
+
+/* ── WORKFLOW STRIP ── */
+.workflow-strip {
+  background: var(--rust);
+  padding: 0;
+  overflow: hidden;
+}
+.workflow-ticker {
+  display: flex;
+  white-space: nowrap;
+  animation: ticker 20s linear infinite;
+  padding: 14px 0;
+}
+.workflow-ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 32px;
+  font-family: var(--ff-display);
+  font-size: 16px;
+  letter-spacing: 2px;
+  color: rgba(255,255,255,0.9);
+}
+.workflow-ticker-item::after {
+  content: '⬥';
+  color: rgba(255,255,255,0.4);
+}
+@keyframes ticker {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* ── OVERVIEW ── */
+.overview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  margin-top: 64px;
+}
+.overview-card {
+  background: var(--surface);
+  padding: 44px 40px;
+  position: relative;
+  overflow: hidden;
+  transition: background var(--t-base);
+}
+.overview-card:hover { background: var(--white); }
+.overview-card-num {
+  font-family: var(--ff-display);
+  font-size: 80px;
+  line-height: 1;
+  color: rgba(201,75,30,0.1);
+  position: absolute;
+  top: -8px; right: 16px;
+  pointer-events: none;
+}
+.overview-card-icon { font-size: 30px; margin-bottom: 16px; }
+.overview-card-title {
+  font-family: var(--ff-display);
+  font-size: 26px;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+.overview-card-body {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #4a4a4a;
+  max-width: 380px;
+}
+.overview-card-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 18px;
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--rust);
+  font-weight: 500;
+}
+.overview-card-link::after { content:'→'; }
+
+/* ── WHO IT'S FOR ── */
+.roles-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  margin-top: 64px;
+}
+.role-card {
+  background: var(--white);
+  border: 2px solid var(--border);
+  padding: 32px 24px;
+  position: relative;
+  overflow: hidden;
+  transition: all var(--t-base);
+}
+.role-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--rust);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--t-base);
+}
+.role-card:hover {
+  border-color: var(--ink);
+  box-shadow: 5px 5px 0 var(--ink);
+  transform: translate(-3px,-3px);
+}
+.role-card:hover::after { transform: scaleX(1); }
+.role-emoji { font-size: 34px; margin-bottom: 16px; }
+.role-title { font-family: var(--ff-display); font-size: 22px; letter-spacing: 1px; margin-bottom: 10px; }
+.role-body { font-size: 13px; line-height: 1.75; color: #5a5a5a; }
+.role-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.role-tag { font-family: var(--ff-mono); font-size: 10px; padding: 3px 10px; background: rgba(201,75,30,0.08); color: var(--rust); border-radius: 20px; }
+
+/* ── FLOW SECTION ── */
+.flow-section {
+  background: var(--ink);
+  padding: var(--space-9) var(--space-7);
+  color: var(--white);
+  position: relative;
+  overflow: hidden;
+}
+.flow-inner { max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
+.flow-nodes { display: flex; flex-direction: column; gap: 2px; }
+.flow-node {
+  display: flex; align-items: center; gap: 16px;
+  background: var(--app-surface); border: 1px solid var(--app-border);
+  padding: 18px 22px;
+  transition: border-color var(--t-fast);
+}
+.flow-node:hover { border-color: var(--rust); }
+.flow-node-icon { font-size: 22px; width: 40px; text-align: center; flex-shrink: 0; }
+.flow-node-label { font-size: 14px; font-weight: 600; color: var(--app-text); }
+.flow-node-sub { font-size: 12px; color: var(--app-muted); }
+.flow-arrow { text-align: center; color: var(--rust); font-family: var(--ff-mono); font-size: 11px; letter-spacing: 1px; padding: 6px 0; }
+.flow-text {}
+.flow-title { font-family: var(--ff-display); font-size: clamp(52px,6vw,80px); line-height: 0.93; margin-bottom: 22px; }
+.flow-body { font-size: 15px; line-height: 1.85; color: var(--chrome); margin-bottom: 28px; }
+.flow-checks { display: flex; flex-direction: column; gap: 12px; }
+.flow-check { display: flex; gap: 12px; font-size: 14px; color: #c9d1d9; }
+.flow-check::before { content:'✓'; color: #27ae60; font-weight: 700; flex-shrink: 0; }
+
+/* ── TESTIMONIAL STRIP ── */
+.testi-strip {
+  background: var(--paper-dark);
+  padding: var(--space-9) var(--space-7);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.testi-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 28px; max-width: 1240px; margin: 0 auto; }
+.testi-card { background: var(--white); border: 1px solid var(--border); padding: 32px; }
+.testi-quote { font-size: 15px; line-height: 1.8; color: #3a3a3a; margin-bottom: 20px; font-style: italic; }
+.testi-author { display: flex; align-items: center; gap: 12px; }
+.testi-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--ink); display: flex; align-items: center; justify-content: center;
+  font-family: var(--ff-display); font-size: 18px; color: var(--white); flex-shrink: 0;
+}
+.testi-name { font-size: 14px; font-weight: 700; }
+.testi-shop { font-size: 12px; color: var(--text-muted); }
+
+/* ── CTA BANNER ── */
+.cta-banner {
+  background: var(--rust);
+  padding: var(--space-9) var(--space-7);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.cta-banner::before {
+  content: 'START';
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+  font-family: var(--ff-display); font-size: 400px; line-height: 1;
+  color: rgba(0,0,0,0.06); pointer-events: none; white-space: nowrap;
+}
+.cta-banner-title { font-family: var(--ff-display); font-size: clamp(56px,9vw,110px); color: var(--white); line-height: 0.9; margin-bottom: 28px; position: relative; }
+.cta-banner-sub { font-size: 18px; color: rgba(255,255,255,0.8); margin-bottom: 40px; font-weight: 300; position: relative; }
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+@media(max-width:900px){
+  .overview-grid,.flow-inner { grid-template-columns:1fr; }
+  .roles-grid { grid-template-columns:1fr 1fr; }
+  .testi-grid { grid-template-columns:1fr; }
+  .hero-stats { flex-wrap:wrap; gap:24px; }
+  .hero-stat { padding:0; border-right:none; margin-right:0; width:45%; }
+}
+@media(max-width:600px){ .roles-grid{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="site-nav" id="siteNav">
+  <a href="index.html" class="nav-logo">GEAR<span class="accent">SHIFT</span></a>
+  <div class="nav-center">
+    <a href="index.html"       class="nav-link" data-page="index.html">Home</a>
+    <a href="features.html"    class="nav-link" data-page="features.html">Features</a>
+    <a href="how-it-works.html"class="nav-link" data-page="how-it-works.html">How It Works</a>
+    <a href="pricing.html"     class="nav-link" data-page="pricing.html">Pricing</a>
+    <a href="contact.html"     class="nav-link" data-page="contact.html">Contact</a>
+  </div>
+  <div class="nav-right">
+    <a href="app/dashboard.html" class="btn-nav-login">Log In</a>
+    <a href="pricing.html"       class="btn-nav-cta">Get Started →</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg-grid"></div>
+  <div class="hero-bg-word">GS</div>
+  <div class="hero-inner">
+    <div class="hero-eyebrow">Auto Shop Management Platform</div>
+    <h1 class="display-xl hero-headline anim-fade-up">
+      THE <span class="line-rust">BRAIN</span><br>OF YOUR<br>SHOP
+    </h1>
+    <p class="hero-sub anim-fade-up-d2">
+      Connect your front desk, mechanics, parts room, and suppliers — all in one place.
+      When one thing changes, everything updates automatically.
+    </p>
+    <div class="hero-actions anim-fade-up-d3">
+      <a href="pricing.html"       class="btn btn-primary btn-lg">Start Free Trial →</a>
+      <a href="how-it-works.html"  class="btn btn-secondary btn-lg">See How It Works</a>
+    </div>
+    <div class="hero-stats anim-fade-up-d4">
+      <div class="hero-stat">
+        <div class="hero-stat-n">9</div>
+        <div class="hero-stat-l">Connected workflows</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-n">4</div>
+        <div class="hero-stat-l">Role-based access levels</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-n">0</div>
+        <div class="hero-stat-l">Spreadsheets needed</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-n">∞</div>
+        <div class="hero-stat-l">Less phone calls</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WORKFLOW TICKER -->
+<div class="workflow-strip">
+  <div class="workflow-ticker">
+    <span class="workflow-ticker-item">Work Orders</span>
+    <span class="workflow-ticker-item">Inventory Management</span>
+    <span class="workflow-ticker-item">Supply Chain</span>
+    <span class="workflow-ticker-item">Customer Profiles</span>
+    <span class="workflow-ticker-item">Appointments</span>
+    <span class="workflow-ticker-item">Auto Invoicing</span>
+    <span class="workflow-ticker-item">Reports & Analytics</span>
+    <span class="workflow-ticker-item">Payment Processing</span>
+    <span class="workflow-ticker-item">Work Orders</span>
+    <span class="workflow-ticker-item">Inventory Management</span>
+    <span class="workflow-ticker-item">Supply Chain</span>
+    <span class="workflow-ticker-item">Customer Profiles</span>
+    <span class="workflow-ticker-item">Appointments</span>
+    <span class="workflow-ticker-item">Auto Invoicing</span>
+    <span class="workflow-ticker-item">Reports & Analytics</span>
+    <span class="workflow-ticker-item">Payment Processing</span>
+  </div>
+</div>
+
+<!-- OVERVIEW -->
+<section class="section section-paper">
+  <div class="container">
+    <div class="section-eyebrow">What is GearShift?</div>
+    <h2 class="display-md" style="max-width:700px;margin-bottom:16px;">ONE PLATFORM.<br>YOUR ENTIRE OPERATION.</h2>
+    <p style="font-size:16px;color:var(--text-muted);max-width:580px;line-height:1.8;">From the moment a customer drives in to the moment they drive out with a paid invoice — every step is tracked, connected, and automated.</p>
+    <div class="overview-grid">
+      <div class="overview-card">
+        <div class="overview-card-num">01</div>
+        <div class="overview-card-icon">🛠️</div>
+        <div class="overview-card-title">Work Order Management</div>
+        <p class="overview-card-body">Create job tickets with unique IDs, link them to customers and vehicles, assign mechanics, and track status from Open all the way to Completed — with timestamps at every step.</p>
+        <a href="app/work-orders.html" class="overview-card-link">Open Work Orders</a>
+      </div>
+      <div class="overview-card">
+        <div class="overview-card-num">02</div>
+        <div class="overview-card-icon">📦</div>
+        <div class="overview-card-title">Inventory Management</div>
+        <p class="overview-card-body">Every part tracked by SKU, category, supplier, and location. Stock automatically decrements when used in a work order. Reorder thresholds trigger instant dashboard alerts.</p>
+        <a href="app/inventory.html" class="overview-card-link">View Inventory</a>
+      </div>
+      <div class="overview-card">
+        <div class="overview-card-num">03</div>
+        <div class="overview-card-icon">🚚</div>
+        <div class="overview-card-title">Supply Chain Integration</div>
+        <p class="overview-card-body">Manage suppliers, auto-generate purchase orders from low-stock items, send POs by email directly from the app, confirm full or partial deliveries, and track supplier performance.</p>
+        <a href="app/supply-chain.html" class="overview-card-link">Supply Chain</a>
+      </div>
+      <div class="overview-card">
+        <div class="overview-card-num">04</div>
+        <div class="overview-card-icon">💰</div>
+        <div class="overview-card-title">Invoicing & Payments</div>
+        <p class="overview-card-body">One click generates a complete invoice from any work order — labor hours, parts used, and tax calculated automatically. Accept card, cash, or bank transfer. Download PDF instantly.</p>
+        <a href="app/invoices.html" class="overview-card-link">View Invoices</a>
+      </div>
+      <div class="overview-card">
+        <div class="overview-card-num">05</div>
+        <div class="overview-card-icon">🗓️</div>
+        <div class="overview-card-title">Appointments & Scheduling</div>
+        <p class="overview-card-body">Customers book online. The shop calendar shows all appointments by technician and day. Reschedule or cancel with one click. Email confirmations sent automatically.</p>
+        <a href="app/appointments.html" class="overview-card-link">Appointments</a>
+      </div>
+      <div class="overview-card">
+        <div class="overview-card-num">06</div>
+        <div class="overview-card-icon">📈</div>
+        <div class="overview-card-title">Reports & Analytics</div>
+        <p class="overview-card-body">Revenue by day, week, or month. Inventory turnover rates with slow-mover flagging. Supplier on-time performance. All filterable by date range and exportable as PDF or CSV.</p>
+        <a href="app/reports.html" class="overview-card-link">View Reports</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHO IT'S FOR -->
+<section class="section section-light">
+  <div class="container">
+    <div class="section-eyebrow">Role-Based Access</div>
+    <h2 class="display-md" style="max-width:640px">EVERYONE SEES<br>WHAT THEY NEED</h2>
+    <div class="roles-grid">
+      <div class="role-card">
+        <div class="role-emoji">👔</div>
+        <div class="role-title">Manager</div>
+        <p class="role-body">Full visibility across all sections — revenue, all work orders, staff performance, inventory, and supplier metrics.</p>
+        <div class="role-tags"><span class="role-tag">All Access</span><span class="role-tag">Reports</span><span class="role-tag">Settings</span></div>
+      </div>
+      <div class="role-card">
+        <div class="role-emoji">📋</div>
+        <div class="role-title">Service Advisor</div>
+        <p class="role-body">Creates customers, registers vehicles, manages the calendar, generates invoices, and handles payments from the front desk.</p>
+        <div class="role-tags"><span class="role-tag">Customers</span><span class="role-tag">Invoices</span><span class="role-tag">Booking</span></div>
+      </div>
+      <div class="role-card">
+        <div class="role-emoji">🔧</div>
+        <div class="role-title">Mechanic</div>
+        <p class="role-body">Views assigned work orders, updates job status, pulls parts from inventory, and logs labor time directly from the shop floor.</p>
+        <div class="role-tags"><span class="role-tag">Work Orders</span><span class="role-tag">Parts</span><span class="role-tag">Status</span></div>
+      </div>
+      <div class="role-card">
+        <div class="role-emoji">📦</div>
+        <div class="role-title">Parts Manager</div>
+        <p class="role-body">Owns the inventory, sets thresholds, creates and emails purchase orders, and confirms deliveries against open POs.</p>
+        <div class="role-tags"><span class="role-tag">Inventory</span><span class="role-tag">Suppliers</span><span class="role-tag">POs</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SUPPLY CHAIN FLOW -->
+<section class="flow-section">
+  <div class="flow-inner">
+    <div>
+      <div class="section-eyebrow" style="color:var(--amber)">Supply Chain</div>
+      <h2 class="flow-title">PARTS TO<br>SUPPLIER<br>IN ONE<br>CLICK</h2>
+      <p class="flow-body">The supply chain doesn't start with a phone call. It starts automatically — the moment a part drops below its threshold.</p>
+      <div class="flow-checks">
+        <div class="flow-check">Auto-detect low stock from live work order usage</div>
+        <div class="flow-check">Purchase orders pre-filled with every low-stock item</div>
+        <div class="flow-check">Email POs directly to suppliers — no external tools</div>
+        <div class="flow-check">Track partial and full deliveries separately</div>
+        <div class="flow-check">Inventory restocked automatically on confirmation</div>
+        <div class="flow-check">Supplier on-time rates tracked automatically</div>
+      </div>
+    </div>
+    <div class="flow-nodes">
+      <div class="flow-node">
+        <div class="flow-node-icon">🔧</div>
+        <div><div class="flow-node-label">Mechanic uses a part</div><div class="flow-node-sub">Attached to Work Order</div></div>
+      </div>
+      <div class="flow-arrow">↓ automatic</div>
+      <div class="flow-node">
+        <div class="flow-node-icon">📉</div>
+        <div><div class="flow-node-label">Inventory decremented</div><div class="flow-node-sub">Stock count updated instantly</div></div>
+      </div>
+      <div class="flow-arrow">↓ automatic</div>
+      <div class="flow-node">
+        <div class="flow-node-icon">🚨</div>
+        <div><div class="flow-node-label">Low-stock alert fires</div><div class="flow-node-sub">Dashboard notification</div></div>
+      </div>
+      <div class="flow-arrow">↓ one click</div>
+      <div class="flow-node">
+        <div class="flow-node-icon">📧</div>
+        <div><div class="flow-node-label">PO emailed to supplier</div><div class="flow-node-sub">Auto-populated from low items</div></div>
+      </div>
+      <div class="flow-arrow">↓ on delivery</div>
+      <div class="flow-node">
+        <div class="flow-node-icon">✅</div>
+        <div><div class="flow-node-label">Inventory restored</div><div class="flow-node-sub">Partial deliveries supported</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="testi-strip">
+  <div class="testi-grid">
+    <div class="testi-card">
+      <p class="testi-quote">"Before GearShift we were running on sticky notes and a shared spreadsheet. Now everything from parts, jobs, invoices is in one place. Game changer."</p>
+      <div class="testi-author">
+        <div class="testi-avatar">U</div>
+        <div><div class="testi-name">Uche Festus</div><div class="testi-shop">Uche's Auto, Lagos NG</div></div>
+      </div>
+    </div>
+    <div class="testi-card">
+      <p class="testi-quote">"The supply chain piece alone saved us. Low stock alerts and auto-POs mean we never stop a job because we're out of a part we should have ordered last week."</p>
+      <div class="testi-author">
+        <div class="testi-avatar">M</div>
+        <div><div class="testi-name">Muhammed Ali</div><div class="testi-shop">Ali Fleet Services, Kano NG</div></div>
+      </div>
+    </div>
+    <div class="testi-card">
+      <p class="testi-quote">"My mechanics update their own job statuses now. My front desk pulls invoices with one click. I finally have time to actually manage instead of chasing paperwork."</p>
+      <div class="testi-author">
+        <div class="testi-avatar">T</div>
+        <div><div class="testi-name">Tolu Otedola</div><div class="testi-shop">Tolu Auto Group, Ibadan NG</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA BANNER -->
+<section class="cta-banner">
+  <div style="position:relative;z-index:2;">
+    <div class="cta-banner-title">READY TO RUN<br>A TIGHTER SHOP?</div>
+    <p class="cta-banner-sub">Join hundreds of shops already using GearShift.</p>
+    <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
+      <a href="pricing.html" class="btn btn-lg" style="background:var(--white);color:var(--rust);">Start Free Trial →</a>
+      <a href="contact.html" class="btn btn-lg btn-secondary">Talk to Sales</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-logo">GEAR<span>SHIFT</span></div>
+        <p class="footer-tagline">The complete management system for modern auto mechanic shops. Connect your team, track every job, never run out of parts.</p>
+      </div>
+      <div>
+        <div class="footer-col-title">Product</div>
+        <div class="footer-links">
+          <a href="features.html"     class="footer-link">Features</a>
+          <a href="how-it-works.html" class="footer-link">How It Works</a>
+          <a href="pricing.html"      class="footer-link">Pricing</a>
+          <a href="app/dashboard.html"class="footer-link">Log In</a>
+        </div>
+      </div>
+      <div>
+        <div class="footer-col-title">Solutions</div>
+        <div class="footer-links">
+          <a href="#" class="footer-link">Single Bay Shops</a>
+          <a href="#" class="footer-link">Multi-Location</a>
+          <a href="#" class="footer-link">Fleet Services</a>
+          <a href="#" class="footer-link">Dealerships</a>
+        </div>
+      </div>
+      <div>
+        <div class="footer-col-title">Company</div>
+        <div class="footer-links">
+          <a href="contact.html" class="footer-link">Contact Us</a>
+          <a href="#"            class="footer-link">Privacy Policy</a>
+          <a href="#"            class="footer-link">Terms of Service</a>
+          <a href="#"            class="footer-link">Support</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 GearShift. All rights reserved.</span>
+      <span style="font-family:var(--ff-mono);font-size:11px;letter-spacing:1px;">BUILT FOR SHOPS THAT MEAN BUSINESS</span>
+    </div>
+  </div>
+</footer>
+
+<div class="toast-container" id="toastContainer"></div>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Supply Chain — GearShift</title>
+<link rel="stylesheet" href="../css/main.css">
+<link rel="stylesheet" href="../css/app.css">
+<style>
+/* ── SUPPLIER CARD ── */
+.supplier-card {
+  background:var(--app-surface); border:1px solid var(--app-border);
+  border-radius:var(--r-sm); padding:16px 18px;
+  cursor:pointer; transition:all var(--t-fast);
+  border-left:3px solid transparent;
+}
+.supplier-card:hover { border-left-color:var(--rust); background:var(--app-surface2); }
+.supplier-card.selected { border-left-color:var(--amber); background:rgba(232,160,32,0.04); }
+.supplier-card-name {
+  font-family:var(--ff-display); font-size:16px; letter-spacing:0.8px;
+  color:var(--app-text); margin-bottom:5px;
+}
+.supplier-card-meta { font-size:12px; color:var(--app-muted); display:flex; flex-wrap:wrap; gap:10px; }
+
+/* ── PO LINE ITEM ROW ── */
+.po-line {
+  display:flex; align-items:center; gap:10px;
+  padding:9px 0; border-bottom:1px solid rgba(48,54,61,.5); font-size:13px;
+}
+.po-line:last-child { border-bottom:none; }
+
+/* ── STAR RATING ── */
+.stars { display:inline-flex; gap:2px; font-size:14px; }
+.star  { cursor:pointer; color:var(--app-muted); transition:color var(--t-fast); }
+.star.filled  { color:var(--amber); }
+.star:hover,
+.star:hover ~ .star { color:var(--app-muted) !important; }
+#ratingStars:hover .star { color:var(--amber); }
+#ratingStars .star:hover ~ .star { color:var(--app-muted) !important; }
+
+/* ── EMAIL PREVIEW ── */
+.email-preview {
+  background:var(--app-bg); border:1px solid var(--app-border);
+  border-radius:var(--r-sm); padding:20px; font-family:var(--ff-body);
+  font-size:13px; color:var(--app-text); line-height:1.8;
+  white-space:pre-wrap; max-height:300px; overflow-y:auto;
+}
+
+/* ── LEAD TIME BADGE ── */
+.lead-badge {
+  display:inline-block; font-family:var(--ff-mono); font-size:10px;
+  letter-spacing:1px; padding:2px 8px; border-radius:20px; border:1px solid;
+}
+.lead-fast   { color:var(--success); border-color:rgba(34,197,94,.3); }
+.lead-medium { color:var(--amber);   border-color:rgba(232,160,32,.3); }
+.lead-slow   { color:var(--danger);  border-color:rgba(239,68,68,.3); }
+
+/* ── PERFORMANCE BAR ── */
+.perf-bar-wrap { height:5px; background:var(--app-surface2); border-radius:3px; overflow:hidden; margin-top:5px; }
+.perf-bar      { height:100%; border-radius:3px; transition:width .4s; }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="app-sidebar">
+    <div class="sidebar-logo"><span class="sidebar-logo-text">GEAR<span>SHIFT</span></span><a href="../index.html" class="sidebar-back">← Site</a></div>
+    <nav class="sidebar-nav"><!-- populated by RBAC.initSidebar --></nav>
+    <div class="sidebar-footer">
+      <div class="theme-toggle">
+        <span class="theme-toggle-label">☾ Dark</span>
+        <button class="theme-toggle-switch" onclick="Theme.toggle()" aria-label="Switch theme"></button>
+      </div>
+      <div class="sidebar-user">
+        <div class="user-avatar" id="userAvatar">?</div>
+        <div><div class="user-name" id="userName">Loading…</div><div class="user-role" id="userRole">—</div></div>
+      </div>
+      <button class="btn-logout" onclick="Auth.signOut().then(()=>window.location='dashboard.html')">Sign Out</button>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <div class="app-topbar">
+      <span class="topbar-title">SUPPLY CHAIN</span>
+      <div class="topbar-actions">
+        <button class="app-btn app-btn-ghost app-btn-sm" onclick="openSupplierModal()">+ Add Supplier</button>
+        <button class="app-btn app-btn-primary" onclick="openNewPO()">+ New Purchase Order</button>
+      </div>
+    </div>
+
+    <div class="app-sub-nav">
+      <button class="app-sub-link active" data-pane="pane-pos"       onclick="switchPane(this)">Purchase Orders</button>
+      <button class="app-sub-link"        data-pane="pane-suppliers"  onclick="switchPane(this)">Suppliers <span id="suppCount" style="margin-left:4px;background:var(--app-surface2);color:var(--app-muted);font-family:var(--ff-mono);font-size:9px;padding:1px 6px;border-radius:10px"></span></button>
+      <button class="app-sub-link"        data-pane="pane-reorder"   onclick="switchPane(this)">Reorder Suggestions <span id="reorderBadge" style="margin-left:4px;background:var(--rust);color:var(--white);font-family:var(--ff-mono);font-size:9px;padding:1px 6px;border-radius:10px;display:none"></span></button>
+    </div>
+
+    <div class="app-content">
+
+      <!-- ══ PURCHASE ORDERS ══ -->
+      <div class="view-pane active" id="pane-pos">
+        <div class="stats-grid" id="poStats"></div>
+        <div class="filter-bar">
+          <input class="search-box" id="poSearch" placeholder="Search PO# or supplier…" oninput="renderPOTable()">
+          <select class="filter-select" id="poStatusFilter" onchange="renderPOTable()">
+            <option value="">All Statuses</option>
+            <option>Draft</option><option>Sent</option>
+            <option>Partially Received</option><option>Received</option><option>Cancelled</option>
+          </select>
+        </div>
+        <div class="panel">
+          <table class="data-table">
+            <thead><tr><th>PO#</th><th>Supplier</th><th>Items</th><th>Total</th><th>Status</th><th>Sent</th><th>Expected</th><th>Actions</th></tr></thead>
+            <tbody id="poTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ══ SUPPLIERS ══ -->
+      <div class="view-pane" id="pane-suppliers">
+        <div class="stats-grid" id="suppStats"></div>
+
+        <!-- Search + filters -->
+        <div class="filter-bar" style="margin-bottom:var(--space-4)">
+          <input class="search-box" id="suppSearch" placeholder="Search name, contact, category…" oninput="renderSupplierList()">
+          <select class="filter-select" id="suppLeadFilter" onchange="renderSupplierList()">
+            <option value="">All Lead Times</option>
+            <option value="fast">Fast (1–3 days)</option>
+            <option value="medium">Medium (4–7 days)</option>
+            <option value="slow">Slow (8+ days)</option>
+          </select>
+          <select class="filter-select" id="suppTermsFilter" onchange="renderSupplierList()">
+            <option value="">All Payment Terms</option>
+            <option value="cod">Immediate / COD</option>
+            <option value="net15">Net 15</option>
+            <option value="net30">Net 30</option>
+            <option value="net60">Net 60+</option>
+          </select>
+          <select class="filter-select" id="suppRatingFilter" onchange="renderSupplierList()">
+            <option value="">All Ratings</option>
+            <option value="5">★★★★★ 5 stars</option>
+            <option value="4">★★★★ 4+ stars</option>
+            <option value="3">★★★ 3+ stars</option>
+          </select>
+        </div>
+
+        <div style="display:grid;grid-template-columns:300px 1fr;gap:var(--space-4);align-items:start;">
+          <!-- Left: supplier list -->
+          <div>
+            <div id="supplierList" style="display:flex;flex-direction:column;gap:8px;"></div>
+          </div>
+          <!-- Right: supplier profile -->
+          <div class="panel" id="supplierProfile">
+            <div class="empty-state" style="padding:64px">
+              <div class="empty-icon">🏭</div>
+              <div class="empty-title">SELECT A SUPPLIER</div>
+              <div class="empty-body">Click a supplier to view their profile, linked parts, and order history.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ REORDER SUGGESTIONS ══ -->
+      <div class="view-pane" id="pane-reorder">
+        <div class="alert alert-warn" style="margin-bottom:var(--space-4)">
+          ⚠ These parts are below their reorder threshold. Select items and generate purchase orders in one click.
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">LOW-STOCK PARTS NEEDING REORDER</span>
+            <button class="app-btn app-btn-primary" onclick="generatePOFromLowStock()">Generate PO from Selected →</button>
+          </div>
+          <table class="data-table">
+            <thead><tr>
+              <th><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th>
+              <th>Part</th><th>SKU</th><th>In Stock</th><th>Min</th>
+              <th>Suggest Order</th><th>Supplier</th><th>Unit Cost</th><th>Line Total</th>
+            </tr></thead>
+            <tbody id="reorderBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /app-content -->
+  </div><!-- /app-main -->
+</div><!-- /app-layout -->
+
+<!-- ══ MODAL: NEW / EDIT SUPPLIER ══ -->
+<div class="modal-backdrop" id="supplierModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="suppModalTitle">ADD SUPPLIER</span>
+      <button class="modal-close" onclick="Modal.close('supplierModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="app-form-group">
+        <label class="app-label">Company Name <span style="color:var(--danger)">*</span></label>
+        <input class="app-input" id="s-name" placeholder="e.g. Eko Auto Parts Ltd">
+      </div>
+      <div class="app-form-row">
+        <div class="app-form-group">
+          <label class="app-label">Contact Person</label>
+          <input class="app-input" id="s-contact" placeholder="e.g. Chidi Okonkwo">
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Email</label>
+          <input class="app-input" type="email" id="s-email" placeholder="orders@supplier.com">
+        </div>
+      </div>
+      <div class="app-form-row">
+        <div class="app-form-group">
+          <label class="app-label">Phone</label>
+          <input class="app-input" id="s-phone" placeholder="e.g. 0801 234 5678">
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Lead Time (days)</label>
+          <input class="app-input" type="number" id="s-lead" min="1" max="90" placeholder="e.g. 3">
+        </div>
+      </div>
+      <div class="app-form-row">
+        <div class="app-form-group">
+          <label class="app-label">Payment Terms</label>
+          <select class="app-input" id="s-terms">
+            <option value="">— Select —</option>
+            <option>Immediate / COD</option>
+            <option>Net 15</option>
+            <option>Net 30</option>
+            <option>Net 45</option>
+            <option>Net 60</option>
+            <option>50% upfront</option>
+          </select>
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Categories Supplied</label>
+          <input class="app-input" id="s-cats" placeholder="e.g. Brakes, Engine, Filters">
+        </div>
+      </div>
+      <div class="app-form-row" style="align-items:start">
+        <div class="app-form-group">
+          <label class="app-label">Rating</label>
+          <div id="ratingStars" class="stars" style="margin-top:8px">
+            <span class="star" data-v="1" onclick="setRating(1)">★</span>
+            <span class="star" data-v="2" onclick="setRating(2)">★</span>
+            <span class="star" data-v="3" onclick="setRating(3)">★</span>
+            <span class="star" data-v="4" onclick="setRating(4)">★</span>
+            <span class="star" data-v="5" onclick="setRating(5)">★</span>
+          </div>
+          <input type="hidden" id="s-rating" value="3">
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">On-time Delivery %</label>
+          <input class="app-input" type="number" id="s-ontime" min="0" max="100" placeholder="e.g. 90">
+        </div>
+      </div>
+      <div class="app-form-group">
+        <label class="app-label">Notes</label>
+        <textarea class="app-input" id="s-notes" rows="2" placeholder="Any additional info, e.g. preferred contact hours, bank details…" style="resize:vertical"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('supplierModal')">Cancel</button>
+      <button class="app-btn app-btn-primary" id="suppSaveBtn" onclick="saveSupplier()">Save Supplier</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: NEW PO ══ -->
+<div class="modal-backdrop" id="poModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="poModalTitle">NEW PURCHASE ORDER</span>
+      <button class="modal-close" onclick="Modal.close('poModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="app-form-row">
+        <div class="app-form-group">
+          <label class="app-label">Supplier <span style="color:var(--danger)">*</span></label>
+          <select class="app-input" id="po-supp"></select>
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Expected Delivery</label>
+          <input class="app-input" type="date" id="po-delivery">
+        </div>
+      </div>
+      <div style="font-family:var(--ff-display);font-size:15px;letter-spacing:1px;color:var(--app-text);margin:16px 0 10px">LINE ITEMS</div>
+      <div id="poLineItems" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
+      <button class="app-btn app-btn-ghost app-btn-sm" onclick="addPOLine()">+ Add Line Item</button>
+      <div class="divider-dark"></div>
+      <div style="display:flex;justify-content:flex-end;gap:24px;align-items:center;font-size:14px;color:var(--app-text)">
+        <span style="font-family:var(--ff-mono);font-size:12px;color:var(--app-muted)">TOTAL</span>
+        <span id="poSubtotal" style="font-family:var(--ff-display);font-size:26px;color:var(--amber)">₦0.00</span>
+      </div>
+      <div class="app-form-group" style="margin-top:12px">
+        <label class="app-label">Notes</label>
+        <input class="app-input" id="po-notes" placeholder="Any special instructions…">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('poModal')">Cancel</button>
+      <button class="app-btn app-btn-ghost" onclick="savePO('Draft')">Save Draft</button>
+      <button class="app-btn app-btn-primary" onclick="savePO('Sent')">Send to Supplier →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: PO DETAIL ══ -->
+<div class="modal-backdrop" id="poDetailModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="pdTitle">PO Detail</span>
+      <button class="modal-close" onclick="Modal.close('poDetailModal')">✕</button>
+    </div>
+    <div class="modal-body" id="pdBody"></div>
+    <div class="modal-footer" id="pdFooter"></div>
+  </div>
+</div>
+
+<!-- ══ MODAL: RECEIVE DELIVERY ══ -->
+<div class="modal-backdrop" id="receiveModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="rcvTitle">CONFIRM DELIVERY</span>
+      <button class="modal-close" onclick="Modal.close('receiveModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-info" style="margin-bottom:16px">Enter received quantities. Inventory will update automatically. Partial deliveries are supported.</div>
+      <div id="rcvLines" style="display:flex;flex-direction:column;gap:0;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('receiveModal')">Cancel</button>
+      <button class="app-btn app-btn-primary" onclick="confirmDelivery()">Confirm Delivery & Update Inventory</button>
+    </div>
+  </div>
+</div>
+
+<!-- EMAIL PREVIEW MODAL -->
+<div class="modal-backdrop" id="emailPreviewModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title">SEND PURCHASE ORDER</span>
+      <button class="modal-close" onclick="Modal.close('emailPreviewModal')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div id="emailNoEmailWarn" style="display:none;background:rgba(181,43,30,.1);border:1px solid rgba(181,43,30,.3);color:#fca5a5;padding:12px 16px;border-radius:var(--r-sm);font-size:13px;margin-bottom:16px">
+        &#x26A0; This supplier has no email on file. Please enter one below or add it in the supplier profile.
+      </div>
+      <div class="app-form-group">
+        <label class="app-label">To (Supplier Email)</label>
+        <input class="app-input" type="email" id="emailPreviewTo" placeholder="orders@supplier.com" style="font-family:var(--ff-mono)">
+        <div style="font-size:11px;color:var(--app-muted);margin-top:4px">On file: <span id="emailPreviewSupplier" style="color:var(--amber)"></span></div>
+      </div>
+      <div class="app-form-group">
+        <label class="app-label">Subject</label>
+        <div id="emailPreviewSubject" style="font-family:var(--ff-mono);font-size:12px;color:var(--app-text);background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:10px 14px"></div>
+      </div>
+      <div class="app-form-group">
+        <label class="app-label">Email Body Preview</label>
+        <div style="background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:16px;max-height:320px;overflow-y:auto">
+          <pre id="emailPreviewBody" style="font-family:var(--ff-mono);font-size:11px;color:var(--app-text);white-space:pre-wrap;line-height:1.7;margin:0"></pre>
+        </div>
+        <div style="font-size:11px;color:var(--app-muted);margin-top:6px">&#x2139; This will open your email app (Gmail, Outlook etc.) with everything pre-filled. Just click Send.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('emailPreviewModal')">Cancel</button>
+      <button class="app-btn app-btn-primary" onclick="confirmSendPO()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        Open Email App &amp; Mark Sent
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/theme.js"></script>
+<script src="../js/main.js"></script>
+<script src="../js/supabase.js"></script>
+<script src="../js/rbac.js"></script>
+<script>
+/* ════════════════════════════════════════
+   STATE
+════════════════════════════════════════ */
+let poData        = [];
+let supplierData  = [];
+let inventoryData = [];
+let selectedSuppId = null;
+let editingSuppId  = null;
+let currentRating  = 3;
+
+/* ════════════════════════════════════════
+   INIT
+════════════════════════════════════════ */
+async function initPage() {
+  const user = await RBAC.guardPage('supply-chain');
+  if (!user) return;
+  await RBAC.initSidebar('supply-chain');
+  await loadAll();
+
+  Realtime.subscribe('purchase_orders', {
+    onInsert: () => loadAll(),
+    onUpdate: () => loadAll(),
+  });
+}
+
+async function loadAll() {
+  const [pos, suppliers, inventory] = await Promise.all([
+    GS.getPurchaseOrders(),
+    GS.getSuppliers(),
+    GS.getInventory(),
+  ]);
+  poData        = pos;
+  supplierData  = suppliers;
+  inventoryData = inventory;
+
+  renderPOStats();
+  renderPOTable();
+  renderSupplierStats();
+  renderSupplierList();
+  renderReorder();
+  populatePOSupplierDropdown();
+
+  // Refresh open profile if one is selected
+  if (selectedSuppId) renderSupplierProfile(selectedSuppId);
+}
+
+/* ════════════════════════════════════════
+   NAVIGATION
+════════════════════════════════════════ */
+function switchPane(btn) {
+  document.querySelectorAll('.view-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.app-sub-link').forEach(b => b.classList.remove('active'));
+  document.getElementById(btn.dataset.pane)?.classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ════════════════════════════════════════
+   PURCHASE ORDERS
+════════════════════════════════════════ */
+function renderPOStats() {
+  const open  = poData.filter(p => !['Received','Cancelled'].includes(p.status)).length;
+  const draft = poData.filter(p => p.status === 'Draft').length;
+  const sent  = poData.filter(p => p.status === 'Sent').length;
+  const val   = poData
+    .filter(p => !['Received','Cancelled'].includes(p.status))
+    .reduce((s, p) => s + (p.purchase_order_items||[]).reduce((t,i) => t + (i.unit_cost||0)*(i.qty||0), 0), 0);
+
+  document.getElementById('poStats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Open Orders</div><div class="stat-value">${open}</div><div class="stat-delta">Active POs</div></div>
+    <div class="stat-card"><div class="stat-label">Drafts</div><div class="stat-value">${draft}</div><div class="stat-delta">Not yet sent</div></div>
+    <div class="stat-card"><div class="stat-label">Sent to Supplier</div><div class="stat-value">${sent}</div><div class="stat-delta">Awaiting delivery</div></div>
+    <div class="stat-card"><div class="stat-label">Open Order Value</div><div class="stat-value" style="font-size:26px">${formatCurrency(val)}</div><div class="stat-delta">All open POs</div></div>`;
+}
+
+function renderPOTable() {
+  const q      = (document.getElementById('poSearch')?.value || '').toLowerCase();
+  const status = document.getElementById('poStatusFilter')?.value || '';
+  const list   = poData.filter(p =>
+    (!status || p.status === status) &&
+    (!q || (p.ref||'').toLowerCase().includes(q) ||
+           (p.suppliers?.name||'').toLowerCase().includes(q))
+  );
+
+  const SC = {
+    Draft:'var(--app-muted)', Sent:'var(--amber)',
+    'Partially Received':'#60a5fa', Received:'var(--success)', Cancelled:'var(--danger)'
+  };
+
+  const tbody = document.getElementById('poTableBody');
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--app-muted)">No purchase orders found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = list.map(p => {
+    const suppName = p.suppliers?.name || '—';
+    const items    = p.purchase_order_items || [];
+    const total    = items.reduce((s,i) => s + (i.unit_cost||0)*(i.qty||0), 0);
+    const col      = SC[p.status] || 'var(--app-muted)';
+    const sent     = p.sent_at ? fmtDate(p.sent_at) : '—';
+    const delivery = p.expected_at ? fmtDate(p.expected_at) : '—';
+    return `<tr>
+      <td style="font-family:var(--ff-mono);font-size:12px;color:var(--amber)">${p.ref || 'PO-'+p.id?.slice(0,6)}</td>
+      <td>${suppName}</td>
+      <td style="text-align:center;font-family:var(--ff-mono)">${items.length}</td>
+      <td style="font-family:var(--ff-mono)">${formatCurrency(total)}</td>
+      <td><span style="font-family:var(--ff-mono);font-size:11px;color:${col};border:1px solid ${col}55;padding:2px 8px;border-radius:20px">${p.status}</span></td>
+      <td style="font-size:12px;color:var(--app-muted)">${sent}</td>
+      <td style="font-size:12px;color:${p.expected_at && new Date(p.expected_at)<new Date() && p.status!=='Received'?'var(--danger)':'var(--app-muted)'}">${delivery}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="app-btn app-btn-ghost app-btn-sm" onclick="viewPO('${p.id}')">View</button>
+          ${p.status==='Draft' ? `<button class="app-btn app-btn-ghost app-btn-sm" onclick="sendPO('${p.id}')">Send</button>` : ''}
+          ${['Sent','Partially Received'].includes(p.status) ? `<button class="app-btn app-btn-primary app-btn-sm" onclick="openReceiveModal('${p.id}')">Receive</button>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function populatePOSupplierDropdown() {
+  const sel = document.getElementById('po-supp');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = `<option value="">— Select Supplier —</option>` +
+    supplierData.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+  if (cur) sel.value = cur;
+}
+
+function openNewPO() {
+  populatePOSupplierDropdown();
+  document.getElementById('po-supp').value     = '';
+  document.getElementById('po-delivery').value = '';
+  document.getElementById('po-notes').value    = '';
+  document.getElementById('poLineItems').innerHTML = '';
+  document.getElementById('poSubtotal').textContent = '₦0.00';
+  addPOLine();
+  Modal.open('poModal');
+}
+
+function openNewPOForSupplier(suppId) {
+  openNewPO();
+  setTimeout(() => { document.getElementById('po-supp').value = suppId; }, 50);
+}
+
+function addPOLine() {
+  const div = document.createElement('div');
+  div.className = 'po-line';
+  div.innerHTML = `
+    <select class="app-input" style="flex:2" onchange="autofillCost(this)">
+      <option value="">— Select Part —</option>
+      ${inventoryData.map(p => `<option value="${p.id}" data-cost="${p.cost||0}">${p.name}${p.sku?' ('+p.sku+')':''}</option>`).join('')}
+    </select>
+    <input class="app-input" type="number" min="1" value="1" style="width:70px;text-align:center" placeholder="Qty" oninput="updatePOTotal()">
+    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+      <span style="font-family:var(--ff-mono);font-size:13px;color:var(--app-muted)">₦</span>
+      <input class="app-input" type="number" min="0" step="0.01" style="width:110px" placeholder="Unit cost" oninput="updatePOTotal()">
+    </div>
+    <button class="app-btn app-btn-ghost app-btn-sm" style="color:var(--danger);flex-shrink:0" onclick="this.closest('.po-line').remove();updatePOTotal()">✕</button>`;
+  document.getElementById('poLineItems').appendChild(div);
+}
+
+function autofillCost(sel) {
+  const cost = sel.options[sel.selectedIndex]?.dataset.cost;
+  const row  = sel.closest('.po-line');
+  if (cost && row) row.querySelectorAll('input[type=number]')[1].value = cost;
+  updatePOTotal();
+}
+
+function updatePOTotal() {
+  let total = 0;
+  document.querySelectorAll('#poLineItems .po-line').forEach(row => {
+    const inputs = row.querySelectorAll('input[type=number]');
+    const qty  = parseFloat(inputs[0]?.value) || 0;
+    const cost = parseFloat(inputs[1]?.value) || 0;
+    total += qty * cost;
+  });
+  document.getElementById('poSubtotal').textContent = formatCurrency(total);
+}
+
+async function savePO(status) {
+  const suppId   = document.getElementById('po-supp').value;
+  const delivery = document.getElementById('po-delivery').value;
+  const notes    = document.getElementById('po-notes').value.trim();
+  if (!suppId) { Toast.show('Please select a supplier', 'error'); return; }
+
+  const lines = [];
+  document.querySelectorAll('#poLineItems .po-line').forEach(row => {
+    const sel    = row.querySelector('select');
+    const inputs = row.querySelectorAll('input[type=number]');
+    const qty    = parseInt(inputs[0]?.value) || 0;
+    const cost   = parseFloat(inputs[1]?.value) || 0;
+    if (sel?.value && qty > 0) lines.push({ part_id: sel.value, qty, unit_cost: cost });
+  });
+  if (!lines.length) { Toast.show('Add at least one line item', 'error'); return; }
+
+  try {
+    const po = await GS.createPurchaseOrder(suppId, lines, notes, delivery || null);
+    if (status === 'Sent') await GS.updatePOStatus(po.id, 'Sent');
+    Toast.show(`PO ${status === 'Sent' ? 'sent to supplier' : 'saved as draft'}`, 'success');
+    Modal.close('poModal');
+    await loadAll();
+  } catch(err) { Toast.show(err.message || 'Failed to save PO', 'error'); }
+}
+
+async function sendPO(id) {
+  var po = poData.find(function(p){ return p.id === id; });
+  if (!po) { Toast.show('PO not found', 'error'); return; }
+
+  var supplier = po.suppliers || {};
+  var supplierEmail = supplier.email || '';
+  var supplierName  = supplier.name  || 'Supplier';
+  var items = po.purchase_order_items || [];
+  var total = items.reduce(function(s,i){ return s + (i.unit_cost||0)*(i.qty||0); }, 0);
+
+  // Build email subject
+  var subject = 'Purchase Order ' + (po.ref||'') + ' — GearShift Auto Shop';
+
+  // Build plain text email body with full PO details
+  var body = '';
+  body += 'Dear ' + supplierName + ',\n\n';
+  body += 'Please find below our purchase order details. Kindly confirm receipt and expected delivery date.\n\n';
+  body += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  body += 'PURCHASE ORDER: ' + (po.ref||'') + '\n';
+  body += 'Date: ' + new Date().toLocaleDateString('en-NG', {day:'numeric',month:'long',year:'numeric'}) + '\n';
+  if (po.expected_at) body += 'Expected Delivery: ' + new Date(po.expected_at).toLocaleDateString('en-NG', {day:'numeric',month:'long',year:'numeric'}) + '\n';
+  body += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+  body += 'ORDER ITEMS:\n\n';
+
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    var name = (item.inventory && item.inventory.name) || 'Part';
+    var sku  = (item.inventory && item.inventory.sku)  || '';
+    var lineTotal = (item.unit_cost||0) * (item.qty||0);
+    body += (i+1) + '. ' + name + (sku ? ' [' + sku + ']' : '') + '\n';
+    body += '   Quantity: ' + (item.qty||0) + '\n';
+    body += '   Unit Cost: ' + formatCurrency(item.unit_cost||0) + '\n';
+    body += '   Line Total: ' + formatCurrency(lineTotal) + '\n\n';
+  }
+
+  body += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  body += 'ORDER TOTAL: ' + formatCurrency(total) + '\n';
+  body += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+  if (po.notes) body += 'Notes: ' + po.notes + '\n\n';
+  body += 'Please reply to this email to confirm the order or contact us for any queries.\n\n';
+  body += 'Thank you for your continued partnership.\n\n';
+  body += 'Best regards,\n';
+  body += 'GearShift Auto Shop\n';
+
+  // Show preview modal first
+  document.getElementById('emailPreviewSupplier').textContent = supplierEmail || '(no email on file)';
+  document.getElementById('emailPreviewSubject').textContent  = subject;
+  document.getElementById('emailPreviewBody').textContent     = body;
+  document.getElementById('emailPreviewTo').value            = supplierEmail;
+
+  // Store for use in confirmSendPO
+  document.getElementById('emailPreviewModal').dataset.poId      = id;
+  document.getElementById('emailPreviewModal').dataset.subject   = subject;
+  document.getElementById('emailPreviewModal').dataset.body      = body;
+  document.getElementById('emailPreviewModal').dataset.toEmail   = supplierEmail;
+
+  if (!supplierEmail) {
+    document.getElementById('emailNoEmailWarn').style.display = 'block';
+  } else {
+    document.getElementById('emailNoEmailWarn').style.display = 'none';
+  }
+
+  Modal.open('emailPreviewModal');
+}
+
+async function confirmSendPO() {
+  var modal   = document.getElementById('emailPreviewModal');
+  var id      = modal.dataset.poId;
+  var subject = modal.dataset.subject;
+  var body    = modal.dataset.body;
+  var toEmail = document.getElementById('emailPreviewTo').value.trim();
+
+  if (!toEmail) { Toast.show('Please enter supplier email address', 'error'); return; }
+
+  // Open mailto in user email client
+  var mailto = 'mailto:' + encodeURIComponent(toEmail)
+    + '?subject=' + encodeURIComponent(subject)
+    + '&body='    + encodeURIComponent(body);
+
+  window.location.href = mailto;
+
+  // Mark PO as Sent after short delay (give email client time to open)
+  setTimeout(async function() {
+    try {
+      await GS.updatePOStatus(id, 'Sent');
+      Toast.show('PO marked as Sent — complete sending in your email app', 'success');
+      Modal.close('emailPreviewModal');
+      await loadAll();
+    } catch(e) { Toast.show(e.message || 'Failed to update status', 'error'); }
+  }, 1500);
+}
+
+function viewPO(id) {
+  const po = poData.find(p => p.id === id);
+  if (!po) return;
+  const items  = po.purchase_order_items || [];
+  const total  = items.reduce((s,i) => s + (i.unit_cost||0)*(i.qty||0), 0);
+  const SC = { Draft:'var(--app-muted)', Sent:'var(--amber)', 'Partially Received':'#60a5fa', Received:'var(--success)', Cancelled:'var(--danger)' };
+  const col = SC[po.status]||'var(--app-muted)';
+
+  document.getElementById('pdTitle').textContent = po.ref || 'PO-' + po.id?.slice(0,6);
+  document.getElementById('pdBody').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;font-size:13px">
+      <div><div style="font-family:var(--ff-mono);font-size:10px;letter-spacing:1.5px;color:var(--app-muted);margin-bottom:4px">SUPPLIER</div><div style="font-size:15px;font-weight:600">${po.suppliers?.name||'—'}</div></div>
+      <div><div style="font-family:var(--ff-mono);font-size:10px;letter-spacing:1.5px;color:var(--app-muted);margin-bottom:4px">STATUS</div><div style="color:${col};font-weight:700">${po.status}</div></div>
+      <div><div style="font-family:var(--ff-mono);font-size:10px;letter-spacing:1.5px;color:var(--app-muted);margin-bottom:4px">EXPECTED</div><div>${po.expected_at ? fmtDate(po.expected_at, true) : '—'}</div></div>
+      <div><div style="font-family:var(--ff-mono);font-size:10px;letter-spacing:1.5px;color:var(--app-muted);margin-bottom:4px">NOTES</div><div>${po.notes||'—'}</div></div>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>Part</th><th>SKU</th><th>Ordered</th><th>Received</th><th>Unit Cost</th><th>Line Total</th></tr></thead>
+      <tbody>
+        ${items.map(i => `<tr>
+          <td><strong>${i.inventory?.name||'—'}</strong></td>
+          <td style="font-family:var(--ff-mono);font-size:12px">${i.inventory?.sku||'—'}</td>
+          <td style="font-family:var(--ff-mono);text-align:center">${i.qty}</td>
+          <td style="font-family:var(--ff-mono);text-align:center;color:${i.qty_received>0?'var(--success)':'var(--app-muted)'}">${i.qty_received||0}</td>
+          <td style="font-family:var(--ff-mono)">${formatCurrency(i.unit_cost||0)}</td>
+          <td style="font-family:var(--ff-mono);font-weight:700">${formatCurrency((i.unit_cost||0)*(i.qty||0))}</td>
+        </tr>`).join('')}
+        <tr style="background:rgba(232,160,32,.05)">
+          <td colspan="5" style="text-align:right;font-family:var(--ff-mono);font-size:11px;color:var(--app-muted);letter-spacing:1.5px">TOTAL</td>
+          <td style="font-family:var(--ff-display);font-size:22px;color:var(--amber)">${formatCurrency(total)}</td>
+        </tr>
+      </tbody>
+    </table>`;
+  document.getElementById('pdFooter').innerHTML = `
+    <button class="app-btn app-btn-ghost" onclick="Modal.close('poDetailModal')">Close</button>
+    ${po.status==='Draft' ? `<button class="app-btn app-btn-primary" onclick="sendPO('${id}');Modal.close('poDetailModal')">Send to Supplier →</button>` : ''}
+    ${['Sent','Partially Received'].includes(po.status) ? `<button class="app-btn app-btn-primary" onclick="Modal.close('poDetailModal');openReceiveModal('${id}')">Receive Delivery →</button>` : ''}`;
+  Modal.open('poDetailModal');
+}
+
+function openReceiveModal(poId) {
+  const po = poData.find(p => p.id === poId);
+  if (!po) return;
+  document.getElementById('rcvTitle').textContent = `RECEIVE — ${po.ref||'PO-'+po.id?.slice(0,6)}`;
+  const pending = (po.purchase_order_items||[]).filter(i => (i.qty_received||0) < i.qty);
+  if (!pending.length) { Toast.show('All items already received', 'info'); return; }
+  document.getElementById('rcvLines').innerHTML = pending.map(i => `
+    <div class="po-line" data-item-id="${i.id}">
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:14px">${i.inventory?.name||'—'}</div>
+        <div style="font-size:11px;color:var(--app-muted);font-family:var(--ff-mono);margin-top:2px">
+          Ordered: ${i.qty} · Already received: ${i.qty_received||0} · Remaining: ${i.qty-(i.qty_received||0)}
+        </div>
+      </div>
+      <input class="app-input" type="number" min="0" max="${i.qty-(i.qty_received||0)}"
+        value="${i.qty-(i.qty_received||0)}" style="width:90px;text-align:center">
+    </div>`).join('');
+  Modal.open('receiveModal');
+}
+
+async function confirmDelivery() {
+  const lines = [];
+  document.querySelectorAll('#rcvLines .po-line').forEach(row => {
+    const qty = parseInt(row.querySelector('input')?.value) || 0;
+    if (qty > 0) lines.push({ id: row.dataset.itemId, qty });
+  });
+  if (!lines.length) { Toast.show('Enter at least one received quantity', 'error'); return; }
+  try {
+    for (const l of lines) await GS.receivePOItem(l.id, l.qty);
+    Toast.show('Delivery confirmed — inventory updated', 'success');
+    Modal.close('receiveModal');
+    await loadAll();
+  } catch(err) { Toast.show(err.message || 'Failed to confirm delivery', 'error'); }
+}
+
+/* ════════════════════════════════════════
+   SUPPLIER LIST
+════════════════════════════════════════ */
+function renderSupplierStats() {
+  const total     = supplierData.length;
+  const withParts = supplierData.filter(s => inventoryData.some(i => i.supplier_id === s.id)).length;
+  const leads     = supplierData.filter(s => s.lead_days).map(s => s.lead_days);
+  const avgLead   = leads.length ? Math.round(leads.reduce((a,b)=>a+b,0)/leads.length) : 0;
+  const openPOs   = poData.filter(p => !['Received','Cancelled'].includes(p.status)).length;
+
+  // Update tab badge
+  const badge = document.getElementById('suppCount');
+  if (badge) badge.textContent = total || '';
+
+  document.getElementById('suppStats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Total Suppliers</div><div class="stat-value">${total}</div><div class="stat-delta">In your network</div></div>
+    <div class="stat-card"><div class="stat-label">Linked to Parts</div><div class="stat-value">${withParts}</div><div class="stat-delta">Have inventory linked</div></div>
+    <div class="stat-card"><div class="stat-label">Avg Lead Time</div><div class="stat-value">${avgLead}<span style="font-size:18px;font-family:var(--ff-body)"> days</span></div><div class="stat-delta">Average delivery window</div></div>
+    <div class="stat-card"><div class="stat-label">Active POs</div><div class="stat-value">${openPOs}</div><div class="stat-delta">Open purchase orders</div></div>`;
+}
+
+function renderSupplierList() {
+  const q     = (document.getElementById('suppSearch')?.value || '').toLowerCase();
+  const lead  = document.getElementById('suppLeadFilter')?.value || '';
+  const terms = document.getElementById('suppTermsFilter')?.value || '';
+  const rating = parseInt(document.getElementById('suppRatingFilter')?.value || '0');
+
+  const list = supplierData.filter(s => {
+    // Text search across name, contact, email, categories
+    const haystack = `${s.name} ${s.contact||''} ${s.email||''} ${s.categories||''}`.toLowerCase();
+    if (q && !haystack.includes(q)) return false;
+
+    // Lead time filter
+    const days = parseInt(s.lead_days) || 0;
+    if (lead === 'fast'   && !(days >= 1 && days <= 3)) return false;
+    if (lead === 'medium' && !(days >= 4 && days <= 7)) return false;
+    if (lead === 'slow'   && !(days >= 8))              return false;
+
+    // Payment terms filter
+    const t = (s.terms||'').toLowerCase();
+    if (terms === 'cod'   && !['cod','immediate','cash'].some(x => t.includes(x))) return false;
+    if (terms === 'net15' && !t.includes('15')) return false;
+    if (terms === 'net30' && !t.includes('30')) return false;
+    if (terms === 'net60' && !/6[0-9]|[7-9][0-9]/.test(t))  return false;
+
+    // Rating filter
+    if (rating && (s.rating||0) < rating) return false;
+
+    return true;
+  });
+
+  const el = document.getElementById('supplierList');
+  if (!list.length) {
+    el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--app-muted);font-size:14px">
+      No suppliers match your filters.
+      ${supplierData.length === 0 ? '<br><br><button class="app-btn app-btn-primary app-btn-sm" onclick="openSupplierModal()">+ Add your first supplier</button>' : ''}
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = list.map(s => {
+    const partCount = inventoryData.filter(i => i.supplier_id === s.id).length;
+    const active    = s.id === selectedSuppId;
+    const initials  = (s.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const leadClass = !s.lead_days ? '' : s.lead_days<=3 ? 'lead-fast' : s.lead_days<=7 ? 'lead-medium' : 'lead-slow';
+    const stars     = s.rating ? '★'.repeat(s.rating) + '☆'.repeat(5-s.rating) : '';
+
+    return `<div class="supplier-card ${active?'selected':''}" onclick="selectSupplier('${s.id}')">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:38px;height:38px;border-radius:8px;background:var(--rust);display:flex;align-items:center;
+          justify-content:center;font-family:var(--ff-display);font-size:15px;color:#fff;flex-shrink:0">${initials}</div>
+        <div style="flex:1;min-width:0">
+          <div class="supplier-card-name">${s.name}</div>
+          <div class="supplier-card-meta">
+            ${s.contact ? `<span>👤 ${s.contact}</span>` : ''}
+            ${s.lead_days ? `<span class="lead-badge ${leadClass}">${s.lead_days}d</span>` : ''}
+            ${s.terms    ? `<span>${s.terms}</span>` : ''}
+            ${stars ? `<span style="color:var(--amber);font-size:11px">${stars}</span>` : ''}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-family:var(--ff-display);font-size:22px;color:${partCount?'var(--app-text)':'var(--app-muted)'}">${partCount}</div>
+          <div style="font-size:9px;color:var(--app-muted);font-family:var(--ff-mono);letter-spacing:1px">PARTS</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectSupplier(id) {
+  selectedSuppId = id;
+  renderSupplierList();
+  renderSupplierProfile(id);
+}
+
+function renderSupplierProfile(id) {
+  const s = supplierData.find(x => x.id === id);
+  if (!s) return;
+
+  const parts    = inventoryData.filter(i => i.supplier_id === id);
+  const orders   = poData.filter(p => p.supplier_id === id);
+  const received = orders.filter(p => p.status === 'Received').length;
+  const open     = orders.filter(p => !['Received','Cancelled'].includes(p.status)).length;
+  const totalVal = orders.reduce((sum,p) =>
+    sum + (p.purchase_order_items||[]).reduce((t,i) => t + (i.unit_cost||0)*(i.qty||0), 0), 0);
+
+  const leadClass = !s.lead_days ? '' : s.lead_days<=3 ? 'lead-fast' : s.lead_days<=7 ? 'lead-medium' : 'lead-slow';
+  const stars     = (s.rating||0);
+  const ontime    = s.on_time_pct ?? 90;
+  const otColor   = ontime >= 80 ? 'var(--success)' : ontime >= 60 ? 'var(--amber)' : 'var(--danger)';
+  const safeName  = s.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+  document.getElementById('supplierProfile').innerHTML = `
+    <!-- Header -->
+    <div class="panel-header" style="align-items:flex-start">
+      <div>
+        <div style="font-family:var(--ff-display);font-size:24px;letter-spacing:1px;color:var(--app-text);line-height:1">${s.name}</div>
+        <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--app-muted)">
+          ${s.email ? `<a href="mailto:${s.email}" style="color:var(--amber)">${s.email}</a>` : ''}
+          ${s.phone ? `<span>📞 ${s.phone}</span>` : ''}
+          ${s.contact ? `<span>👤 ${s.contact}</span>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-shrink:0;margin-left:auto">
+        <button class="app-btn app-btn-ghost app-btn-sm" onclick="openNewPOForSupplier('${id}')">+ New PO</button>
+        <button class="app-btn app-btn-ghost app-btn-sm" onclick="openEditSupplier('${id}')">✏️ Edit</button>
+        <button class="app-btn app-btn-ghost app-btn-sm" style="color:var(--danger)"
+          onclick="deleteSupplier('${id}','${safeName}')">Delete</button>
+      </div>
+    </div>
+
+    <!-- Info grid -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--app-border)">
+      ${[
+        ['Lead Time', s.lead_days
+          ? `<span class="lead-badge ${leadClass}">${s.lead_days} days</span>`
+          : '<span style="color:var(--app-muted)">—</span>'],
+        ['Payment Terms', s.terms || '<span style="color:var(--app-muted)">—</span>'],
+        ['Categories', s.categories || '<span style="color:var(--app-muted)">—</span>'],
+        ['Rating', stars
+          ? `<span style="color:var(--amber)">${'★'.repeat(stars)}</span><span style="color:var(--app-muted)">${'☆'.repeat(5-stars)}</span>`
+          : '<span style="color:var(--app-muted)">—</span>'],
+      ].map(([label, val]) => `
+        <div style="padding:14px 20px;border-right:1px solid var(--app-border)">
+          <div style="font-family:var(--ff-mono);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--app-muted);margin-bottom:6px">${label}</div>
+          <div style="font-size:14px;color:var(--app-text)">${val}</div>
+        </div>`).join('')}
+    </div>
+
+    <!-- Performance row -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--app-border)">
+      ${[
+        ['Parts Supplied', parts.length, 'In inventory'],
+        ['Total Orders',   orders.length, `${received} completed`],
+        ['Open POs',       open, 'Awaiting delivery'],
+        ['Total Value',    formatCurrency(totalVal), 'All orders'],
+      ].map(([label, val, sub]) => `
+        <div style="padding:16px 20px;border-right:1px solid var(--app-border);text-align:center">
+          <div style="font-family:var(--ff-display);font-size:26px;color:var(--app-text);line-height:1">${val}</div>
+          <div style="font-family:var(--ff-mono);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--app-muted);margin:4px 0 2px">${label}</div>
+          <div style="font-size:11px;color:var(--app-muted)">${sub}</div>
+        </div>`).join('')}
+    </div>
+
+    <!-- On-time delivery bar -->
+    <div style="padding:14px 20px;border-bottom:1px solid var(--app-border);display:flex;align-items:center;gap:16px">
+      <div style="font-family:var(--ff-mono);font-size:10px;letter-spacing:1.5px;color:var(--app-muted);white-space:nowrap">ON-TIME DELIVERY</div>
+      <div class="perf-bar-wrap" style="flex:1">
+        <div class="perf-bar" style="width:${ontime}%;background:${otColor}"></div>
+      </div>
+      <div style="font-family:var(--ff-display);font-size:20px;color:${otColor};white-space:nowrap">${ontime}%</div>
+    </div>
+
+    ${s.notes ? `
+    <div style="padding:14px 20px;font-size:13px;color:var(--app-muted);border-bottom:1px solid var(--app-border)">
+      <span style="font-family:var(--ff-mono);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--app-muted);margin-right:12px">NOTES</span>
+      ${s.notes}
+    </div>` : ''}
+
+    <!-- Linked parts -->
+    <div class="panel-header"><span class="panel-title">LINKED PARTS (${parts.length})</span></div>
+    ${parts.length
+      ? `<table class="data-table">
+          <thead><tr><th>Part Name</th><th>SKU</th><th>Category</th><th>In Stock</th><th>Unit Cost</th></tr></thead>
+          <tbody>
+            ${parts.map(p => `<tr>
+              <td><strong>${p.name}</strong></td>
+              <td style="font-family:var(--ff-mono);font-size:12px">${p.sku||'—'}</td>
+              <td>${p.category||'—'}</td>
+              <td style="font-family:var(--ff-mono);font-weight:700;color:${p.qty<=(p.reorder_threshold||p.threshold||0)?'var(--danger)':'var(--success)'}">${p.qty}</td>
+              <td style="font-family:var(--ff-mono)">${formatCurrency(p.cost||0)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      : `<div style="padding:18px 24px;font-size:13px;color:var(--app-muted)">
+          No inventory parts linked yet. Open a part in <a href="inventory.html" style="color:var(--amber)">Inventory</a> and set this supplier.
+        </div>`
+    }
+
+    <!-- Recent POs -->
+    ${orders.length ? `
+    <div class="panel-header" style="margin-top:4px"><span class="panel-title">RECENT ORDERS</span></div>
+    <table class="data-table">
+      <thead><tr><th>PO#</th><th>Status</th><th>Items</th><th>Value</th><th>Date</th><th></th></tr></thead>
+      <tbody>
+        ${orders.slice(0,6).map(o => {
+          const col = { Draft:'var(--app-muted)', Sent:'var(--amber)', 'Partially Received':'#60a5fa', Received:'var(--success)', Cancelled:'var(--danger)' }[o.status]||'var(--app-muted)';
+          const val = (o.purchase_order_items||[]).reduce((t,i) => t+(i.unit_cost||0)*(i.qty||0),0);
+          return `<tr>
+            <td style="font-family:var(--ff-mono);font-size:12px;color:var(--amber)">${o.ref||'PO-'+o.id?.slice(0,6)}</td>
+            <td><span style="font-family:var(--ff-mono);font-size:11px;color:${col}">${o.status}</span></td>
+            <td style="font-family:var(--ff-mono);text-align:center">${o.purchase_order_items?.length||0}</td>
+            <td style="font-family:var(--ff-mono)">${formatCurrency(val)}</td>
+            <td style="font-size:12px;color:var(--app-muted)">${fmtDate(o.created_at)}</td>
+            <td><button class="app-btn app-btn-ghost app-btn-sm" onclick="viewPO('${o.id}')">View</button></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>` : ''}
+  `;
+}
+
+/* ════════════════════════════════════════
+   SUPPLIER MODAL — ADD / EDIT
+════════════════════════════════════════ */
+function setRating(v) {
+  currentRating = v;
+  document.getElementById('s-rating').value = v;
+  document.querySelectorAll('#ratingStars .star').forEach(s => {
+    s.classList.toggle('filled', parseInt(s.dataset.v) <= v);
+  });
+}
+
+function openSupplierModal() {
+  editingSuppId = null;
+  currentRating = 3;
+  document.getElementById('suppModalTitle').textContent = 'ADD SUPPLIER';
+  document.getElementById('suppSaveBtn').textContent    = 'Save Supplier';
+  ['s-name','s-contact','s-email','s-phone','s-notes'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('s-lead').value   = '';
+  document.getElementById('s-terms').value  = '';
+  document.getElementById('s-cats').value   = '';
+  document.getElementById('s-ontime').value = '';
+  setRating(3);
+  Modal.open('supplierModal');
+}
+
+function openEditSupplier(id) {
+  const s = supplierData.find(x => x.id === id);
+  if (!s) return;
+  editingSuppId = id;
+  document.getElementById('suppModalTitle').textContent = 'EDIT SUPPLIER';
+  document.getElementById('suppSaveBtn').textContent    = 'Save Changes';
+
+  document.getElementById('s-name').value    = s.name           || '';
+  document.getElementById('s-contact').value = s.contact        || '';
+  document.getElementById('s-email').value   = s.email          || '';
+  document.getElementById('s-phone').value   = s.phone          || '';
+  document.getElementById('s-lead').value    = s.lead_days      || '';
+  document.getElementById('s-terms').value   = s.terms          || '';
+  document.getElementById('s-cats').value    = s.categories     || '';
+  document.getElementById('s-ontime').value  = s.on_time_pct    ?? '';
+  document.getElementById('s-notes').value   = s.notes          || '';
+  setRating(s.rating || 3);
+  Modal.open('supplierModal');
+}
+
+async function saveSupplier() {
+  const name = document.getElementById('s-name').value.trim();
+  if (!name) { Toast.show('Supplier name is required', 'error'); return; }
+
+  const btn = document.getElementById('suppSaveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    const user    = await RBAC.getCurrentUser();
+    const payload = {
+      name,
+      contact:     document.getElementById('s-contact').value.trim() || null,
+      email:       document.getElementById('s-email').value.trim()   || null,
+      phone:       document.getElementById('s-phone').value.trim()   || null,
+      lead_days:   document.getElementById('s-lead').value   ? parseInt(document.getElementById('s-lead').value)   : null,
+      terms:       document.getElementById('s-terms').value  || null,
+      categories:  document.getElementById('s-cats').value.trim()    || null,
+      on_time_pct: document.getElementById('s-ontime').value ? parseInt(document.getElementById('s-ontime').value) : null,
+      notes:       document.getElementById('s-notes').value.trim()   || null,
+      rating:      currentRating,
+      shop_id:     user?.shop_id,
+    };
+
+    let savedId = editingSuppId;
+    if (editingSuppId) {
+      await GS.updateSupplier(editingSuppId, payload);
+      Toast.show(`${name} updated`, 'success');
+    } else {
+      const result = await GS.createSupplier(payload);
+      savedId = result?.id;
+      Toast.show(`${name} added to your supplier network`, 'success');
+    }
+
+    Modal.close('supplierModal');
+    await loadAll();
+    if (savedId) selectSupplier(savedId);
+
+    // Switch to suppliers pane if not already there
+    const btn2 = document.querySelector('[data-pane="pane-suppliers"]');
+    if (btn2 && !btn2.classList.contains('active')) switchPane(btn2);
+
+  } catch(err) {
+    console.error(err);
+    Toast.show(err.message || 'Failed to save supplier', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = editingSuppId ? 'Save Changes' : 'Save Supplier';
+  }
+}
+
+async function deleteSupplier(id, name) {
+  confirmAction(`Delete "${name}"? Their inventory parts will remain but lose the supplier link.`, async () => {
+    try {
+      const { error } = await sb.from('suppliers').delete().eq('id', id);
+      if (error) throw error;
+      Toast.show(`${name} removed`, 'info');
+      selectedSuppId = null;
+      document.getElementById('supplierProfile').innerHTML = `
+        <div class="empty-state" style="padding:64px">
+          <div class="empty-icon">🏭</div>
+          <div class="empty-title">SELECT A SUPPLIER</div>
+          <div class="empty-body">Click a supplier to view their profile.</div>
+        </div>`;
+      await loadAll();
+    } catch(err) { Toast.show(err.message || 'Failed to delete', 'error'); }
+  });
+}
+
+/* ════════════════════════════════════════
+   REORDER SUGGESTIONS
+════════════════════════════════════════ */
+function renderReorder() {
+  const low = inventoryData.filter(p => (p.qty||0) <= (p.reorder_threshold||p.threshold||0));
+
+  const badge = document.getElementById('reorderBadge');
+  if (badge) {
+    badge.textContent = low.length || '';
+    badge.style.display = low.length ? 'inline' : 'none';
+  }
+
+  const tbody = document.getElementById('reorderBody');
+  if (!tbody) return;
+
+  if (!low.length) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--app-muted)">✓ All parts are adequately stocked.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = low.map(p => {
+    const supp    = supplierData.find(s => s.id === p.supplier_id);
+    const suggest = Math.max(((p.reorder_threshold||p.threshold||0) * 2) - (p.qty||0), 1);
+    const cost    = p.cost || 0;
+    return `<tr>
+      <td><input type="checkbox" class="reorder-chk"
+        data-id="${p.id}" data-supp="${p.supplier_id||''}"
+        data-qty="${suggest}" data-cost="${cost}" checked></td>
+      <td><strong>${p.name}</strong></td>
+      <td style="font-family:var(--ff-mono);font-size:12px">${p.sku||'—'}</td>
+      <td style="font-family:var(--ff-mono);font-weight:700;color:var(--danger)">${p.qty||0}</td>
+      <td style="font-family:var(--ff-mono)">${p.reorder_threshold||p.threshold||0}</td>
+      <td style="font-family:var(--ff-mono);color:var(--amber)">${suggest}</td>
+      <td>${supp
+        ? supp.name
+        : `<span style="color:var(--danger);font-size:12px">No supplier set</span>`}
+      </td>
+      <td style="font-family:var(--ff-mono)">${formatCurrency(cost)}</td>
+      <td style="font-family:var(--ff-mono);font-weight:700">${formatCurrency(suggest * cost)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleAll(cb) {
+  document.querySelectorAll('.reorder-chk').forEach(c => c.checked = cb.checked);
+}
+
+async function generatePOFromLowStock() {
+  const checked = [...document.querySelectorAll('.reorder-chk:checked')];
+  if (!checked.length) { Toast.show('Select at least one part', 'error'); return; }
+
+  // Group by supplier
+  const bySup = {};
+  const noSupp = [];
+  checked.forEach(c => {
+    if (!c.dataset.supp) { noSupp.push(c); return; }
+    if (!bySup[c.dataset.supp]) bySup[c.dataset.supp] = [];
+    bySup[c.dataset.supp].push({
+      part_id:   c.dataset.id,
+      qty:       parseInt(c.dataset.qty),
+      unit_cost: parseFloat(c.dataset.cost),
+    });
+  });
+
+  const suppCount = Object.keys(bySup).length;
+  if (!suppCount) {
+    Toast.show('None of the selected parts have a supplier assigned. Link suppliers in Inventory first.', 'error', 5000);
+    return;
+  }
+
+  try {
+    for (const [sid, items] of Object.entries(bySup)) {
+      await GS.createPurchaseOrder(sid, items, 'Auto-generated from reorder suggestions');
+    }
+    const msg = `${suppCount} PO${suppCount!==1?'s':''} created`
+      + (noSupp.length ? ` · ${noSupp.length} part(s) skipped (no supplier)` : '');
+    Toast.show(msg, 'success', 6000);
+    await loadAll();
+    switchPane(document.querySelector('[data-pane="pane-pos"]'));
+  } catch(err) { Toast.show(err.message || 'Failed to generate POs', 'error'); }
+}
+
+/* ════════════════════════════════════════
+   HELPERS
+════════════════════════════════════════ */
+function fmtDate(d, long = false) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-NG', long
+    ? { day:'numeric', month:'long', year:'numeric' }
+    : { day:'numeric', month:'short' });
+}
+
+document.addEventListener('DOMContentLoaded', initPage);
+</script>
+</body>
+</html>

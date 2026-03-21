@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pricing — GearShift</title>
+<meta name="description" content="Simple, transparent pricing for auto mechanic shops of every size. Start free, upgrade when you're ready.">
+<link rel="stylesheet" href="css/main.css">
+<style>
+.page-hero { background:var(--ink); padding:120px var(--space-7) 80px; position:relative; overflow:hidden; }
+.page-hero-grid { position:absolute;inset:0; background-image:linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px); background-size:56px 56px; }
+
+/* TOGGLE */
+.billing-toggle {
+  display:inline-flex; align-items:center; gap:16px;
+  background:var(--surface); border:1.5px solid var(--border);
+  padding:6px 6px 6px 20px; border-radius:40px; margin-bottom:56px;
+  font-size:14px; font-weight:500;
+}
+.toggle-track {
+  width:52px; height:28px; background:var(--border); border-radius:20px;
+  position:relative; cursor:pointer; transition:background var(--t-base);
+}
+.toggle-track.on { background:var(--rust); }
+.toggle-thumb {
+  width:22px; height:22px; background:var(--white); border-radius:50%;
+  position:absolute; top:3px; left:3px; transition:transform var(--t-base);
+  box-shadow:var(--shadow-sm);
+}
+.toggle-track.on .toggle-thumb { transform:translateX(24px); }
+.toggle-label { font-size:14px; font-weight:500; }
+.save-badge { background:var(--success); color:var(--white); font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; font-family:var(--ff-mono); letter-spacing:0.5px; }
+
+/* PLANS */
+.plans-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:2px; background:var(--border); border:1px solid var(--border); margin-bottom:var(--space-8); }
+.plan-card {
+  background:var(--surface); padding:40px 36px;
+  display:flex; flex-direction:column;
+  position:relative; transition:background var(--t-base);
+}
+.plan-card:hover { background:var(--white); }
+.plan-card.featured {
+  background:var(--ink); color:var(--white);
+  border-top:3px solid var(--rust);
+}
+.plan-card.featured:hover { background:#141a22; }
+.plan-badge {
+  display:inline-flex; position:absolute; top:-1px; right:28px;
+  background:var(--rust); color:var(--white); font-family:var(--ff-mono);
+  font-size:10px; letter-spacing:2px; text-transform:uppercase;
+  padding:5px 14px;
+}
+.plan-name { font-family:var(--ff-display); font-size:32px; letter-spacing:1px; margin-bottom:6px; }
+.plan-desc { font-size:14px; color:var(--text-muted); margin-bottom:28px; line-height:1.7; }
+.plan-card.featured .plan-desc { color:var(--chrome); }
+.plan-price { margin-bottom:28px; }
+.plan-amount {
+  font-family:var(--ff-display); font-size:64px; line-height:1;
+  display:flex; align-items:flex-start; gap:4px;
+}
+.plan-currency { font-size:24px; margin-top:10px; font-family:var(--ff-body); font-weight:600; }
+.plan-period { font-size:14px; color:var(--text-muted); margin-top:8px; }
+.plan-card.featured .plan-period { color:var(--chrome); }
+.plan-divider { height:1px; background:var(--border); margin:24px 0; }
+.plan-card.featured .plan-divider { background:rgba(255,255,255,0.1); }
+.plan-features { display:flex; flex-direction:column; gap:12px; flex:1; margin-bottom:32px; }
+.plan-feature { display:flex; gap:10px; font-size:14px; }
+.plan-feature .yes { color:var(--success); font-weight:700; flex-shrink:0; }
+.plan-feature .no  { color:var(--border); flex-shrink:0; }
+.plan-card.featured .plan-feature { color:rgba(255,255,255,0.85); }
+.plan-feature-text { line-height:1.5; }
+.plan-cta {
+  padding:14px; font-family:var(--ff-body); font-size:14px; font-weight:700;
+  letter-spacing:1px; text-transform:uppercase; text-align:center;
+  border-radius:var(--r-sm); border:none; transition:all var(--t-base); display:block;
+}
+.plan-cta-primary { background:var(--rust); color:var(--white); }
+.plan-cta-primary:hover { background:#e05520; transform:translateY(-2px); box-shadow:var(--shadow-rust); }
+.plan-cta-outline { background:transparent; color:var(--ink); border:2px solid var(--ink); }
+.plan-cta-outline:hover { background:var(--ink); color:var(--white); }
+.plan-cta-ghost { background:rgba(255,255,255,0.1); color:var(--white); }
+.plan-cta-ghost:hover { background:rgba(255,255,255,0.2); }
+
+/* FEATURE TABLE */
+.feat-table { width:100%; border-collapse:collapse; }
+.feat-table th { padding:14px 20px; font-family:var(--ff-mono); font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--text-muted); border-bottom:2px solid var(--border); text-align:center; }
+.feat-table th:first-child { text-align:left; }
+.feat-table th.hi { background:var(--rust); color:var(--white); }
+.feat-table td { padding:13px 20px; font-size:14px; border-bottom:1px solid var(--border); text-align:center; }
+.feat-table td:first-child { text-align:left; color:var(--ink); font-weight:500; }
+.feat-table .section-row td { background:var(--paper-dark); font-family:var(--ff-mono); font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--text-muted); padding:10px 20px; }
+.feat-table tr:hover td { background:rgba(201,75,30,0.03); }
+.feat-table .hi-col { background:rgba(201,75,30,0.04); }
+.chk { color:var(--success); font-size:18px; font-weight:700; }
+.dsh { color:#ccc; font-size:18px; }
+
+/* FAQ */
+.faq-list { max-width:760px; margin:0 auto; }
+.faq-item { border-bottom:1px solid var(--border); }
+.faq-q {
+  width:100%; text-align:left; padding:22px 0; font-size:16px; font-weight:600;
+  background:none; border:none; cursor:pointer; display:flex; justify-content:space-between; align-items:center;
+  transition:color var(--t-fast);
+}
+.faq-q:hover { color:var(--rust); }
+.faq-q .arrow { font-size:20px; transition:transform var(--t-base); color:var(--text-muted); }
+.faq-item.open .faq-q .arrow { transform:rotate(45deg); color:var(--rust); }
+.faq-a { display:none; padding:0 0 22px; font-size:15px; line-height:1.85; color:var(--text-muted); }
+.faq-item.open .faq-a { display:block; }
+
+@media(max-width:900px){ .plans-grid{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a href="index.html" class="nav-logo">GEAR<span class="accent">SHIFT</span></a>
+  <div class="nav-center">
+    <a href="index.html"        class="nav-link" data-page="index.html">Home</a>
+    <a href="features.html"     class="nav-link" data-page="features.html">Features</a>
+    <a href="how-it-works.html" class="nav-link" data-page="how-it-works.html">How It Works</a>
+    <a href="pricing.html"      class="nav-link active">Pricing</a>
+    <a href="contact.html"      class="nav-link" data-page="contact.html">Contact</a>
+  </div>
+  <div class="nav-right">
+    <a href="app/dashboard.html" class="btn-nav-login">Log In</a>
+    <a href="#plans"             class="btn-nav-cta">Get Started →</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="page-hero">
+  <div class="page-hero-grid"></div>
+  <div class="container" style="position:relative;z-index:2;text-align:center;">
+    <div class="section-eyebrow" style="color:var(--amber);justify-content:center;margin:0 auto 20px;">Pricing</div>
+    <h1 class="display-lg anim-fade-up" style="color:var(--white);margin-bottom:20px;">SIMPLE,<br>TRANSPARENT<br>PRICING</h1>
+    <p class="anim-fade-up-d2" style="font-size:18px;color:var(--chrome);max-width:480px;margin:0 auto;line-height:1.8;font-weight:300;">
+      Start free. No credit card required. Upgrade when your shop is ready.
+    </p>
+  </div>
+</section>
+
+<!-- PLANS -->
+<section class="section section-paper" id="plans">
+  <div class="container" style="text-align:center;">
+
+    <!-- Billing toggle -->
+    <div style="display:flex;justify-content:center;">
+      <div class="billing-toggle">
+        <span class="toggle-label">Monthly</span>
+        <div class="toggle-track on" id="billingToggle" onclick="toggleBilling()">
+          <div class="toggle-thumb"></div>
+        </div>
+        <span class="toggle-label">Annual</span>
+        <span class="save-badge">SAVE 20%</span>
+      </div>
+    </div>
+
+    <div class="plans-grid" id="plansGrid">
+
+      <!-- STARTER -->
+      <div class="plan-card">
+        <div class="plan-name">Starter</div>
+        <p class="plan-desc">For single-bay shops just getting started. Everything you need to go paperless.</p>
+        <div class="plan-price">
+          <div class="plan-amount"><span class="plan-currency">₦</span><span class="price-val" data-monthly="0" data-annual="0">0</span></div>
+          <div class="plan-period">per month · forever free</div>
+        </div>
+        <div class="plan-divider"></div>
+        <div class="plan-features">
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">Up to <strong>2 users</strong></span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">Up to <strong>50 work orders/month</strong></span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">Customer & vehicle management</span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">Basic inventory tracking</span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">Invoicing & PDF export</span></div>
+          <div class="plan-feature"><span class="no">—</span><span class="plan-feature-text" style="color:#aaa;">Supply chain & POs</span></div>
+          <div class="plan-feature"><span class="no">—</span><span class="plan-feature-text" style="color:#aaa;">Advanced reports</span></div>
+          <div class="plan-feature"><span class="no">—</span><span class="plan-feature-text" style="color:#aaa;">Online booking portal</span></div>
+        </div>
+        <a href="app/dashboard.html" class="plan-cta plan-cta-outline">Start Free</a>
+      </div>
+
+      <!-- PRO (FEATURED) -->
+      <div class="plan-card featured">
+        <div class="plan-badge">Most Popular</div>
+        <div class="plan-name">Pro</div>
+        <p class="plan-desc">The full GearShift experience. Everything connected, for growing shops.</p>
+        <div class="plan-price">
+          <div class="plan-amount" style="color:var(--white);">
+            <span class="plan-currency">₦</span>
+            <span class="price-val" data-monthly="10,500" data-annual="8,000">8,000</span>
+          </div>
+          <div class="plan-period">per month · billed annually</div>
+        </div>
+        <div class="plan-divider"></div>
+        <div class="plan-features">
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">Up to <strong>10 users</strong></span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text"><strong>Unlimited</strong> work orders</span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">Full customer & vehicle management</span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">Full inventory with thresholds</span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">Supply chain & purchase orders</span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">Online customer booking portal</span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">Advanced reports & analytics</span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">Card & ACH payment processing</span></div>
+        </div>
+        <a href="contact.html" class="plan-cta plan-cta-primary" style="margin-top:auto;">Start Pro Trial →</a>
+      </div>
+
+      <!-- ENTERPRISE -->
+      <div class="plan-card">
+        <div class="plan-name">Enterprise</div>
+        <p class="plan-desc">For multi-location operations, dealerships, and fleet service centres.</p>
+        <div class="plan-price">
+          <div class="plan-amount"><span class="plan-currency" style="font-size:18px;margin-top:14px;">Custom</span></div>
+          <div class="plan-period">volume pricing · annual contract</div>
+        </div>
+        <div class="plan-divider"></div>
+        <div class="plan-features">
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text"><strong>Unlimited</strong> users</span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text"><strong>Unlimited</strong> locations</span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">Everything in Pro</span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">Dedicated account manager</span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">Custom integrations & API access</span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">SLA & uptime guarantee</span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">SSO / SAML authentication</span></div>
+          <div class="plan-feature"><span class="yes">✓</span><span class="plan-feature-text">Custom onboarding & training</span></div>
+        </div>
+        <a href="contact.html" class="plan-cta plan-cta-outline">Contact Sales</a>
+      </div>
+
+    </div>
+
+    <p style="font-size:13px;color:var(--text-muted);margin-top:-32px;">All plans include SSL security, automatic backups, and email support. No setup fees.</p>
+  </div>
+</section>
+
+<!-- FULL FEATURE TABLE -->
+<section class="section section-light">
+  <div class="container">
+    <div class="section-eyebrow">Compare Plans</div>
+    <h2 class="display-sm" style="margin-bottom:40px;">FULL FEATURE<br>BREAKDOWN</h2>
+    <table class="feat-table">
+      <thead>
+        <tr>
+          <th style="width:40%">Feature</th>
+          <th style="width:20%">Starter</th>
+          <th class="hi" style="width:20%">✦ Pro</th>
+          <th style="width:20%">Enterprise</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="section-row"><td colspan="4">Users & Access</td></tr>
+        <tr><td>Number of users</td><td>2</td><td class="hi-col">10</td><td>Unlimited</td></tr>
+        <tr><td>Role-based access control</td><td><span class="chk">✓</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>SSO / SAML</td><td><span class="dsh">—</span></td><td class="hi-col"><span class="dsh">—</span></td><td><span class="chk">✓</span></td></tr>
+
+        <tr class="section-row"><td colspan="4">Work Orders & Customers</td></tr>
+        <tr><td>Work orders per month</td><td>50</td><td class="hi-col">Unlimited</td><td>Unlimited</td></tr>
+        <tr><td>Customer management</td><td><span class="chk">✓</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>Vehicle registry & VIN</td><td><span class="chk">✓</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>Service history per vehicle</td><td><span class="chk">✓</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+
+        <tr class="section-row"><td colspan="4">Inventory & Supply Chain</td></tr>
+        <tr><td>Basic inventory tracking</td><td><span class="chk">✓</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>Reorder thresholds & alerts</td><td><span class="dsh">—</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>Supplier management</td><td><span class="dsh">—</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>Purchase orders & PO email</td><td><span class="dsh">—</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>Delivery confirmation</td><td><span class="dsh">—</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+
+        <tr class="section-row"><td colspan="4">Scheduling</td></tr>
+        <tr><td>Appointment calendar</td><td><span class="chk">✓</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>Online customer booking portal</td><td><span class="dsh">—</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>Email confirmations & reminders</td><td><span class="dsh">—</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+
+        <tr class="section-row"><td colspan="4">Finance & Payments</td></tr>
+        <tr><td>Invoice generation (PDF)</td><td><span class="chk">✓</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>Card payment processing</td><td><span class="dsh">—</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>ACH / bank transfer</td><td><span class="dsh">—</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>Overdue invoice tracking</td><td><span class="chk">✓</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+
+        <tr class="section-row"><td colspan="4">Reports & Analytics</td></tr>
+        <tr><td>Basic revenue summary</td><td><span class="chk">✓</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>Advanced reports & charts</td><td><span class="dsh">—</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>Supplier performance analytics</td><td><span class="dsh">—</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>CSV & PDF export</td><td><span class="dsh">—</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+
+        <tr class="section-row"><td colspan="4">Support</td></tr>
+        <tr><td>Email support</td><td><span class="chk">✓</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>Priority support</td><td><span class="dsh">—</span></td><td class="hi-col"><span class="chk">✓</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>Dedicated account manager</td><td><span class="dsh">—</span></td><td class="hi-col"><span class="dsh">—</span></td><td><span class="chk">✓</span></td></tr>
+        <tr><td>Custom onboarding & training</td><td><span class="dsh">—</span></td><td class="hi-col"><span class="dsh">—</span></td><td><span class="chk">✓</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="section section-paper">
+  <div class="container">
+    <div class="section-eyebrow">FAQ</div>
+    <h2 class="display-sm" style="margin-bottom:48px;text-align:center;">COMMON<br>QUESTIONS</h2>
+    <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Is there really a free plan? <span class="arrow">+</span></button>
+        <div class="faq-a">Yes. The Starter plan is free forever — no credit card required, no time limit. It covers up to 2 users and 50 work orders per month, which is enough for most single-bay shops to run day-to-day operations completely paperless.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Can I change plans later? <span class="arrow">+</span></button>
+        <div class="faq-a">Absolutely. You can upgrade from Starter to Pro at any time. If you switch to annual billing mid-month, we'll prorate the difference. Downgrading is also possible at the end of your billing period.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">What payment methods do you accept for GearShift subscriptions? <span class="arrow">+</span></button>
+        <div class="faq-a">We accept all major credit and debit cards (Visa, Mastercard, Amex), as well as ACH bank transfer for annual plans. Enterprise customers can be invoiced on Net 30 terms.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">What payment methods can my shop accept from customers? <span class="arrow">+</span></button>
+        <div class="faq-a">On the Pro and Enterprise plans, your shop can accept card payments (via Stripe), cash, and bank transfer directly through GearShift invoices. Card processing fees are 2.9% + 30¢ per transaction, passed directly from Stripe — we don't add any markup.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Is my data secure? <span class="arrow">+</span></button>
+        <div class="faq-a">All data is encrypted in transit (TLS 1.3) and at rest (AES-256). We perform daily automated backups with 30-day retention. We are SOC 2 Type II compliant and never sell your data to third parties.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Can I import my existing customer data? <span class="arrow">+</span></button>
+        <div class="faq-a">Yes. GearShift supports CSV import for customers, vehicles, and inventory. Our onboarding team (available on Pro and Enterprise plans) can assist with data migration from common shop management software.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Do I need to install anything? <span class="arrow">+</span></button>
+        <div class="faq-a">No. GearShift is fully web-based. Open it in any modern browser on desktop, tablet, or mobile. There's nothing to install, patch, or maintain on your end.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section style="background:var(--rust);padding:var(--space-9) var(--space-7);text-align:center;">
+  <h2 class="display-md" style="color:var(--white);margin-bottom:16px;">START FREE TODAY</h2>
+  <p style="color:rgba(255,255,255,0.8);font-size:18px;margin-bottom:36px;font-weight:300;">No credit card. No setup fee. Up and running in minutes.</p>
+  <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
+    <a href="app/dashboard.html" class="btn btn-lg" style="background:var(--white);color:var(--rust);">Launch Free App →</a>
+    <a href="contact.html"       class="btn btn-lg btn-secondary">Talk to Sales</a>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div><div class="footer-logo">GEAR<span>SHIFT</span></div><p class="footer-tagline">The complete management system for modern auto mechanic shops.</p></div>
+      <div><div class="footer-col-title">Product</div><div class="footer-links"><a href="features.html" class="footer-link">Features</a><a href="how-it-works.html" class="footer-link">How It Works</a><a href="pricing.html" class="footer-link">Pricing</a></div></div>
+      <div><div class="footer-col-title">App</div><div class="footer-links"><a href="app/dashboard.html" class="footer-link">Dashboard</a><a href="app/work-orders.html" class="footer-link">Work Orders</a><a href="app/inventory.html" class="footer-link">Inventory</a></div></div>
+      <div><div class="footer-col-title">Company</div><div class="footer-links"><a href="contact.html" class="footer-link">Contact</a><a href="#" class="footer-link">Privacy Policy</a><a href="#" class="footer-link">Terms</a></div></div>
+    </div>
+    <div class="footer-bottom"><span>© 2026 GearShift.</span><span>All rights reserved.</span></div>
+  </div>
+</footer>
+
+<div class="toast-container" id="toastContainer"></div>
+<script src="js/main.js"></script>
+<script>
+let annualBilling = true;
+
+function toggleBilling() {
+  annualBilling = !annualBilling;
+  const track = document.getElementById('billingToggle');
+  track.classList.toggle('on', annualBilling);
+  document.querySelectorAll('.price-val').forEach(el => {
+    el.textContent = annualBilling ? el.dataset.annual : el.dataset.monthly;
+  });
+  document.querySelectorAll('.plan-period').forEach((el, i) => {
+    if (i === 1) el.textContent = annualBilling ? 'per month · billed annually' : 'per month · billed monthly';
+  });
+}
+
+function toggleFaq(btn) {
+  const item = btn.closest('.faq-item');
+  const wasOpen = item.classList.contains('open');
+  document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+  if (!wasOpen) item.classList.add('open');
+}
+</script>
+</body>
+</html>

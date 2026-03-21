@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How It Works — GearShift</title>
+<link rel="stylesheet" href="css/main.css">
+<style>
+.page-hero { background:var(--ink); padding:120px var(--space-7) 80px; position:relative; overflow:hidden; }
+.page-hero-grid { position:absolute;inset:0; background-image:linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px); background-size:56px 56px; }
+
+/* STEPS */
+.steps-wrapper { max-width:1240px; margin:0 auto; }
+.step-row {
+  display:grid; grid-template-columns:80px 1fr;
+  gap:0 40px; margin-bottom:2px; background:var(--surface);
+  border:1px solid var(--border); position:relative;
+  transition:background var(--t-base);
+}
+.step-row:hover { background:var(--white); }
+.step-row:hover .step-num-col { background:var(--rust); }
+.step-row:hover .step-num-col .step-n { color:var(--white); }
+.step-num-col {
+  background:var(--ink); display:flex; align-items:flex-start;
+  justify-content:center; padding:40px 0; transition:background var(--t-base);
+}
+.step-n { font-family:var(--ff-display); font-size:36px; color:rgba(255,255,255,0.3); line-height:1; }
+.step-content { padding:40px 40px 40px 0; }
+.step-label {
+  font-family:var(--ff-mono); font-size:10px; letter-spacing:2.5px; text-transform:uppercase;
+  color:var(--rust); margin-bottom:10px;
+}
+.step-title { font-family:var(--ff-display); font-size:clamp(26px,4vw,36px); letter-spacing:1px; margin-bottom:14px; }
+.step-body { font-size:15px; line-height:1.85; color:var(--text-muted); max-width:680px; margin-bottom:20px; }
+.step-details { display:flex; flex-wrap:wrap; gap:10px; }
+.step-detail-chip {
+  display:flex; align-items:center; gap:8px;
+  padding:8px 14px; background:var(--paper-dark); border:1px solid var(--border);
+  font-size:13px; color:var(--ink); border-radius:var(--r-sm);
+}
+.step-detail-chip::before { content:'✓'; color:var(--success); font-weight:700; font-size:12px; }
+.step-connector { text-align:center; padding:8px 0; font-family:var(--ff-mono); font-size:11px; color:var(--rust); letter-spacing:1px; background:var(--paper); display:flex; align-items:center; justify-content:center; gap:8px; }
+.step-connector::before, .step-connector::after { content:''; flex:1; max-width:80px; height:1px; background:var(--border); }
+
+/* ROLE JOURNEY */
+.journey-tabs { display:flex; gap:0; border-bottom:2px solid var(--border); margin-bottom:48px; overflow-x:auto; }
+.journey-tab {
+  padding:14px 28px; font-family:var(--ff-display); font-size:18px; letter-spacing:1px;
+  color:var(--text-muted); background:none; border:none; cursor:pointer;
+  border-bottom:3px solid transparent; margin-bottom:-2px; transition:all var(--t-fast); white-space:nowrap;
+}
+.journey-tab:hover { color:var(--ink); }
+.journey-tab.active { color:var(--rust); border-bottom-color:var(--rust); }
+.journey-pane { display:none; }
+.journey-pane.active { display:grid; grid-template-columns:1fr 1fr; gap:32px; align-items:start; }
+.journey-steps { display:flex; flex-direction:column; gap:16px; }
+.journey-step {
+  display:flex; gap:16px; padding:20px; background:var(--surface); border:1px solid var(--border);
+  border-left:3px solid transparent; transition:all var(--t-fast);
+}
+.journey-step:hover { border-left-color:var(--rust); background:var(--white); }
+.journey-step-num { font-family:var(--ff-display); font-size:28px; color:var(--rust); line-height:1; flex-shrink:0; width:32px; }
+.journey-step-title { font-weight:700; font-size:14px; margin-bottom:6px; }
+.journey-step-body { font-size:13px; color:var(--text-muted); line-height:1.7; }
+.journey-sidebar {
+  background:var(--ink); color:var(--white); padding:32px;
+  position:sticky; top:100px;
+}
+.journey-sidebar-title { font-family:var(--ff-display); font-size:28px; letter-spacing:1px; margin-bottom:16px; }
+.journey-sidebar-body { font-size:14px; color:var(--chrome); line-height:1.8; margin-bottom:24px; }
+.journey-sidebar-stat { display:flex; gap:16px; align-items:center; padding:14px 0; border-bottom:1px solid rgba(255,255,255,0.08); }
+.journey-sidebar-stat:last-child { border-bottom:none; }
+.journey-stat-n { font-family:var(--ff-display); font-size:36px; color:var(--amber); }
+.journey-stat-l { font-size:13px; color:var(--chrome); }
+
+@media(max-width:900px){
+  .step-row { grid-template-columns:60px 1fr; }
+  .journey-pane.active { grid-template-columns:1fr; }
+  .journey-sidebar { position:static; }
+}
+@media(max-width:600px){
+  .step-num-col { display:none; }
+  .step-row { grid-template-columns:1fr; }
+  .step-content { padding:28px; }
+}
+</style>
+</head>
+<body>
+<nav class="site-nav">
+  <a href="index.html" class="nav-logo">GEAR<span class="accent">SHIFT</span></a>
+  <div class="nav-center">
+    <a href="index.html"        class="nav-link" data-page="index.html">Home</a>
+    <a href="features.html"     class="nav-link" data-page="features.html">Features</a>
+    <a href="how-it-works.html" class="nav-link active">How It Works</a>
+    <a href="pricing.html"      class="nav-link" data-page="pricing.html">Pricing</a>
+    <a href="contact.html"      class="nav-link" data-page="contact.html">Contact</a>
+  </div>
+  <div class="nav-right">
+    <a href="app/dashboard.html" class="btn-nav-login">Log In</a>
+    <a href="pricing.html"       class="btn-nav-cta">Get Started →</a>
+  </div>
+</nav>
+
+<section class="page-hero">
+  <div class="page-hero-grid"></div>
+  <div class="container" style="position:relative;z-index:2;">
+    <div class="section-eyebrow" style="color:var(--amber)">Workflow</div>
+    <h1 class="display-lg anim-fade-up" style="color:var(--white);margin-bottom:20px;">HOW IT<br>ALL WORKS</h1>
+    <p class="anim-fade-up-d2" style="font-size:18px;color:var(--chrome);max-width:560px;line-height:1.8;font-weight:300;">
+      Nine steps. Zero phone calls. Everything connected automatically.
+    </p>
+  </div>
+</section>
+
+<!-- STEPS -->
+<section class="section section-paper">
+  <div class="steps-wrapper">
+
+    <div class="step-row">
+      <div class="step-num-col"><div class="step-n">1</div></div>
+      <div class="step-content">
+        <div class="step-label">Authentication</div>
+        <div class="step-title">Everyone Logs In With Their Role</div>
+        <p class="step-body">Every team member has an account with their role assigned. The manager sees everything. A mechanic sees only their assigned jobs. A parts manager sees inventory and purchase orders. Access is always appropriate — no one sees what they don't need.</p>
+        <div class="step-details">
+          <div class="step-detail-chip">Email & Google sign-in</div>
+          <div class="step-detail-chip">4 role levels</div>
+          <div class="step-detail-chip">Secure session management</div>
+          <div class="step-detail-chip">Password reset by email</div>
+        </div>
+      </div>
+    </div>
+    <div class="step-connector">leads to role-based dashboard</div>
+
+    <div class="step-row">
+      <div class="step-num-col"><div class="step-n">2</div></div>
+      <div class="step-content">
+        <div class="step-label">Customer & Vehicle</div>
+        <div class="step-title">Customer Arrives or Books Online</div>
+        <p class="step-body">The front desk looks up an existing customer or creates a new profile in seconds. They register the vehicle with make, model, year, VIN (validated automatically), mileage, and plate. If the customer booked online, their appointment is already waiting in the shop calendar — no data entry needed.</p>
+        <div class="step-details">
+          <div class="step-detail-chip">Instant duplicate detection</div>
+          <div class="step-detail-chip">VIN format validation</div>
+          <div class="step-detail-chip">Online booking linked to profile</div>
+          <div class="step-detail-chip">Full service history attached</div>
+        </div>
+      </div>
+    </div>
+    <div class="step-connector">profile saved, vehicle linked</div>
+
+    <div class="step-row">
+      <div class="step-num-col"><div class="step-n">3</div></div>
+      <div class="step-content">
+        <div class="step-label">Work Orders</div>
+        <div class="step-title">A Work Order Is Created</div>
+        <p class="step-body">A job ticket is created with a unique ID, linked to the customer and their specific vehicle. The fault description is logged, a mechanic is assigned, and labor hours estimated. Status begins as <strong>Open</strong>. The assigned mechanic sees it instantly on their dashboard.</p>
+        <div class="step-details">
+          <div class="step-detail-chip">Unique WO# generated</div>
+          <div class="step-detail-chip">Linked to customer & vehicle</div>
+          <div class="step-detail-chip">Mechanic assigned & notified</div>
+          <div class="step-detail-chip">Status: Open</div>
+        </div>
+      </div>
+    </div>
+    <div class="step-connector">mechanic sees it instantly</div>
+
+    <div class="step-row">
+      <div class="step-num-col"><div class="step-n">4</div></div>
+      <div class="step-content">
+        <div class="step-label">Inventory</div>
+        <div class="step-title">Parts Are Pulled from Inventory</div>
+        <p class="step-body">The mechanic searches the inventory inside the app and attaches parts to the work order. Stock counts decrease automatically the moment a part is attached. If there isn't enough stock, the system warns them immediately before proceeding. Status updates to <strong>In Progress</strong>.</p>
+        <div class="step-details">
+          <div class="step-detail-chip">Searchable parts catalog</div>
+          <div class="step-detail-chip">Auto-deduct on attachment</div>
+          <div class="step-detail-chip">Insufficient stock warning</div>
+          <div class="step-detail-chip">Status: In Progress</div>
+        </div>
+      </div>
+    </div>
+    <div class="step-connector">inventory auto-updated</div>
+
+    <div class="step-row">
+      <div class="step-num-col"><div class="step-n">5</div></div>
+      <div class="step-content">
+        <div class="step-label">Notifications</div>
+        <div class="step-title">Low-Stock Alert Fires Automatically</div>
+        <p class="step-body">Every part has a configurable minimum threshold — say, "always keep at least 10 brake pad sets." The moment stock hits that number, an alert fires on the dashboard and appears in the Notifications center with the part name and current count. The parts manager sees it immediately.</p>
+        <div class="step-details">
+          <div class="step-detail-chip">Threshold set per part</div>
+          <div class="step-detail-chip">Dashboard alert badge</div>
+          <div class="step-detail-chip">Notification with part detail</div>
+          <div class="step-detail-chip">Parts manager alerted</div>
+        </div>
+      </div>
+    </div>
+    <div class="step-connector">parts manager sees it instantly</div>
+
+    <div class="step-row">
+      <div class="step-num-col"><div class="step-n">6</div></div>
+      <div class="step-content">
+        <div class="step-label">Supply Chain</div>
+        <div class="step-title">Purchase Order Sent to Supplier</div>
+        <p class="step-body">The parts manager opens a new Purchase Order — the app automatically suggests every item that's running low, pre-filled with the correct quantities to hit safe stock levels. They select the supplier, review, and click Send. The PO is emailed directly from GearShift to the supplier. No external email, no phone call.</p>
+        <div class="step-details">
+          <div class="step-detail-chip">Auto-suggested low-stock items</div>
+          <div class="step-detail-chip">Supplier selected per PO</div>
+          <div class="step-detail-chip">Email sent from within the app</div>
+          <div class="step-detail-chip">PO logged with unique ID</div>
+        </div>
+      </div>
+    </div>
+    <div class="step-connector">PO status: sent</div>
+
+    <div class="step-row">
+      <div class="step-num-col"><div class="step-n">7</div></div>
+      <div class="step-content">
+        <div class="step-label">Delivery</div>
+        <div class="step-title">Parts Arrive — Inventory Restocked</div>
+        <p class="step-body">When the delivery arrives, the parts manager opens the PO in the app and enters received quantities. Inventory is incremented automatically. If only some items arrived, a partial delivery is recorded and the PO stays open until fully received. Supplier performance metrics update automatically.</p>
+        <div class="step-details">
+          <div class="step-detail-chip">Received quantities entered against PO</div>
+          <div class="step-detail-chip">Partial deliveries supported</div>
+          <div class="step-detail-chip">Inventory auto-restocked</div>
+          <div class="step-detail-chip">Supplier on-time rate updated</div>
+        </div>
+      </div>
+    </div>
+    <div class="step-connector">PO status: received</div>
+
+    <div class="step-row">
+      <div class="step-num-col"><div class="step-n">8</div></div>
+      <div class="step-content">
+        <div class="step-label">Finance</div>
+        <div class="step-title">Invoice Generated in One Click</div>
+        <p class="step-body">Once the work is complete, the service advisor clicks Generate Invoice. GearShift auto-populates labor hours × labor rate, every part used from the work order, and calculates tax automatically. The customer receives a clean PDF invoice by email. Status is tracked from Unpaid through to Paid.</p>
+        <div class="step-details">
+          <div class="step-detail-chip">Labor + parts + tax auto-calculated</div>
+          <div class="step-detail-chip">PDF invoice emailed to customer</div>
+          <div class="step-detail-chip">Card, cash, or bank transfer</div>
+          <div class="step-detail-chip">Paid / Unpaid / Overdue tracking</div>
+        </div>
+      </div>
+    </div>
+    <div class="step-connector">customer billed, records logged</div>
+
+    <div class="step-row" style="border-top:3px solid var(--rust);">
+      <div class="step-num-col"><div class="step-n">9</div></div>
+      <div class="step-content">
+        <div class="step-label">Analytics</div>
+        <div class="step-title">Manager Reviews Reports — No Spreadsheets</div>
+        <p class="step-body">At any time, the manager opens Reports to see revenue by day, week, or month. They check which parts are moving fast and which are sitting on the shelf. They see which suppliers are always late. They filter by any date range and export as PDF or CSV. Everything is inside GearShift — no external tools, no manual calculations.</p>
+        <div class="step-details">
+          <div class="step-detail-chip">Revenue by period</div>
+          <div class="step-detail-chip">Inventory turnover rates</div>
+          <div class="step-detail-chip">Supplier performance metrics</div>
+          <div class="step-detail-chip">Export PDF or CSV</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ROLE JOURNEYS -->
+<section class="section section-light">
+  <div class="container">
+    <div class="section-eyebrow">Role Journeys</div>
+    <h2 class="display-sm" style="margin-bottom:40px;">A TYPICAL DAY<br>FOR EACH ROLE</h2>
+    <div class="journey-tabs">
+      <button class="journey-tab active" onclick="showJourney('manager',this)">👔 Manager</button>
+      <button class="journey-tab" onclick="showJourney('advisor',this)">📋 Service Advisor</button>
+      <button class="journey-tab" onclick="showJourney('mechanic',this)">🔧 Mechanic</button>
+      <button class="journey-tab" onclick="showJourney('parts',this)">📦 Parts Manager</button>
+    </div>
+
+    <div class="journey-pane active" id="journey-manager">
+      <div class="journey-steps">
+        <div class="journey-step"><div class="journey-step-num">1</div><div><div class="journey-step-title">Check dashboard</div><div class="journey-step-body">Review active jobs, low stock alerts, and today's revenue at a glance.</div></div></div>
+        <div class="journey-step"><div class="journey-step-num">2</div><div><div class="journey-step-title">Review reports</div><div class="journey-step-body">Check weekly revenue trend, top-moving parts, and any overdue invoices.</div></div></div>
+        <div class="journey-step"><div class="journey-step-num">3</div><div><div class="journey-step-title">Monitor supplier performance</div><div class="journey-step-body">See which suppliers are consistently late and plan sourcing changes.</div></div></div>
+        <div class="journey-step"><div class="journey-step-num">4</div><div><div class="journey-step-title">Follow up on overdue invoices</div><div class="journey-step-body">Email reminders to customers with outstanding balances directly from the app.</div></div></div>
+      </div>
+      <div class="journey-sidebar">
+        <div class="journey-sidebar-title">MANAGER VIEW</div>
+        <p class="journey-sidebar-body">The manager has full visibility. No section is hidden. The dashboard gives an instant health check of the entire operation without opening a single spreadsheet.</p>
+        <div class="journey-sidebar-stat"><div class="journey-stat-n">9</div><div class="journey-stat-l">Sections accessible</div></div>
+        <div class="journey-sidebar-stat"><div class="journey-stat-n">∞</div><div class="journey-stat-l">Reports & exports</div></div>
+        <div class="journey-sidebar-stat"><div class="journey-stat-n">0</div><div class="journey-stat-l">Spreadsheets needed</div></div>
+      </div>
+    </div>
+
+    <div class="journey-pane" id="journey-advisor">
+      <div class="journey-steps">
+        <div class="journey-step"><div class="journey-step-num">1</div><div><div class="journey-step-title">Check the calendar</div><div class="journey-step-body">Review today's appointments, confirm any pending bookings.</div></div></div>
+        <div class="journey-step"><div class="journey-step-num">2</div><div><div class="journey-step-title">Check in arriving customers</div><div class="journey-step-body">Look up or create customer profile, register vehicle, create work order.</div></div></div>
+        <div class="journey-step"><div class="journey-step-num">3</div><div><div class="journey-step-title">Generate invoices</div><div class="journey-step-body">Click Generate Invoice on any completed work order. Send PDF to customer.</div></div></div>
+        <div class="journey-step"><div class="journey-step-num">4</div><div><div class="journey-step-title">Process payments</div><div class="journey-step-body">Record card, cash, or bank payment and mark invoice as paid.</div></div></div>
+      </div>
+      <div class="journey-sidebar">
+        <div class="journey-sidebar-title">ADVISOR VIEW</div>
+        <p class="journey-sidebar-body">The service advisor is the hub of customer interaction. They own the front desk — from the first booking to the final receipt.</p>
+        <div class="journey-sidebar-stat"><div class="journey-stat-n">5</div><div class="journey-stat-l">Core sections accessed daily</div></div>
+        <div class="journey-sidebar-stat"><div class="journey-stat-n">1</div><div class="journey-stat-l">Click to generate invoice</div></div>
+      </div>
+    </div>
+
+    <div class="journey-pane" id="journey-mechanic">
+      <div class="journey-steps">
+        <div class="journey-step"><div class="journey-step-num">1</div><div><div class="journey-step-title">Check assigned work orders</div><div class="journey-step-body">See all jobs assigned, sorted by priority and date.</div></div></div>
+        <div class="journey-step"><div class="journey-step-num">2</div><div><div class="journey-step-title">Update status to In Progress</div><div class="journey-step-body">Mark job as started — customer is notified automatically.</div></div></div>
+        <div class="journey-step"><div class="journey-step-num">3</div><div><div class="journey-step-title">Pull parts from inventory</div><div class="journey-step-body">Search and attach parts to the work order — stock auto-decrements.</div></div></div>
+        <div class="journey-step"><div class="journey-step-num">4</div><div><div class="journey-step-title">Mark as Completed</div><div class="journey-step-body">Final status update triggers invoice-ready notification for the front desk.</div></div></div>
+      </div>
+      <div class="journey-sidebar">
+        <div class="journey-sidebar-title">MECHANIC VIEW</div>
+        <p class="journey-sidebar-body">The mechanic's view is focused and clean. No financial data, no supplier screens — just work orders and parts. Everything they need, nothing they don't.</p>
+        <div class="journey-sidebar-stat"><div class="journey-stat-n">2</div><div class="journey-stat-l">Main sections (WOs + Inventory)</div></div>
+        <div class="journey-sidebar-stat"><div class="journey-stat-n">Auto</div><div class="journey-stat-l">Stock deduction on part use</div></div>
+      </div>
+    </div>
+
+    <div class="journey-pane" id="journey-parts">
+      <div class="journey-steps">
+        <div class="journey-step"><div class="journey-step-num">1</div><div><div class="journey-step-title">Check low-stock alerts</div><div class="journey-step-body">Dashboard shows every part at or below its reorder threshold.</div></div></div>
+        <div class="journey-step"><div class="journey-step-num">2</div><div><div class="journey-step-title">Create a purchase order</div><div class="journey-step-body">System pre-populates all low-stock items. Select supplier, set quantities.</div></div></div>
+        <div class="journey-step"><div class="journey-step-num">3</div><div><div class="journey-step-title">Send PO to supplier</div><div class="journey-step-body">Click Send — PO emailed directly from the app. No external tools.</div></div></div>
+        <div class="journey-step"><div class="journey-step-num">4</div><div><div class="journey-step-title">Confirm delivery</div><div class="journey-step-body">Enter received quantities against the open PO. Inventory restocked automatically.</div></div></div>
+      </div>
+      <div class="journey-sidebar">
+        <div class="journey-sidebar-title">PARTS MGR VIEW</div>
+        <p class="journey-sidebar-body">The parts manager's daily loop is alerts → PO → confirm delivery. GearShift automates the first step and simplifies the rest to a few clicks.</p>
+        <div class="journey-sidebar-stat"><div class="journey-stat-n">Auto</div><div class="journey-stat-l">Low-stock detection</div></div>
+        <div class="journey-sidebar-stat"><div class="journey-stat-n">1</div><div class="journey-stat-l">Click to email PO</div></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- CTA -->
+<section style="background:var(--rust);padding:var(--space-9) var(--space-7);text-align:center;">
+  <h2 class="display-md" style="color:var(--white);margin-bottom:24px;">READY TO TRY IT?</h2>
+  <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
+    <a href="app/dashboard.html" class="btn btn-lg" style="background:var(--white);color:var(--rust);">Launch Demo →</a>
+    <a href="pricing.html"       class="btn btn-lg btn-secondary">See Pricing</a>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div><div class="footer-logo">GEAR<span>SHIFT</span></div><p class="footer-tagline">The complete management system for modern auto mechanic shops.</p></div>
+      <div><div class="footer-col-title">Product</div><div class="footer-links"><a href="features.html" class="footer-link">Features</a><a href="how-it-works.html" class="footer-link">How It Works</a><a href="pricing.html" class="footer-link">Pricing</a></div></div>
+      <div><div class="footer-col-title">App</div><div class="footer-links"><a href="app/dashboard.html" class="footer-link">Dashboard</a><a href="app/work-orders.html" class="footer-link">Work Orders</a><a href="app/inventory.html" class="footer-link">Inventory</a></div></div>
+      <div><div class="footer-col-title">Company</div><div class="footer-links"><a href="contact.html" class="footer-link">Contact</a><a href="#" class="footer-link">Privacy Policy</a><a href="#" class="footer-link">Terms</a></div></div>
+    </div>
+    <div class="footer-bottom"><span>© 2026 GearShift.</span><span>All rights reserved.</span></div>
+  </div>
+</footer>
+
+<div class="toast-container" id="toastContainer"></div>
+<script src="js/main.js"></script>
+<script>
+function showJourney(id, btn) {
+  document.querySelectorAll('.journey-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.journey-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('journey-' + id).classList.add('active');
+}
+</script>
+</body>
+</html>

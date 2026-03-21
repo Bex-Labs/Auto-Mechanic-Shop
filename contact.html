@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contact — GearShift</title>
+<meta name="description" content="Get in touch with the GearShift team. Book a demo, ask about pricing, or get support for your shop.">
+<link rel="stylesheet" href="css/main.css">
+<style>
+.page-hero { background:var(--ink); padding:120px var(--space-7) 80px; position:relative; overflow:hidden; }
+.page-hero-grid { position:absolute;inset:0; background-image:linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px); background-size:56px 56px; }
+
+.contact-layout { display:grid; grid-template-columns:1fr 1.4fr; gap:64px; align-items:start; }
+
+/* INFO SIDE */
+.contact-info-block { position:sticky; top:100px; }
+.contact-intro-title { font-family:var(--ff-display); font-size:clamp(40px,5vw,64px); line-height:0.95; margin-bottom:20px; }
+.contact-intro-body { font-size:15px; line-height:1.85; color:var(--text-muted); margin-bottom:40px; }
+.contact-items { display:flex; flex-direction:column; gap:24px; margin-bottom:40px; }
+.contact-item { display:flex; gap:18px; align-items:flex-start; }
+.contact-item-icon {
+  width:50px; height:50px; background:var(--ink); flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; font-size:22px;
+  border-radius:var(--r-sm);
+}
+.contact-item-label { font-family:var(--ff-mono); font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px; }
+.contact-item-val { font-size:15px; font-weight:600; color:var(--ink); }
+.contact-item-sub { font-size:13px; color:var(--text-muted); margin-top:2px; }
+
+/* DEPARTMENT CARDS */
+.dept-cards { display:flex; flex-direction:column; gap:10px; }
+.dept-card {
+  display:flex; gap:16px; align-items:center;
+  padding:16px 20px; background:var(--surface); border:1px solid var(--border);
+  transition:all var(--t-fast); cursor:pointer;
+}
+.dept-card:hover { background:var(--white); border-color:var(--rust); }
+.dept-card-icon { font-size:24px; flex-shrink:0; }
+.dept-card-title { font-weight:700; font-size:14px; }
+.dept-card-email { font-size:12px; color:var(--text-muted); font-family:var(--ff-mono); }
+
+/* FORM SIDE */
+.contact-form-box { background:var(--white); border:1px solid var(--border); padding:48px; }
+.form-section-title { font-family:var(--ff-display); font-size:28px; letter-spacing:1px; margin-bottom:28px; }
+.contact-tabs { display:flex; gap:0; margin-bottom:32px; border-bottom:2px solid var(--border); }
+.contact-tab {
+  padding:10px 22px; font-family:var(--ff-mono); font-size:11px; letter-spacing:1.5px;
+  text-transform:uppercase; background:none; border:none; cursor:pointer;
+  color:var(--text-muted); border-bottom:3px solid transparent; margin-bottom:-2px;
+  transition:all var(--t-fast);
+}
+.contact-tab:hover { color:var(--ink); }
+.contact-tab.active { color:var(--rust); border-bottom-color:var(--rust); }
+.contact-form-pane { display:none; }
+.contact-form-pane.active { display:block; }
+.submit-btn {
+  width:100%; padding:16px; background:var(--rust); color:var(--white);
+  font-family:var(--ff-body); font-size:14px; font-weight:700; letter-spacing:2px;
+  text-transform:uppercase; border:none; border-radius:var(--r-sm); transition:background var(--t-base);
+}
+.submit-btn:hover { background:#e05520; }
+.submit-btn:disabled { background:#ccc; cursor:not-allowed; }
+.form-note { font-size:12px; color:var(--text-muted); margin-top:12px; text-align:center; }
+
+/* MAP STRIP */
+.map-strip { background:var(--ink-soft); padding:var(--space-9) var(--space-7); color:var(--white); }
+.map-inner { max-width:1240px; margin:0 auto; display:grid; grid-template-columns:1fr 1fr; gap:64px; align-items:center; }
+.map-placeholder {
+  height:320px; background:var(--app-surface);
+  border:1px solid var(--app-border); display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:12px; color:var(--app-muted);
+}
+.map-placeholder-icon { font-size:48px; opacity:0.5; }
+.map-placeholder-text { font-family:var(--ff-mono); font-size:11px; letter-spacing:2px; text-transform:uppercase; }
+.office-list { display:flex; flex-direction:column; gap:28px; }
+.office-card { padding:24px; background:var(--app-surface); border:1px solid var(--app-border); border-left:3px solid var(--rust); }
+.office-city { font-family:var(--ff-display); font-size:24px; letter-spacing:1px; margin-bottom:8px; }
+.office-addr { font-size:14px; color:var(--chrome); line-height:1.7; }
+
+@media(max-width:900px){
+  .contact-layout { grid-template-columns:1fr; }
+  .contact-info-block { position:static; }
+  .map-inner { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a href="index.html" class="nav-logo">GEAR<span class="accent">SHIFT</span></a>
+  <div class="nav-center">
+    <a href="index.html"        class="nav-link" data-page="index.html">Home</a>
+    <a href="features.html"     class="nav-link" data-page="features.html">Features</a>
+    <a href="how-it-works.html" class="nav-link" data-page="how-it-works.html">How It Works</a>
+    <a href="pricing.html"      class="nav-link" data-page="pricing.html">Pricing</a>
+    <a href="contact.html"      class="nav-link active">Contact</a>
+  </div>
+  <div class="nav-right">
+    <a href="app/dashboard.html" class="btn-nav-login">Log In</a>
+    <a href="pricing.html"       class="btn-nav-cta">Get Started →</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="page-hero">
+  <div class="page-hero-grid"></div>
+  <div class="container" style="position:relative;z-index:2;">
+    <div class="section-eyebrow" style="color:var(--amber)">Get In Touch</div>
+    <h1 class="display-lg anim-fade-up" style="color:var(--white);margin-bottom:20px;">LET'S TALK<br>SHOP</h1>
+    <p class="anim-fade-up-d2" style="font-size:18px;color:var(--chrome);max-width:500px;line-height:1.8;font-weight:300;">
+      Whether you need a demo, have a billing question, or just want to know if GearShift is right for your shop — we're here.
+    </p>
+  </div>
+</section>
+
+<!-- CONTACT SECTION -->
+<section class="section section-paper">
+  <div class="container">
+    <div class="contact-layout">
+
+      <!-- LEFT: INFO -->
+      <div class="contact-info-block">
+        <h2 class="contact-intro-title">GET YOUR SHOP<br>SET UP TODAY</h2>
+        <p class="contact-intro-body">We respond to all inquiries within 1 business day. For urgent technical support, use the support email below — our team is available Mon–Fri, 8am–6pm EST.</p>
+
+        <div class="contact-items">
+          <div class="contact-item">
+            <div class="contact-item-icon">📧</div>
+            <div>
+              <div class="contact-item-label">General</div>
+              <div class="contact-item-val">hello@gearshift.app</div>
+              <div class="contact-item-sub">For general inquiries and partnerships</div>
+            </div>
+          </div>
+          <div class="contact-item">
+            <div class="contact-item-icon">🛠️</div>
+            <div>
+              <div class="contact-item-label">Support</div>
+              <div class="contact-item-val">support@gearshift.app</div>
+              <div class="contact-item-sub">Mon–Fri, 8am–6pm EST</div>
+            </div>
+          </div>
+          <div class="contact-item">
+            <div class="contact-item-icon">💼</div>
+            <div>
+              <div class="contact-item-label">Sales</div>
+              <div class="contact-item-val">sales@gearshift.app</div>
+              <div class="contact-item-sub">Pro & Enterprise inquiries</div>
+            </div>
+          </div>
+          <div class="contact-item">
+            <div class="contact-item-icon">📞</div>
+            <div>
+              <div class="contact-item-label">Phone</div>
+              <div class="contact-item-val">+234 (080) 555-GEARS</div>
+              <div class="contact-item-sub">Mon–Fri, 9am–5pm EST</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="dept-cards">
+          <div class="dept-card" onclick="switchContactTab('demo')">
+            <div class="dept-card-icon">🎬</div>
+            <div>
+              <div class="dept-card-title">Book a Demo</div>
+              <div class="dept-card-email">See GearShift live with your data →</div>
+            </div>
+          </div>
+          <div class="dept-card" onclick="switchContactTab('support')">
+            <div class="dept-card-icon">🔧</div>
+            <div>
+              <div class="dept-card-title">Technical Support</div>
+              <div class="dept-card-email">support@gearshift.app →</div>
+            </div>
+          </div>
+          <div class="dept-card" onclick="switchContactTab('billing')">
+            <div class="dept-card-icon">💳</div>
+            <div>
+              <div class="dept-card-title">Billing & Accounts</div>
+              <div class="dept-card-email">billing@gearshift.app →</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: FORM -->
+      <div>
+        <div class="contact-form-box">
+          <div class="contact-tabs">
+            <button class="contact-tab active" data-tab="general"  onclick="switchContactTab('general',this)">General</button>
+            <button class="contact-tab"        data-tab="demo"     onclick="switchContactTab('demo',this)">Book Demo</button>
+            <button class="contact-tab"        data-tab="support"  onclick="switchContactTab('support',this)">Support</button>
+            <button class="contact-tab"        data-tab="billing"  onclick="switchContactTab('billing',this)">Billing</button>
+          </div>
+
+          <!-- GENERAL -->
+          <div class="contact-form-pane active" id="tab-general">
+            <div class="form-section-title">SEND A MESSAGE</div>
+            <form id="contactForm" onsubmit="handleContact(event,'general')">
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">First Name</label><input class="form-input" type="text" name="fname" placeholder="Jane" required></div>
+                <div class="form-group"><label class="form-label">Last Name</label><input class="form-input" type="text" name="lname" placeholder="Smith" required></div>
+              </div>
+              <div class="form-group"><label class="form-label">Email Address</label><input class="form-input" type="email" name="email" placeholder="jane@shop.com" required></div>
+              <div class="form-group"><label class="form-label">Shop Name</label><input class="form-input" type="text" name="shop" placeholder="Jane's Auto Repair"></div>
+              <div class="form-group">
+                <label class="form-label">Inquiry Type</label>
+                <select class="form-input" name="type">
+                  <option>General Inquiry</option>
+                  <option>Demo Request</option>
+                  <option>Pricing & Plans</option>
+                  <option>Technical Support</option>
+                  <option>Partnership</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div class="form-group"><label class="form-label">Message</label><textarea class="form-input" name="message" placeholder="Tell us about your shop and what you're looking for..." required></textarea></div>
+              <button type="submit" class="submit-btn" id="submitBtn">Send Message →</button>
+              <p class="form-note">We respond within 1 business day. We never share your information.</p>
+            </form>
+          </div>
+
+          <!-- DEMO -->
+          <div class="contact-form-pane" id="tab-demo">
+            <div class="form-section-title">BOOK A DEMO</div>
+            <form onsubmit="handleContact(event,'demo')">
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">First Name</label><input class="form-input" type="text" placeholder="Jane" required></div>
+                <div class="form-group"><label class="form-label">Last Name</label><input class="form-input" type="text" placeholder="Smith" required></div>
+              </div>
+              <div class="form-group"><label class="form-label">Work Email</label><input class="form-input" type="email" placeholder="jane@shop.com" required></div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Shop Name</label><input class="form-input" type="text" placeholder="Jane's Auto" required></div>
+                <div class="form-group"><label class="form-label">Number of Bays</label><select class="form-input"><option>1–2</option><option>3–5</option><option>6–10</option><option>10+</option></select></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Preferred Date</label><input class="form-input" type="date"></div>
+                <div class="form-group">
+                  <label class="form-label">Preferred Time (EST)</label>
+                  <select class="form-input">
+                    <option>9:00 AM</option><option>10:00 AM</option><option>11:00 AM</option>
+                    <option>1:00 PM</option><option>2:00 PM</option><option>3:00 PM</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group"><label class="form-label">What are you most interested in?</label><textarea class="form-input" placeholder="e.g. supply chain automation, invoicing, scheduling..."></textarea></div>
+              <button type="submit" class="submit-btn">Request Demo →</button>
+              <p class="form-note">A GearShift team member will confirm your slot within 24 hours.</p>
+            </form>
+          </div>
+
+          <!-- SUPPORT -->
+          <div class="contact-form-pane" id="tab-support">
+            <div class="form-section-title">TECHNICAL SUPPORT</div>
+            <div class="alert alert-info" style="margin-bottom:24px;">For urgent issues, email <strong>support@gearshift.app</strong> directly for the fastest response.</div>
+            <form onsubmit="handleContact(event,'support')">
+              <div class="form-group"><label class="form-label">Your Email</label><input class="form-input" type="email" placeholder="jane@shop.com" required></div>
+              <div class="form-group">
+                <label class="form-label">Issue Category</label>
+                <select class="form-input">
+                  <option>Can't log in</option>
+                  <option>Work orders not saving</option>
+                  <option>Inventory not updating</option>
+                  <option>Invoice issues</option>
+                  <option>Supply chain / POs</option>
+                  <option>Payments not processing</option>
+                  <option>Notifications not firing</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Priority</label>
+                <select class="form-input">
+                  <option>Low — general question</option>
+                  <option>Medium — affecting some workflows</option>
+                  <option>High — blocking shop operations</option>
+                </select>
+              </div>
+              <div class="form-group"><label class="form-label">Describe the Issue</label><textarea class="form-input" placeholder="What happened? What did you expect? Steps to reproduce..." required></textarea></div>
+              <button type="submit" class="submit-btn">Submit Ticket →</button>
+            </form>
+          </div>
+
+          <!-- BILLING -->
+          <div class="contact-form-pane" id="tab-billing">
+            <div class="form-section-title">BILLING & ACCOUNTS</div>
+            <form onsubmit="handleContact(event,'billing')">
+              <div class="form-group"><label class="form-label">Account Email</label><input class="form-input" type="email" placeholder="jane@shop.com" required></div>
+              <div class="form-group">
+                <label class="form-label">Billing Topic</label>
+                <select class="form-input">
+                  <option>Upgrade / Downgrade plan</option>
+                  <option>Invoice or receipt request</option>
+                  <option>Payment method change</option>
+                  <option>Refund request</option>
+                  <option>Cancel subscription</option>
+                  <option>Enterprise pricing inquiry</option>
+                  <option>Other billing issue</option>
+                </select>
+              </div>
+              <div class="form-group"><label class="form-label">Details</label><textarea class="form-input" placeholder="Please provide as much detail as possible..." required></textarea></div>
+              <button type="submit" class="submit-btn">Submit Request →</button>
+              <p class="form-note">Billing requests are handled within 1–2 business days.</p>
+            </form>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- OFFICE / MAP -->
+<section class="map-strip">
+  <div class="map-inner">
+    <div class="map-placeholder">
+      <div class="map-placeholder-icon">📍</div>
+      <div class="map-placeholder-text">Abuja, Nigeria</div>
+      <div style="font-size:13px;color:var(--app-muted);margin-top:4px;">Interactive map coming soon</div>
+    </div>
+    <div>
+      <div class="section-eyebrow" style="color:var(--amber)">Our Office</div>
+      <h2 style="font-family:var(--ff-display);font-size:48px;color:var(--white);margin-bottom:28px;line-height:0.95;">WHERE<br>TO FIND US</h2>
+      <div class="office-list">
+      
+        <div class="office-card">
+          <div class="office-city">Abuja, NG — HQ</div>
+          <div class="office-addr">33 Kigali Street <br>Wuse II, Abuja 802001</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div><div class="footer-logo">GEAR<span>SHIFT</span></div><p class="footer-tagline">The complete management system for modern auto mechanic shops.</p></div>
+      <div><div class="footer-col-title">Product</div><div class="footer-links"><a href="features.html" class="footer-link">Features</a><a href="how-it-works.html" class="footer-link">How It Works</a><a href="pricing.html" class="footer-link">Pricing</a></div></div>
+      <div><div class="footer-col-title">App</div><div class="footer-links"><a href="app/dashboard.html" class="footer-link">Dashboard</a><a href="app/work-orders.html" class="footer-link">Work Orders</a><a href="app/inventory.html" class="footer-link">Inventory</a></div></div>
+      <div><div class="footer-col-title">Company</div><div class="footer-links"><a href="contact.html" class="footer-link active">Contact</a><a href="#" class="footer-link">Privacy Policy</a><a href="#" class="footer-link">Terms</a></div></div>
+    </div>
+    <div class="footer-bottom"><span>© 2026 GearShift.</span><span>All rights reserved.</span></div>
+  </div>
+</footer>
+
+<div class="toast-container" id="toastContainer"></div>
+<script src="js/main.js"></script>
+<script>
+function switchContactTab(id, btn) {
+  document.querySelectorAll('.contact-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.contact-form-pane').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  else {
+    document.querySelectorAll('.contact-tab').forEach(t => {
+      if (t.dataset.tab === id) t.classList.add('active');
+    });
+  }
+  const pane = document.getElementById('tab-' + id);
+  if (pane) pane.classList.add('active');
+}
+
+function handleContact(e, type) {
+  e.preventDefault();
+  const btn = e.target.querySelector('button[type=submit]');
+  const orig = btn.textContent;
+  btn.textContent = 'Sending...';
+  btn.disabled = true;
+  setTimeout(() => {
+    const msgs = {
+      general: 'Message sent! We\'ll respond within 1 business day.',
+      demo:    'Demo request received! We\'ll confirm your slot within 24 hours.',
+      support: 'Support ticket submitted. Our team will be in touch shortly.',
+      billing: 'Billing request received. We\'ll handle it within 1–2 business days.',
+    };
+    Toast.show(msgs[type] || 'Submitted successfully.', 'success', 4500);
+    e.target.reset();
+    btn.textContent = orig;
+    btn.disabled = false;
+  }, 1200);
+}
+</script>
+</body>
+</html>

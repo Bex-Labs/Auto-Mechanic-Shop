@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings — GearShift</title>
+<link rel="stylesheet" href="../css/main.css">
+<link rel="stylesheet" href="../css/app.css">
+<style>
+.settings-layout { display:grid; grid-template-columns:220px 1fr; gap:var(--space-5); align-items:start; }
+.settings-nav { background:var(--app-surface); border:1px solid var(--app-border); border-radius:var(--r-sm); overflow:hidden; position:sticky; top:80px; }
+.settings-nav-item {
+  display:flex; align-items:center; gap:12px; padding:13px 16px;
+  font-size:13px; color:var(--app-muted); cursor:pointer;
+  border-left:3px solid transparent; transition:all var(--t-fast);
+  border-bottom:1px solid rgba(48,54,61,.4);
+}
+.settings-nav-item:last-child { border-bottom:none; }
+.settings-nav-item:hover { color:var(--app-text); background:var(--app-surface2); }
+.settings-nav-item.active { color:var(--amber); border-left-color:var(--amber); background:rgba(232,160,32,.05); }
+.settings-nav-item svg { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:2; flex-shrink:0; }
+.settings-pane { display:none; }
+.settings-pane.active { display:block; }
+.settings-section { margin-bottom:var(--space-5); }
+.settings-section-title { font-family:var(--ff-display); font-size:16px; letter-spacing:1.5px; color:var(--app-text); margin-bottom:4px; }
+.settings-section-sub { font-size:12px; color:var(--app-muted); margin-bottom:20px; }
+.settings-field { display:flex; justify-content:space-between; align-items:center; padding:14px 0; border-bottom:1px solid rgba(48,54,61,.4); gap:24px; }
+.settings-field:last-child { border-bottom:none; }
+.settings-field-left { flex:1; }
+.settings-field-label { font-size:13px; font-weight:600; color:var(--app-text); margin-bottom:3px; }
+.settings-field-desc { font-size:12px; color:var(--app-muted); line-height:1.5; }
+.settings-field-right { flex-shrink:0; min-width:200px; }
+.toggle-wrap { display:flex; align-items:center; gap:10px; }
+.toggle {
+  width:44px; height:24px; background:var(--app-border); border-radius:12px;
+  position:relative; cursor:pointer; transition:background var(--t-fast); flex-shrink:0;
+}
+.toggle.on { background:var(--rust); }
+.toggle::after {
+  content:''; position:absolute; top:3px; left:3px;
+  width:18px; height:18px; border-radius:50%; background:var(--white);
+  transition:transform var(--t-fast);
+}
+.toggle.on::after { transform:translateX(20px); }
+.toggle-label { font-size:12px; color:var(--app-muted); font-family:var(--ff-mono); }
+.user-row { display:flex; align-items:center; gap:14px; padding:14px 0; border-bottom:1px solid rgba(48,54,61,.4); }
+.user-row:last-child { border-bottom:none; }
+.user-row-avatar { width:38px; height:38px; border-radius:50%; background:var(--rust); display:flex; align-items:center; justify-content:center; font-family:var(--ff-display); font-size:16px; color:var(--white); flex-shrink:0; }
+.user-row-name { font-size:13px; font-weight:700; color:var(--app-text); }
+.user-row-role { font-size:11px; color:var(--app-muted); font-family:var(--ff-mono); margin-top:2px; }
+.danger-zone { background:rgba(181,43,30,.05); border:1px solid rgba(181,43,30,.3); border-radius:var(--r-sm); padding:24px; }
+.danger-zone-title { font-family:var(--ff-display); font-size:16px; letter-spacing:1px; color:var(--danger); margin-bottom:4px; }
+.danger-zone-sub { font-size:12px; color:var(--app-muted); margin-bottom:20px; }
+.plan-card { background:var(--app-surface2); border:1px solid var(--app-border); border-radius:var(--r-sm); padding:20px 22px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; }
+.plan-card.current { border-color:var(--amber); }
+.plan-name { font-family:var(--ff-display); font-size:20px; letter-spacing:1px; color:var(--app-text); }
+.plan-price { font-family:var(--ff-display); font-size:28px; color:var(--amber); }
+.plan-period { font-size:11px; color:var(--app-muted); }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="app-sidebar">
+    <div class="sidebar-logo"><span class="sidebar-logo-text">GEAR<span>SHIFT</span></span><a href="../index.html" class="sidebar-back">← Site</a></div>
+    <nav class="sidebar-nav"><!-- populated by RBAC.initSidebar --></nav>
+    <div class="sidebar-footer">
+      <div class="theme-toggle">
+        <span class="theme-toggle-label">☾ Dark</span>
+        <button class="theme-toggle-switch" onclick="Theme.toggle()" aria-label="Switch to light mode"></button>
+      </div>
+      
+      <div class="sidebar-user"><div class="user-avatar" id="userAvatar">?</div><div><div class="user-name" id="userName">Loading…</div><div class="user-role" id="userRole">—</div></div></div>
+      <button class="btn-logout" onclick="Auth.signOut().then(()=>window.location='dashboard.html')">Sign Out</button>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <div class="app-topbar">
+      <span class="topbar-title">SETTINGS</span>
+    </div>
+
+    <div class="app-content">
+      <div class="settings-layout">
+
+        <!-- Settings nav -->
+        <div class="settings-nav">
+          <div class="settings-nav-item" id="nav-personal" onclick="showSettingsPane('personal',this)">
+            <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            My Profile
+          </div>
+          <div class="settings-nav-item active" onclick="showSettingsPane('shop',this)">
+            <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+            Shop Info
+          </div>
+          <div class="settings-nav-item" onclick="showSettingsPane('billing',this)">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            Billing & Rates
+          </div>
+          <div class="settings-nav-item" onclick="showSettingsPane('users',this)">
+            <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Users & Roles
+          </div>
+          <div class="settings-nav-item" onclick="showSettingsPane('notifications',this)">
+            <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            Notifications
+          </div>
+          <div class="settings-nav-item" onclick="showSettingsPane('integrations',this)">
+            <svg viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>
+            Integrations
+          </div>
+          <div class="settings-nav-item" onclick="showSettingsPane('plan',this)">
+            <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            Plan & Billing
+          </div>
+          <div class="settings-nav-item" onclick="showSettingsPane('security',this)">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Security
+          </div>
+          <div class="settings-nav-item" id="nav-booking" onclick="showSettingsPane('booking',this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Booking QR
+          </div>
+          <div class="settings-nav-item" onclick="showSettingsPane('danger',this)">
+            <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Danger Zone
+          </div>
+        </div>
+
+        <!-- Settings panes -->
+        <div>
+
+          <!-- MY PROFILE — visible to all roles -->
+          <div class="settings-pane" id="sp-personal">
+            <div class="panel">
+              <div class="panel-header">
+                <span class="panel-title">MY PROFILE</span>
+                <button class="app-btn app-btn-primary app-btn-sm" onclick="savePersonalInfo()">Save Changes</button>
+              </div>
+              <div class="panel-body">
+                <div class="settings-section">
+                  <div class="settings-section-title">General Info</div>
+                  <div class="settings-section-sub">This information is visible to other staff members.</div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Full Name</div><div class="settings-field-desc">Your display name across the app.</div></div>
+                    <div class="settings-field-right"><input class="app-input" id="p-fullname" placeholder="e.g. Abbas Khalifa" style="max-width:280px"></div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Phone Number</div><div class="settings-field-desc">Used for internal contact only.</div></div>
+                    <div class="settings-field-right"><input class="app-input" id="p-phone" placeholder="e.g. 0801 234 5678" style="max-width:220px"></div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Role</div><div class="settings-field-desc">Assigned by your admin.</div></div>
+                    <div class="settings-field-right"><input class="app-input" id="p-role" disabled style="max-width:180px;opacity:.6"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SHOP INFO -->
+          <div class="settings-pane active" id="sp-shop">
+            <div class="panel">
+              <div class="panel-header">
+                <span class="panel-title">SHOP INFORMATION</span>
+                <button class="app-btn app-btn-primary app-btn-sm" onclick="saveShopInfo()">Save Changes</button>
+              </div>
+              <div class="panel-body">
+                <div class="settings-section">
+                  <div class="settings-section-title">General</div>
+                  <div class="settings-section-sub">Basic information about your shop displayed on invoices and emails.</div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Shop Name</div><div class="settings-field-desc">Appears on all invoices and customer communications.</div></div>
+                    <div class="settings-field-right"><input class="app-input" id="set-shopname" placeholder="Your shop name"></div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Phone Number</div><div class="settings-field-desc">Customer-facing contact number.</div></div>
+                    <div class="settings-field-right"><input class="app-input" id="set-phone" placeholder="e.g. +1 (555) 000-0000"></div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Email Address</div><div class="settings-field-desc">Used for outgoing emails and reply-to address.</div></div>
+                    <div class="settings-field-right"><input class="app-input" type="email" id="set-email" type="email" placeholder="e.g. hello@yourshop.com"></div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Street Address</div><div class="settings-field-desc">Shown on invoices and contact page.</div></div>
+                    <div class="settings-field-right"><input class="app-input" id="set-addr" placeholder="e.g. 123 Main St, City, State"></div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Number of Bays</div><div class="settings-field-desc">Used for scheduling capacity limits.</div></div>
+                    <div class="settings-field-right"><input class="app-input" type="number" id="set-bays" type="number" min="1" max="50" placeholder="—" style="max-width:100px"></div>
+                  </div>
+                </div>
+                <div class="settings-section">
+                  <div class="settings-section-title">Hours of Operation</div>
+                  <div class="settings-section-sub">Displayed on your public booking page.</div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Weekdays</div></div>
+                    <div class="settings-field-right" style="display:flex;gap:8px;align-items:center">
+                      <input class="app-input" type="time" id="set-wd-open" value="08:00" style="width:110px">
+                      <span style="color:var(--app-muted)">to</span>
+                      <input class="app-input" type="time" id="set-wd-close" value="18:00" style="width:110px">
+                    </div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Saturday</div></div>
+                    <div class="settings-field-right" style="display:flex;gap:8px;align-items:center">
+                      <input class="app-input" type="time" id="set-sat-open" value="09:00" style="width:110px">
+                      <span style="color:var(--app-muted)">to</span>
+                      <input class="app-input" type="time" id="set-sat-close" value="15:00" style="width:110px">
+                    </div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Sunday</div><div class="settings-field-desc">Set to Closed if not operating.</div></div>
+                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle" id="sun-toggle" onclick="this.classList.toggle('on')"></div><span class="toggle-label" id="sun-label">Closed</span></div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- BILLING & RATES -->
+          <div class="settings-pane" id="sp-billing">
+            <div class="panel">
+              <div class="panel-header">
+                <span class="panel-title">BILLING & RATES</span>
+                <button class="app-btn app-btn-primary app-btn-sm" onclick="saveBillingSettings()">Save Changes</button>
+              </div>
+              <div class="panel-body">
+                <div class="settings-section">
+                  <div class="settings-section-title">Labor & Tax</div>
+                  <div class="settings-section-sub">These rates apply to all invoices and estimates.</div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Labor Rate (₦/hr)</div><div class="settings-field-desc">Applied automatically when generating invoices from work orders.</div></div>
+                    <div class="settings-field-right"><input class="app-input" type="number" id="set-labor" type="number" min="0" step="1" placeholder="e.g. 90" style="max-width:120px"></div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Tax Rate (%)</div><div class="settings-field-desc">Applied to labor + parts subtotal. Enter as a percentage (e.g. 8.5).</div></div>
+                    <div class="settings-field-right"><input class="app-input" type="number" id="set-tax" type="number" min="0" max="30" step="0.1" placeholder="e.g. 8.5" style="max-width:120px"></div>
+                  </div>
+                </div>
+                <div class="settings-section">
+                  <div class="settings-section-title">Invoice Settings</div>
+                  <div class="settings-section-sub">Control how invoices are numbered and displayed.</div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Invoice Prefix</div><div class="settings-field-desc">Prefix added to all invoice numbers (e.g. INV-, DAW-).</div></div>
+                    <div class="settings-field-right"><input class="app-input" id="set-invprefix" placeholder="e.g. INV-" style="max-width:120px"></div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Next Invoice Number</div><div class="settings-field-desc">Auto-increments after each invoice generated.</div></div>
+                    <div class="settings-field-right"><input class="app-input" type="number" id="set-invnum" value="5507" style="max-width:120px"></div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Payment Terms</div><div class="settings-field-desc">Default terms shown on all invoices.</div></div>
+                    <div class="settings-field-right">
+                      <select class="app-input">
+                        <option>Due on receipt</option>
+                        <option>Net 15</option>
+                        <option selected>Net 30</option>
+                        <option>Net 45</option>
+                        <option>Net 60</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Auto-send Invoices</div><div class="settings-field-desc">Email invoice PDF to customer when generated.</div></div>
+                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Send Payment Reminders</div><div class="settings-field-desc">Automatically email overdue reminders after 7, 14, and 30 days.</div></div>
+                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div>
+                  </div>
+                </div>
+                <div class="settings-section">
+                  <div class="settings-section-title">Accepted Payment Methods</div>
+                  <div class="settings-section-sub">Enable the methods you accept from customers.</div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Credit / Debit Card </div></div>
+                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Bank Transfer </div></div>
+                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Cash</div></div>
+                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Check</div></div>
+                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Disabled</span></div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- USERS & ROLES -->
+          <div class="settings-pane" id="sp-users">
+            <div class="panel">
+              <div class="panel-header">
+                <span class="panel-title">USERS & ROLES</span>
+                <button class="app-btn app-btn-primary app-btn-sm" onclick="Modal.open('inviteModal')">+ Invite User</button>
+              </div>
+              <div class="panel-body">
+                <div id="usersList"></div>
+                <div class="divider-dark"></div>
+                <div class="settings-section-title" style="margin-bottom:12px">ROLE PERMISSIONS</div>
+                <table class="data-table">
+                  <thead><tr><th>Permission</th><th>Admin</th><th>Service Advisor</th><th>Mechanic</th><th>Parts Manager</th></tr></thead>
+                  <tbody>
+                    <tr><td>View Dashboard</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                    <tr><td>Manage Work Orders</td><td>✅</td><td>✅</td><td>Edit only</td><td>❌</td></tr>
+                    <tr><td>View Customers</td><td>✅</td><td>✅</td><td>❌</td><td>❌</td></tr>
+                    <tr><td>Generate Invoices</td><td>✅</td><td>✅</td><td>❌</td><td>❌</td></tr>
+                    <tr><td>Manage Inventory</td><td>✅</td><td>View only</td><td>View only</td><td>✅</td></tr>
+                    <tr><td>Create Purchase Orders</td><td>✅</td><td>❌</td><td>❌</td><td>✅</td></tr>
+                    <tr><td>View Reports</td><td>✅</td><td>Limited</td><td>❌</td><td>Limited</td></tr>
+                    <tr><td>Manage Settings</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
+                    <tr><td>Manage Users</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- NOTIFICATIONS -->
+          <div class="settings-pane" id="sp-notifications">
+            <div class="panel">
+              <div class="panel-header">
+                <span class="panel-title">NOTIFICATION PREFERENCES</span>
+                <button class="app-btn app-btn-primary app-btn-sm" onclick="Toast.show('Notification preferences saved','success')">Save Changes</button>
+              </div>
+              <div class="panel-body">
+                <div class="settings-section">
+                  <div class="settings-section-title">In-App Notifications</div>
+                  <div class="settings-section-sub">These appear in your GearShift notification center.</div>
+                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Low Stock Alerts</div><div class="settings-field-desc">Notify when a part drops below its reorder threshold.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div></div>
+                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Work Order Status Changes</div><div class="settings-field-desc">Alert when a WO moves to a new status.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div></div>
+                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">New Booking Requests</div><div class="settings-field-desc">Alert when a customer submits an appointment request.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div></div>
+                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">PO Delivery Confirmations</div><div class="settings-field-desc">Alert when a purchase order is marked received.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div></div>
+                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Invoice Payments</div><div class="settings-field-desc">Alert when a payment is recorded on an invoice.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div></div>
+                </div>
+                <div class="settings-section">
+                  <div class="settings-section-title">Email Notifications</div>
+                  <div class="settings-section-sub">Emails sent to your admin address.</div>
+                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Daily Summary Email</div><div class="settings-field-desc">Morning digest: active WOs, appointments today, low stock.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div></div>
+                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Overdue Invoice Alerts</div><div class="settings-field-desc">Email when invoices pass their due date.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div></div>
+                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Supplier Delivery Alerts</div><div class="settings-field-desc">Email when a PO expected delivery date passes.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Disabled</span></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- INTEGRATIONS -->
+          <div class="settings-pane" id="sp-integrations">
+            <div class="panel">
+              <div class="panel-header"><span class="panel-title">INTEGRATIONS</span></div>
+              <div class="panel-body">
+                <div id="integrationsList"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PLAN -->
+          <div class="settings-pane" id="sp-plan">
+            <div class="panel">
+              <div class="panel-header"><span class="panel-title">PLAN & BILLING</span></div>
+              <div class="panel-body">
+                <div class="alert alert-info" style="margin-bottom:20px">You are on the <strong>Pro Plan</strong> — billed annually. Your next renewal is <strong>March 1, 2027</strong>.</div>
+                <div class="plan-card current">
+                  <div><div class="plan-name">Pro</div><div style="font-size:12px;color:var(--app-muted);margin-top:4px">Current plan · Billed annually</div></div>
+                  <div style="text-align:right"><div class="plan-price">$63<span style="font-size:14px;color:var(--app-muted)">/mo</span></div><div class="plan-period">= $756 / year</div></div>
+                </div>
+                <div class="plan-card" style="opacity:.6">
+                  <div><div class="plan-name">Starter</div><div style="font-size:12px;color:var(--app-muted);margin-top:4px">Free — 2 users, 50 WOs/month</div></div>
+                  <div><button class="app-btn app-btn-ghost app-btn-sm" onclick="Toast.show('Contact support to downgrade','info')">Downgrade</button></div>
+                </div>
+                <div class="plan-card">
+                  <div><div class="plan-name">Enterprise</div><div style="font-size:12px;color:var(--app-muted);margin-top:4px">Custom pricing — unlimited everything</div></div>
+                  <div><a href="../contact.html" class="app-btn app-btn-primary app-btn-sm">Contact Sales</a></div>
+                </div>
+                <div class="divider-dark"></div>
+                <div class="settings-section-title" style="margin-bottom:12px">PAYMENT METHOD</div>
+                <div style="background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                  <div style="display:flex;align-items:center;gap:12px">
+                    <div style="background:#1a56db;color:white;padding:4px 10px;border-radius:4px;font-weight:700;font-size:12px">VISA</div>
+                    <div><div style="font-size:13px;color:var(--app-text)">•••• •••• •••• 4242</div><div style="font-size:11px;color:var(--app-muted)">Expires 09/2027</div></div>
+                  </div>
+                  <button class="app-btn app-btn-ghost app-btn-sm" onclick="Toast.show('Card management coming soon','info')">Update</button>
+                </div>
+                <div class="settings-section-title" style="margin-bottom:12px;margin-top:20px">BILLING HISTORY</div>
+                <table class="data-table">
+                  <thead><tr><th>Date</th><th>Description</th><th>Amount</th><th>Status</th><th>Receipt</th></tr></thead>
+                  <tbody>
+                    <tr><td class="td-mono">Mar 1, 2026</td><td>Pro Plan — Annual</td><td class="td-mono">$756.00</td><td>${makeBadge('Paid')}</td><td><button class="app-btn app-btn-ghost app-btn-xs" onclick="Toast.show('Receipt downloaded','success')">PDF</button></td></tr>
+                    <tr><td class="td-mono">Mar 1, 2025</td><td>Pro Plan — Annual</td><td class="td-mono">$756.00</td><td>${makeBadge('Paid')}</td><td><button class="app-btn app-btn-ghost app-btn-xs" onclick="Toast.show('Receipt downloaded','success')">PDF</button></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECURITY -->
+          <div class="settings-pane" id="sp-security">
+            <div class="panel">
+              <div class="panel-header">
+                <span class="panel-title">SECURITY</span>
+              </div>
+              <div class="panel-body">
+                <div class="settings-section">
+                  <div class="settings-section-title">Password</div>
+                  <div class="settings-section-sub">It's a good idea to use a strong, unique password.</div>
+                  <div class="app-form-group"><label class="app-label">Current Password</label><input class="app-input" type="password" id="set-pw-current" placeholder="••••••••" style="max-width:320px"></div>
+                  <div class="app-form-group"><label class="app-label">New Password</label><input class="app-input" type="password" id="set-pw-new" placeholder="Min 8 characters" style="max-width:320px"></div>
+                  <div class="app-form-group"><label class="app-label">Confirm New Password</label><input class="app-input" type="password" id="set-pw-confirm" placeholder="Repeat new password" style="max-width:320px"></div>
+                  <button class="app-btn app-btn-primary" style="margin-top:4px" onclick="updatePassword()">Update Password</button>
+                </div>
+                <div class="divider-dark"></div>
+                <div class="settings-section">
+                  <div class="settings-section-title">Two-Factor Authentication</div>
+                  <div class="settings-section-sub">Add an extra layer of security to your account.</div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Authenticator App (TOTP)</div><div class="settings-field-desc">Use Google Authenticator, Authy, or any TOTP app.</div></div>
+                    <div class="settings-field-right"><button class="app-btn app-btn-ghost app-btn-sm" onclick="Toast.show('2FA setup flow coming soon','info')">Set Up 2FA</button></div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Google OAuth</div><div class="settings-field-desc">Sign in with your Google account.</div></div>
+                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Connected</span></div></div>
+                  </div>
+                </div>
+                <div class="divider-dark"></div>
+                <div class="settings-section">
+                  <div class="settings-section-title">Active Sessions</div>
+                  <div class="settings-section-sub">You are currently logged in from these devices.</div>
+                  <div style="background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                    <div><div style="font-size:13px;color:var(--app-text);font-weight:600">Chrome on macOS — Detroit, MI</div><div style="font-size:11px;color:var(--app-muted);font-family:var(--ff-mono)">Current session · Last active just now</div></div>
+                    <span class="badge badge-success">Current</span>
+                  </div>
+                  <div style="background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:14px 18px;display:flex;align-items:center;justify-content:space-between">
+                    <div><div style="font-size:13px;color:var(--app-text);font-weight:600">Safari on iPhone — Detroit, MI</div><div style="font-size:11px;color:var(--app-muted);font-family:var(--ff-mono)">Last active 2h ago</div></div>
+                    <button class="app-btn app-btn-danger app-btn-xs" onclick="Toast.show('Session revoked','info')">Revoke</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- DANGER ZONE -->
+          <div class="settings-pane" id="sp-danger">
+            <div class="danger-zone">
+              <div class="danger-zone-title">⚠ DANGER ZONE</div>
+              <div class="danger-zone-sub">These actions are irreversible. Please read carefully before proceeding.</div>
+              <div style="display:flex;flex-direction:column;gap:16px;">
+                <div style="background:var(--app-surface);border:1px solid rgba(181,43,30,.25);border-radius:var(--r-sm);padding:18px 20px;display:flex;align-items:center;justify-content:space-between">
+                  <div><div style="font-size:13px;font-weight:700;color:var(--app-text)">Export All Data</div><div style="font-size:12px;color:var(--app-muted);margin-top:3px">Download a complete ZIP of your shop data (JSON + CSVs).</div></div>
+                  <button class="app-btn app-btn-ghost app-btn-sm" onclick="Toast.show('Data export queued — you will receive an email shortly','success')">Export Data</button>
+                </div>
+                <div style="background:var(--app-surface);border:1px solid rgba(181,43,30,.25);border-radius:var(--r-sm);padding:18px 20px;display:flex;align-items:center;justify-content:space-between">
+                  <div><div style="font-size:13px;font-weight:700;color:var(--app-text)">Reset Demo Data</div><div style="font-size:12px;color:var(--app-muted);margin-top:3px">Wipe all data and reload the original sample dataset.</div></div>
+                  <button class="app-btn app-btn-danger app-btn-sm" onclick="confirmReset()">Reset Data</button>
+                </div>
+                <div style="background:var(--app-surface);border:1px solid rgba(181,43,30,.4);border-radius:var(--r-sm);padding:18px 20px;display:flex;align-items:center;justify-content:space-between">
+                  <div><div style="font-size:13px;font-weight:700;color:var(--danger)">Delete Account</div><div style="font-size:12px;color:var(--app-muted);margin-top:3px">Permanently delete your GearShift account and all associated data.</div></div>
+                  <button class="app-btn app-btn-danger app-btn-sm" onclick="Toast.show('Account deletion requires verification — contact support@gearshift.app','info')">Delete Account</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- BOOKING QR PANE -->
+          <div class="settings-pane" id="sp-booking">
+            <div class="panel">
+              <div class="panel-header"><span class="panel-title">BOOKING LINK &amp; QR CODE</span></div>
+              <div class="panel-body">
+                <p style="font-size:13px;color:var(--app-muted);margin-bottom:20px">Share this link or QR code with customers so they can book appointments online.</p>
+
+                <div class="app-form-group">
+                  <label class="app-label">Your Booking URL</label>
+                  <div style="display:flex;gap:8px">
+                    <input class="app-input" id="bk-url" readonly style="font-family:var(--ff-mono);font-size:11px;flex:1;cursor:pointer" onclick="this.select()" value="Loading...">
+                    <button class="app-btn app-btn-ghost app-btn-sm" onclick="copyBkUrl()">Copy</button>
+                    <a id="bk-url-open" href="#" target="_blank" class="app-btn app-btn-ghost app-btn-sm">Open ↗</a>
+                  </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:200px 1fr;gap:32px;align-items:start;margin-top:24px">
+                  <div>
+                    <div class="app-label" style="margin-bottom:12px">QR CODE PREVIEW</div>
+                    <!-- Branded QR card -->
+                    <div id="bk-qr-card" style="background:#fff;border:1px solid #d5d0c8;border-radius:6px;overflow:hidden;width:220px;box-shadow:0 4px 16px rgba(0,0,0,0.12)">
+                      <!-- Header band -->
+                      <div style="background:#0e0f0f;padding:12px 16px;text-align:center">
+                        <div style="font-family:var(--ff-display);font-size:20px;letter-spacing:3px;color:#fff" id="bk-card-shopname">GEARSHIFT</div>
+                        <div style="font-size:9px;letter-spacing:2px;color:#c94b1e;margin-top:2px;font-family:var(--ff-mono)">BOOK A SERVICE</div>
+                      </div>
+                      <!-- QR canvas -->
+                      <div style="padding:14px;text-align:center;background:#fff">
+                        <canvas id="bk-qr" width="176" height="176" style="display:block;margin:0 auto"></canvas>
+                      </div>
+                      <!-- Footer -->
+                      <div style="background:#f4f1eb;padding:10px 16px;text-align:center;border-top:1px solid #d5d0c8">
+                        <div style="font-size:11px;font-weight:700;color:#0e0f0f;font-family:Arial,sans-serif">Scan to Book an Appointment</div>
+                        <div style="font-size:9px;color:#6b6b6b;margin-top:2px;font-family:Arial,sans-serif">Point your phone camera at this code</div>
+                      </div>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+                      <button class="app-btn app-btn-primary app-btn-sm" onclick="downloadBkQR()">Download PNG</button>
+                      <button class="app-btn app-btn-ghost app-btn-sm" onclick="printBkQR()">Print</button>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="app-label" style="margin-bottom:12px">HOW TO USE</div>
+                    <div style="display:flex;flex-direction:column;gap:14px">
+                      <div style="display:flex;gap:12px;align-items:flex-start">
+                        <div style="font-size:20px">📱</div>
+                        <div><div style="font-size:13px;font-weight:600;color:var(--app-text);margin-bottom:2px">WhatsApp / SMS</div><div style="font-size:12px;color:var(--app-muted)">Copy the link and send directly to customers</div></div>
+                      </div>
+                      <div style="display:flex;gap:12px;align-items:flex-start">
+                        <div style="font-size:20px">🖨️</div>
+                        <div><div style="font-size:13px;font-weight:600;color:var(--app-text);margin-bottom:2px">Print &amp; Display</div><div style="font-size:12px;color:var(--app-muted)">Print and stick on your reception desk or workshop entrance</div></div>
+                      </div>
+                      <div style="display:flex;gap:12px;align-items:flex-start">
+                        <div style="font-size:20px">🌐</div>
+                        <div><div style="font-size:13px;font-weight:600;color:var(--app-text);margin-bottom:2px">Website Button</div><div style="font-size:12px;color:var(--app-muted)">Add a Book a Service button to your website using this URL</div></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- INVITE USER MODAL -->
+<div class="modal-backdrop" id="inviteModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title">INVITE USER</span>
+      <button class="modal-close" onclick="Modal.close('inviteModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="app-form-group"><label class="app-label">Email Address</label><input class="app-input" id="inv-email" type="email" placeholder="colleague@shop.com"></div>
+      <div class="app-form-group"><label class="app-label">Role</label>
+        <select class="app-input" id="inv-role">
+          <option>Admin</option><option>Service Advisor</option><option>Mechanic</option><option>Parts Manager</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('inviteModal')">Cancel</button>
+      <button class="app-btn app-btn-primary" onclick="sendInvite()">Send Invite</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+<script src="../js/theme.js"></script>
+<script src="../js/main.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/supabase.js"></script>
+<script src="../js/rbac.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script>
+let _currentShop = null;
+
+function val(id) {
+  const el = document.getElementById(id);
+  return el ? el.value.trim() : '';
+}
+function setVal(id, v) {
+  const el = document.getElementById(id);
+  if (el) el.value = v ?? '';
+}
+
+function showSettingsPane(pane, el) {
+  document.querySelectorAll('.settings-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.settings-nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('sp-' + pane)?.classList.add('active');
+  if (el) el.classList.add('active');
+  if (pane === 'booking') initBookingPane();
+}
+
+async function initPage() {
+  const user = await RBAC.guardPage('settings');
+  if (!user) return;
+  await RBAC.initSidebar('settings');
+  await loadSettings(user);
+}
+
+async function loadSettings(user) {
+  RBAC.clearCache();
+  _currentShop = await RBAC.getShop();
+
+  if (_currentShop) {
+    setVal('set-shopname', _currentShop.name);
+    setVal('set-phone',    _currentShop.phone);
+    setVal('set-email',    _currentShop.email);
+    setVal('set-addr',     _currentShop.address);
+  }
+
+  // Load personal profile for all roles
+  try {
+    const user = await Auth.getUser();
+    if (user) {
+      const { data: profile } = await sb.from('profiles')
+        .select('full_name,phone,role').eq('id', user.id).limit(1);
+      const p = profile?.[0];
+      if (p) {
+        setVal('p-fullname', p.full_name || '');
+        setVal('p-phone',    p.phone     || '');
+        setVal('p-role',     p.role      || '');
+      }
+    }
+  } catch(e) {}
+
+  // Non-admins: default to My Profile pane, disable shop fields
+  if (user?.role !== 'Admin') {
+    document.querySelectorAll('[onclick*="saveShopInfo"],[onclick*="saveBillingSettings"]')
+      .forEach(btn => btn.style.display = 'none');
+    document.querySelectorAll('#set-shopname,#set-phone,#set-email,#set-addr,#set-labor,#set-tax,#set-invprefix,#set-bays,#set-wd-open,#set-wd-close,#set-sat-open,#set-sat-close')
+      .forEach(el => el.disabled = true);
+    // Default to personal pane for non-admins
+    const personalNav = document.getElementById('nav-personal');
+    if (personalNav) {
+      document.querySelectorAll('.settings-pane').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.settings-nav-item').forEach(n => n.classList.remove('active'));
+      document.getElementById('sp-personal')?.classList.add('active');
+      personalNav.classList.add('active');
+    }
+  }
+
+  // Load shop_settings for rates
+  try {
+    const settings = await GS.getSettings();
+    if (settings) {
+      setVal('set-labor',     settings.labor_rate);
+      setVal('set-tax',       settings.tax_rate);
+      setVal('set-invprefix', settings.invoice_prefix || 'INV-');
+      setVal('set-bays',      settings.bays || '');
+      setVal('set-wd-open',   settings.weekday_open  || '08:00');
+      setVal('set-wd-close',  settings.weekday_close || '18:00');
+      setVal('set-sat-open',  settings.saturday_open  || '09:00');
+      setVal('set-sat-close', settings.saturday_close || '15:00');
+      if (settings.sunday_closed === false) {
+        document.getElementById('sun-toggle')?.classList.add('on');
+      }
+    }
+  } catch(e) { /* settings row may not exist yet */ }
+}
+
+async function saveShopInfo() {
+  const name  = val('set-shopname');
+  const phone = val('set-phone');
+  const email = val('set-email');
+  const addr  = val('set-addr');
+  const bays  = parseInt(val('set-bays')) || null;
+
+  // Hours of operation
+  const hours = {
+    weekday_open:  val('set-wd-open')  || null,
+    weekday_close: val('set-wd-close') || null,
+    saturday_open: val('set-sat-open') || null,
+    saturday_close:val('set-sat-close')|| null,
+    sunday_closed: !document.getElementById('sun-toggle')?.classList.contains('on'),
+  };
+
+  if (!name) { Toast.show('Shop name is required', 'error'); return; }
+
+  try {
+    const user = await Auth.getUser();
+    if (!user) { Toast.show('Not logged in', 'error'); return; }
+    if (user.role !== 'Admin') {
+      Toast.show('Only admins can edit shop information', 'error');
+      return;
+    }
+
+    const shopId = user.shop_id || _currentShop?.id;
+    if (!shopId) {
+      Toast.show('Your account is not linked to a shop yet', 'error');
+      return;
+    }
+
+    // Upsert shop row — update if exists, insert if new account
+    const { data: existing } = await sb.from('shops').select('id').eq('id', shopId).limit(1);
+    let shopError;
+    if (existing?.length) {
+      const { error } = await sb.from('shops')
+        .update({ name, phone, email, address: addr, updated_at: new Date().toISOString() })
+        .eq('id', shopId);
+      shopError = error;
+    } else {
+      // Row doesn't exist yet — insert it
+      const { error } = await sb.from('shops')
+        .insert({ id: shopId, name, phone, email, address: addr });
+      shopError = error;
+    }
+    if (shopError) throw shopError;
+
+    // Save bays + hours to shop_settings
+    try {
+      await GS.updateSettings({ bays, ...hours });
+    } catch(e) { console.warn('Could not save bays/hours:', e.message); }
+
+    _currentShop = { ..._currentShop, name, phone, email, address: addr };
+    RBAC.clearCache();
+    Toast.show('Shop info saved successfully', 'success');
+  } catch(err) {
+    Toast.show(err.message || 'Failed to save', 'error');
+  }
+}
+
+async function savePersonalInfo() {
+  const fullName = val('p-fullname').trim();
+  const phone    = val('p-phone').trim();
+  if (!fullName) { Toast.show('Full name is required', 'error'); return; }
+
+  const btn = document.querySelector('#sp-personal .app-btn-primary');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const user = await Auth.getUser();
+    if (!user?.id) { Toast.show('Not logged in', 'error'); return; }
+    const { error } = await sb.from('profiles')
+      .update({ full_name: fullName, phone })
+      .eq('id', user.id);
+    if (error) throw error;
+    Toast.show('Profile saved', 'success');
+    // Update sidebar display name
+    const nameEl = document.getElementById('userName');
+    if (nameEl) nameEl.textContent = fullName;
+  } catch(err) {
+    Toast.show(err.message || 'Failed to save profile', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Changes';
+  }
+}
+
+async function saveBillingSettings() {
+  const laborRate = parseFloat(val('set-labor'));
+  const taxRate   = parseFloat(val('set-tax'));
+  const prefix    = val('set-invprefix');
+
+  if (isNaN(laborRate) || laborRate < 0) { Toast.show('Enter a valid labor rate', 'error'); return; }
+  if (isNaN(taxRate)   || taxRate < 0)   { Toast.show('Enter a valid tax rate', 'error'); return; }
+
+  try {
+    await GS.updateSettings({
+      labor_rate:     laborRate,
+      tax_rate:       taxRate,
+      invoice_prefix: prefix,
+    });
+    Toast.show('Billing settings saved', 'success');
+  } catch(err) {
+    Toast.show(err.message || 'Failed to save', 'error');
+  }
+}
+
+async function updatePassword() {
+  const current = document.getElementById('set-pw-current')?.value;
+  const newPw   = document.getElementById('set-pw-new')?.value;
+  const confirm = document.getElementById('set-pw-confirm')?.value;
+
+  if (!newPw || newPw.length < 8) { Toast.show('New password must be at least 8 characters', 'error'); return; }
+  if (newPw !== confirm)          { Toast.show('Passwords do not match', 'error'); return; }
+
+  try {
+    const { error } = await sb.auth.updateUser({ password: newPw });
+    if (error) throw error;
+    Toast.show('Password updated successfully', 'success');
+    document.getElementById('set-pw-current').value = '';
+    document.getElementById('set-pw-new').value = '';
+    document.getElementById('set-pw-confirm').value = '';
+  } catch(err) {
+    Toast.show(err.message || 'Failed to update password', 'error');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initPage);
+
+/* ================================================================
+   BOOKING QR CODE
+   ================================================================ */
+var _bkUrl = '';
+var _bkLoaded = false;
+
+function initBookingPane() {
+  if (_bkLoaded) return;
+  var shop = _currentShop;
+  if (!shop || !shop.id) {
+    // Try again after short delay in case shop not loaded yet
+    setTimeout(initBookingPane, 500);
+    return;
+  }
+  _bkLoaded = true;
+
+  // Build URL from current window location
+  var base = window.location.href;
+  base = base.substring(0, base.lastIndexOf('/') + 1);
+  _bkUrl = base + 'booking.html?shop=' + shop.id;
+
+  var urlInput = document.getElementById('bk-url');
+  var urlOpen  = document.getElementById('bk-url-open');
+  if (urlInput) urlInput.value = _bkUrl;
+  if (urlOpen)  urlOpen.href   = _bkUrl;
+
+  // Generate QR
+  var canvas = document.getElementById('bk-qr');
+  // Update shop name in card header
+  var cardName = document.getElementById('bk-card-shopname');
+  if (cardName && shop.name) cardName.textContent = shop.name.toUpperCase();
+
+  if (canvas && typeof QRCode !== 'undefined') {
+    QRCode.toCanvas(canvas, _bkUrl, {
+      width: 176, margin: 1,
+      color: { dark: '#0e0f0f', light: '#ffffff' }
+    }, function(err) { if (err) console.warn('QR err:', err); });
+  } else {
+    // QRCode lib not loaded yet — retry
+    setTimeout(function() {
+      _bkLoaded = false;
+      initBookingPane();
+    }, 800);
+  }
+}
+
+function copyBkUrl() {
+  if (!_bkUrl) { Toast.show('URL not ready yet', 'error'); return; }
+  navigator.clipboard.writeText(_bkUrl)
+    .then(function() { Toast.show('Booking link copied!', 'success'); })
+    .catch(function() {
+      var el = document.getElementById('bk-url');
+      if (el) { el.select(); document.execCommand('copy'); }
+      Toast.show('Link copied', 'success');
+    });
+}
+
+function downloadBkQR() {
+  var src = document.getElementById('bk-qr');
+  if (!src) return;
+
+  var out  = document.createElement('canvas');
+  out.width  = 320;
+  out.height = 380;
+  var ctx = out.getContext('2d');
+
+  // White background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 320, 380);
+
+  // Dark header band
+  ctx.fillStyle = '#0e0f0f';
+  ctx.fillRect(0, 0, 320, 64);
+
+  // Shop name in header
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 17px Arial';
+  ctx.textAlign = 'center';
+  var shopName = (_currentShop && _currentShop.name) ? _currentShop.name.toUpperCase() : 'GEARSHIFT';
+  ctx.fillText(shopName, 160, 30);
+
+  // Subtitle in rust colour
+  ctx.fillStyle = '#c94b1e';
+  ctx.font = '11px Arial';
+  ctx.fillText('BOOK A SERVICE APPOINTMENT', 160, 50);
+
+  // QR code centred
+  ctx.drawImage(src, 72, 76, 176, 176);
+
+  // Instruction text
+  ctx.fillStyle = '#0e0f0f';
+  ctx.font = 'bold 13px Arial';
+  ctx.fillText('Scan to Book Your Next Service', 160, 278);
+  ctx.fillStyle = '#6b6b6b';
+  ctx.font = '11px Arial';
+  ctx.fillText('Point your phone camera at this code', 160, 296);
+
+  // Thin border
+  ctx.strokeStyle = '#d5d0c8';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, 0.5, 319, 379);
+
+  var link = document.createElement('a');
+  var slug = shopName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  link.download = 'booking-qr-' + slug + '.png';
+  link.href = out.toDataURL('image/png');
+  link.click();
+  Toast.show('QR code downloaded', 'success');
+}
+
+function printBkQR() {
+  var src = document.getElementById('bk-qr');
+  if (!src) return;
+  var imgData  = src.toDataURL('image/png');
+  var shopName = (_currentShop && _currentShop.name) ? _currentShop.name : 'GearShift Auto';
+
+  // Build print page using array join — safe from parser tag issues
+  var lines = [];
+  lines.push('<!DOCTYPE html>');
+  lines.push('<html lang="en">');
+  lines.push('<head>');
+  lines.push('<meta charset="UTF-8">');
+  lines.push('<title>Booking QR — ' + shopName + '<' + '/title>');
+  lines.push('<style>');
+  lines.push('body{font-family:Arial,sans-serif;text-align:center;padding:48px;background:#fff;color:#0e0f0f;}');
+  lines.push('.logo{font-size:34px;font-weight:900;letter-spacing:3px;margin-bottom:4px;}');
+  lines.push('.logo em{color:#c94b1e;font-style:normal;}');
+  lines.push('.shopname{font-size:15px;font-weight:700;letter-spacing:1px;margin-bottom:4px;}');
+  lines.push('.sub{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#999;margin-bottom:28px;}');
+  lines.push('img{width:220px;height:220px;border:1px solid #eee;padding:8px;border-radius:4px;}');
+  lines.push('.cta{font-size:17px;font-weight:700;margin-top:20px;}');
+  lines.push('.hint{font-size:12px;color:#666;margin-top:6px;}');
+  lines.push('.url{font-size:9px;color:#aaa;margin-top:18px;word-break:break-all;max-width:280px;display:block;margin-left:auto;margin-right:auto;}');
+  lines.push('@media print{.no-print{display:none!important;}}');
+  lines.push('<' + '/style>');
+  lines.push('<' + '/head>');
+  lines.push('<body>');
+  lines.push('<div class="logo">GEAR<em>SHIFT</em><' + '/div>');
+  lines.push('<div class="shopname">' + shopName + '<' + '/div>');
+  lines.push('<div class="sub">Online Service Booking<' + '/div>');
+  lines.push('<img src="' + imgData + '" alt="QR Code">');
+  lines.push('<div class="cta">Scan to Book a Service<' + '/div>');
+  lines.push('<div class="hint">Point your phone camera at this QR code<' + '/div>');
+  lines.push('<span class="url">' + _bkUrl + '<' + '/span>');
+  lines.push('<div class="no-print" style="margin-top:28px">');
+  lines.push('<button onclick="window.print()" style="padding:10px 28px;background:#c94b1e;color:#fff;border:none;border-radius:4px;font-size:14px;cursor:pointer;font-weight:600">Print</button>');
+  lines.push('<' + '/div>');
+  lines.push('<' + '/body>');
+  lines.push('<' + '/html>');
+
+  var win = window.open('', '_blank');
+  if (!win) { Toast.show('Allow popups to print', 'error'); return; }
+  win.document.write(lines.join(''));
+  win.document.close();
+  win.focus();
+  setTimeout(function() { win.print(); }, 500);
+}
+</script>
+</body>
+</html>

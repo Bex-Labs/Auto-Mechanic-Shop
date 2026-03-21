@@ -1,0 +1,2 @@
+# Auto Mechanic App With Supply Chain
+It is a web-based management system built specifically for auto mechanic shops. Think of it as the brain of the entire shop  everything that happens in a garage, from the moment a customer books an appointment to the moment they pay their invoice, is tracked and managed through this one system. Instead of using paper job cards, spreadsheets, sticky notes, and separate tools for billing, GearShift puts everything in one place that the whole team can access and update in real time.

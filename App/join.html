@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Join Your Shop — GearShift</title>
+<link rel="stylesheet" href="../css/main.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    min-height: 100vh;
+    background: var(--app-bg, #0d1117);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--ff-body, 'Inter', sans-serif);
+    padding: 24px;
+  }
+
+  .join-wrap {
+    width: 100%;
+    max-width: 460px;
+  }
+
+  /* Logo */
+  .join-logo {
+    font-family: var(--ff-display, 'Barlow Condensed', sans-serif);
+    font-size: 28px;
+    letter-spacing: 3px;
+    color: var(--white, #fff);
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .join-logo span { color: var(--rust, #c94b1e); }
+
+  /* Card */
+  .join-card {
+    background: var(--app-surface, #161b22);
+    border: 1px solid var(--app-border, #30363d);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  /* Top banner — shop info */
+  .join-banner {
+    background: linear-gradient(135deg, rgba(201,75,30,0.15), rgba(232,160,32,0.08));
+    border-bottom: 1px solid var(--app-border, #30363d);
+    padding: 24px 28px;
+    text-align: center;
+  }
+  .join-banner-icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+  }
+  .join-shop-name {
+    font-family: var(--ff-display, 'Barlow Condensed', sans-serif);
+    font-size: 22px;
+    letter-spacing: 2px;
+    color: var(--white, #fff);
+    margin-bottom: 6px;
+  }
+  .join-role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(201,75,30,0.2);
+    border: 1px solid rgba(201,75,30,0.4);
+    color: #ff8a65;
+    font-family: var(--ff-mono, monospace);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 5px 14px;
+    border-radius: 20px;
+    margin-top: 8px;
+  }
+  .join-role-badge::before {
+    content: '';
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #ff8a65;
+  }
+
+  /* Form body */
+  .join-body {
+    padding: 28px;
+  }
+
+  .join-title {
+    font-family: var(--ff-display, 'Barlow Condensed', sans-serif);
+    font-size: 20px;
+    letter-spacing: 1px;
+    color: var(--white, #fff);
+    margin-bottom: 6px;
+  }
+  .join-sub {
+    font-size: 13px;
+    color: var(--app-muted, #7d8590);
+    margin-bottom: 24px;
+    line-height: 1.6;
+  }
+
+  .form-group { margin-bottom: 18px; }
+  .form-label {
+    display: block;
+    font-family: var(--ff-mono, monospace);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--app-muted, #7d8590);
+    margin-bottom: 8px;
+  }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-input {
+    width: 100%;
+    background: var(--app-surface2, #1c2128);
+    border: 1px solid var(--app-border, #30363d);
+    border-radius: 8px;
+    padding: 13px 16px;
+    color: var(--app-text, #e6edf3);
+    font-size: 15px;
+    font-family: var(--ff-body, sans-serif);
+    transition: border-color 0.15s;
+    outline: none;
+  }
+  .form-input:focus { border-color: var(--amber, #e8a020); background: #202830; }
+  .form-input::placeholder { color: var(--app-muted, #7d8590); }
+  .form-input[readonly] {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  /* Password strength */
+  .pw-strength {
+    height: 4px;
+    background: var(--app-border, #30363d);
+    border-radius: 2px;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+  .pw-strength-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s, background 0.3s;
+    width: 0;
+  }
+  .pw-hint {
+    font-size: 12px;
+    color: var(--app-muted, #7d8590);
+    margin-top: 5px;
+  }
+
+  /* Error */
+  .field-error {
+    font-size: 12px;
+    color: #f87171;
+    margin-top: 5px;
+    display: none;
+  }
+  .field-error.show { display: block; }
+
+  /* Alert */
+  .join-alert {
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 18px;
+    display: none;
+  }
+  .join-alert.show { display: flex; gap: 10px; align-items: flex-start; }
+  .join-alert.error { background: rgba(181,43,30,0.12); border: 1px solid rgba(181,43,30,0.3); color: #f87171; }
+  .join-alert.info  { background: rgba(232,160,32,0.1);  border: 1px solid rgba(232,160,32,0.25); color: var(--amber, #e8a020); }
+
+  /* Submit button */
+  .join-btn {
+    width: 100%;
+    padding: 15px;
+    background: var(--rust, #c94b1e);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: var(--ff-body, sans-serif);
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    margin-top: 8px;
+  }
+  .join-btn:hover:not(:disabled) { background: #e05520; }
+  .join-btn:active:not(:disabled) { transform: scale(0.99); }
+  .join-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  /* Success screen */
+  .success-screen {
+    display: none;
+    padding: 40px 28px;
+    text-align: center;
+  }
+  .success-screen.show { display: block; }
+  .success-icon { font-size: 56px; margin-bottom: 16px; }
+  .success-title {
+    font-family: var(--ff-display, 'Barlow Condensed', sans-serif);
+    font-size: 26px;
+    letter-spacing: 1px;
+    color: var(--white, #fff);
+    margin-bottom: 10px;
+  }
+  .success-body {
+    font-size: 14px;
+    color: var(--app-muted, #7d8590);
+    line-height: 1.7;
+    margin-bottom: 28px;
+  }
+
+  /* Invalid/expired screen */
+  .invalid-screen {
+    display: none;
+    padding: 40px 28px;
+    text-align: center;
+  }
+  .invalid-screen.show { display: block; }
+
+  /* Loading */
+  .loading-screen {
+    padding: 48px 28px;
+    text-align: center;
+    color: var(--app-muted, #7d8590);
+    font-size: 14px;
+  }
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--app-border, #30363d);
+    border-top-color: var(--rust, #c94b1e);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .back-link {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 13px;
+    color: var(--app-muted, #7d8590);
+  }
+  .back-link a { color: var(--amber, #e8a020); text-decoration: none; }
+  .back-link a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="join-wrap">
+
+  <div class="join-logo">GEAR<span>SHIFT</span></div>
+
+  <div class="join-card">
+
+    <!-- LOADING -->
+    <div class="loading-screen" id="loadingScreen">
+      <div class="spinner"></div>
+      Verifying your invite…
+    </div>
+
+    <!-- INVALID / EXPIRED -->
+    <div class="invalid-screen" id="invalidScreen">
+      <div style="font-size:52px;margin-bottom:16px">⚠️</div>
+      <div class="join-shop-name" style="margin-bottom:10px" id="invalidTitle">Invite Not Found</div>
+      <div style="font-size:14px;color:var(--app-muted);line-height:1.7" id="invalidMsg">
+        This invite link is invalid or has expired.<br>
+        Please ask your shop admin to send a new invite.
+      </div>
+      <a href="dashboard.html" style="display:inline-block;margin-top:24px;color:var(--amber);font-size:13px;text-decoration:none">
+        ← Go to Sign In
+      </a>
+    </div>
+
+    <!-- MAIN FORM -->
+    <div id="mainForm" style="display:none">
+      <div class="join-banner">
+        <div class="join-banner-icon">🔧</div>
+        <div class="join-shop-name" id="shopNameDisplay">Your Shop</div>
+        <div style="font-size:13px;color:var(--app-muted);margin-top:4px">has invited you to join their team</div>
+        <div class="join-role-badge" id="roleDisplay">—</div>
+      </div>
+
+      <div class="join-body">
+        <div class="join-title">Set Up Your Account</div>
+        <div class="join-sub">Enter your details below to create your account and get started.</div>
+
+        <div class="join-alert" id="formAlert"></div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">First Name</label>
+            <input class="form-input" id="j-fn" type="text" placeholder="Your first name" autocomplete="given-name">
+            <div class="field-error" id="err-fn">First name is required</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Last Name</label>
+            <input class="form-input" id="j-ln" type="text" placeholder="Your last name" autocomplete="family-name">
+            <div class="field-error" id="err-ln">Last name is required</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input class="form-input" id="j-email" type="email" readonly>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Create Password</label>
+          <input class="form-input" id="j-pw" type="password" placeholder="At least 8 characters"
+            autocomplete="new-password" oninput="checkPwStrength()">
+          <div class="pw-strength"><div class="pw-strength-fill" id="pwBar"></div></div>
+          <div class="pw-hint" id="pwHint">Use 8+ characters</div>
+          <div class="field-error" id="err-pw">Password must be at least 8 characters</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Confirm Password</label>
+          <input class="form-input" id="j-pw2" type="password" placeholder="Repeat your password"
+            autocomplete="new-password">
+          <div class="field-error" id="err-pw2">Passwords do not match</div>
+        </div>
+
+        <button class="join-btn" id="joinBtn" onclick="submitJoin()">
+          Create My Account &amp; Join Shop
+        </button>
+      </div>
+    </div>
+
+    <!-- SUCCESS -->
+    <div class="success-screen" id="successScreen">
+      <div class="success-icon">🎉</div>
+      <div class="success-title">YOU'RE IN!</div>
+      <div class="success-body" id="successMsg">
+        Your account has been created.<br>
+        You can now sign in and start working.
+      </div>
+      <a href="dashboard.html">
+        <button class="join-btn" style="max-width:260px;margin:0 auto;display:block">
+          Go to Sign In →
+        </button>
+      </a>
+    </div>
+
+  </div><!-- /.join-card -->
+
+  <div class="back-link">
+    Already have an account? <a href="dashboard.html">Sign in here</a>
+  </div>
+
+</div><!-- /.join-wrap -->
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/theme.js"></script>
+<script src="../js/main.js"></script>
+<script src="../js/supabase.js"></script>
+<script src="../js/rbac.js"></script>
+<script>
+let _inviteToken  = null;
+let _inviteData   = null;
+
+/* ── INIT ── */
+document.addEventListener('DOMContentLoaded', async () => {
+  // Get token from URL
+  const params = new URLSearchParams(window.location.search);
+  _inviteToken  = params.get('token') || params.get('invite');
+
+  if (!_inviteToken) {
+    showInvalid('No Invite Found', 'This link is missing an invite token. Please ask your admin to resend the invite.');
+    return;
+  }
+
+  try {
+    _inviteData = await RBAC.getInviteByToken(_inviteToken);
+  } catch(e) {
+    _inviteData = null;
+  }
+
+  if (!_inviteData) {
+    showInvalid('Invite Expired or Used', 'This invite link has already been used or has expired (links expire after 7 days). Please ask your shop admin to send a new invite.');
+    return;
+  }
+
+  // Populate form
+  document.getElementById('shopNameDisplay').textContent = _inviteData.shops?.name || 'Your Shop';
+  document.getElementById('roleDisplay').textContent     = _inviteData.role || 'Staff';
+  document.getElementById('j-email').value               = _inviteData.email || '';
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('mainForm').style.display      = 'block';
+  document.getElementById('j-fn').focus();
+});
+
+/* ── PASSWORD STRENGTH ── */
+function checkPwStrength() {
+  const pw  = document.getElementById('j-pw').value;
+  const bar = document.getElementById('pwBar');
+  const hint = document.getElementById('pwHint');
+  let score = 0;
+  if (pw.length >= 8)  score++;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+
+  const levels = [
+    { pct: '0%',   color: 'transparent', text: 'Use 8+ characters' },
+    { pct: '25%',  color: '#f87171',     text: 'Weak' },
+    { pct: '50%',  color: 'var(--amber)', text: 'Fair' },
+    { pct: '75%',  color: '#60a5fa',     text: 'Good' },
+    { pct: '100%', color: 'var(--success)', text: 'Strong ✓' },
+  ];
+  const lvl = levels[Math.min(score, 4)];
+  bar.style.width    = lvl.pct;
+  bar.style.background = lvl.color;
+  hint.textContent   = lvl.text;
+  hint.style.color   = score >= 3 ? lvl.color : 'var(--app-muted)';
+}
+
+/* ── SUBMIT ── */
+async function submitJoin() {
+  clearErrors();
+
+  const fn  = document.getElementById('j-fn').value.trim();
+  const ln  = document.getElementById('j-ln').value.trim();
+  const pw  = document.getElementById('j-pw').value;
+  const pw2 = document.getElementById('j-pw2').value;
+
+  let ok = true;
+  if (!fn) { showErr('err-fn'); ok = false; }
+  if (!ln) { showErr('err-ln'); ok = false; }
+  if (pw.length < 8) { showErr('err-pw'); ok = false; }
+  if (pw !== pw2)    { showErr('err-pw2'); ok = false; }
+  if (!ok) return;
+
+  const btn = document.getElementById('joinBtn');
+  btn.disabled    = true;
+  btn.textContent = 'Creating your account…';
+
+  try {
+    // Step 1: Sign up with Supabase auth
+    const { data: signUpData, error: signUpErr } = await sb.auth.signUp({
+      email:    _inviteData.email,
+      password: pw,
+      options:  {
+        data: {
+          full_name: `${fn} ${ln}`,
+          role:      _inviteData.role,
+        }
+      }
+    });
+
+    if (signUpErr) throw signUpErr;
+
+    const userId = signUpData?.user?.id;
+    if (!userId) throw new Error('Signup failed — please try again');
+
+    // Step 2: Wait briefly for DB trigger to create profile row
+    await new Promise(r => setTimeout(r, 1200));
+
+    // Step 3: Accept the invite — links profile to shop with correct role
+    const { error: acceptErr } = await sb.rpc('accept_staff_invite', {
+      p_token: _inviteToken
+    });
+
+    // Accept error is non-fatal — profile may link on next sign-in
+    if (acceptErr) {
+      console.warn('accept_staff_invite:', acceptErr.message);
+      // Store token for retry on first login
+      localStorage.setItem('gs_pending_invite', _inviteToken);
+    }
+
+    // Step 4: Sign out so they go to fresh login
+    await sb.auth.signOut();
+
+    // Show success
+    document.getElementById('mainForm').style.display = 'none';
+    document.getElementById('successMsg').innerHTML =
+      `Your account has been created for <strong>${_inviteData.shops?.name || 'your shop'}</strong>.<br>
+       Sign in with <strong>${_inviteData.email}</strong> to start working.`;
+    document.getElementById('successScreen').classList.add('show');
+
+  } catch(err) {
+    const msg = err.message || '';
+    let friendly = 'Something went wrong. Please try again.';
+    if (msg.includes('already registered') || msg.includes('already exists')) {
+      friendly = 'An account with this email already exists. Try signing in instead.';
+    } else if (msg.includes('password')) {
+      friendly = 'Password must be at least 8 characters.';
+    } else if (msg.includes('email')) {
+      friendly = 'Invalid email address.';
+    }
+    showAlert(friendly);
+    btn.disabled    = false;
+    btn.textContent = 'Create My Account & Join Shop';
+  }
+}
+
+/* ── HELPERS ── */
+function showInvalid(title, msg) {
+  document.getElementById('loadingScreen').style.display  = 'none';
+  document.getElementById('invalidScreen').classList.add('show');
+  document.getElementById('invalidTitle').textContent = title;
+  document.getElementById('invalidMsg').textContent   = msg;
+}
+
+function showAlert(msg) {
+  const el = document.getElementById('formAlert');
+  el.textContent = msg;
+  el.className = 'join-alert error show';
+}
+
+function showErr(id) {
+  document.getElementById(id).classList.add('show');
+}
+
+function clearErrors() {
+  document.querySelectorAll('.field-error').forEach(e => e.classList.remove('show'));
+  document.getElementById('formAlert').className = 'join-alert';
+}
+</script>
+</body>
+</html>

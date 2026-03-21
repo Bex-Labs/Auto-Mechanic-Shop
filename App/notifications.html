@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notifications — GearShift</title>
+<link rel="stylesheet" href="../css/main.css">
+<link rel="stylesheet" href="../css/app.css">
+<style>
+.notif-row {
+  display:flex; gap:16px; align-items:flex-start;
+  padding:18px 20px; border-bottom:1px solid rgba(48,54,61,0.5);
+  cursor:pointer; transition:background var(--t-fast);
+  position:relative;
+}
+.notif-row:hover { background:var(--app-hover); }
+.notif-row.unread { background:rgba(232,160,32,0.04); border-left:3px solid var(--amber); padding-left:17px; }
+.notif-row.unread:hover { background:rgba(232,160,32,0.07); }
+.notif-icon-wrap {
+  width:40px; height:40px; border-radius:var(--r-md); flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; font-size:18px;
+}
+.notif-icon-wrap.low_stock   { background:rgba(181,43,30,0.15); }
+.notif-icon-wrap.wo_update   { background:rgba(37,99,235,0.15); }
+.notif-icon-wrap.po_update   { background:rgba(139,92,246,0.15); }
+.notif-icon-wrap.payment     { background:rgba(232,160,32,0.15); }
+.notif-icon-wrap.appointment { background:rgba(31,122,74,0.15); }
+.notif-content { flex:1; min-width:0; }
+.notif-title { font-size:13px; font-weight:600; color:var(--app-text); margin-bottom:4px; }
+.notif-row.unread .notif-title { color:var(--white); }
+.notif-body { font-size:12px; color:var(--app-muted); line-height:1.6; }
+.notif-meta { display:flex; align-items:center; gap:8px; margin-top:6px; flex-wrap:wrap; }
+.notif-time { font-family:var(--ff-mono); font-size:10px; color:var(--app-muted); }
+.notif-actions { display:flex; gap:6px; align-items:center; flex-shrink:0; }
+.unread-dot {
+  width:8px; height:8px; border-radius:50%; background:var(--amber);
+  flex-shrink:0; margin-top:5px;
+}
+
+/* Filter pills */
+.filter-pills { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:var(--space-4); }
+.filter-pill {
+  padding:6px 16px; background:var(--app-surface2); border:1px solid var(--app-border);
+  color:var(--app-muted); font-family:var(--ff-mono); font-size:10px; letter-spacing:1px;
+  text-transform:uppercase; border-radius:20px; cursor:pointer; transition:all var(--t-fast);
+}
+.filter-pill:hover { color:var(--app-text); border-color:var(--app-muted); }
+.filter-pill.active { background:var(--amber); border-color:var(--amber); color:var(--ink); }
+
+/* Summary cards */
+.notif-summary { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:var(--space-5); }
+.ns-card {
+  background:var(--app-surface); border:1px solid var(--app-border);
+  padding:16px 18px; border-radius:var(--r-sm); cursor:pointer; transition:all var(--t-fast);
+}
+.ns-card:hover { border-color:var(--amber); }
+.ns-card.active { border-color:var(--amber); background:rgba(232,160,32,0.07); }
+.ns-icon { font-size:22px; margin-bottom:8px; }
+.ns-count { font-family:var(--ff-display); font-size:32px; color:var(--app-text); line-height:1; }
+.ns-label { font-family:var(--ff-mono); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--app-muted); margin-top:4px; }
+.ns-unread { font-size:11px; color:var(--amber); margin-top:2px; }
+</style>
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="app-sidebar">
+    <div class="sidebar-logo">
+      <span class="sidebar-logo-text">GEAR<span>SHIFT</span></span>
+      <a href="../index.html" class="sidebar-back">← Site</a>
+    </div>
+    <nav class="sidebar-nav"><!-- populated by RBAC.initSidebar --></nav>
+    <div class="sidebar-footer">
+      <div class="theme-toggle">
+        <span class="theme-toggle-label">☾ Dark</span>
+        <button class="theme-toggle-switch" onclick="Theme.toggle()" aria-label="Switch to light mode"></button>
+      </div>
+      
+      <div class="sidebar-user"><div class="user-avatar" id="userAvatar">?</div><div><div class="user-name" id="userName">Loading…</div><div class="user-role" id="userRole">—</div></div></div>
+      <button class="btn-logout" onclick="Auth.signOut().then(()=>window.location='dashboard.html')">Sign Out</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="app-main">
+    <div class="app-topbar">
+      <span class="topbar-title">NOTIFICATIONS</span>
+      <div class="topbar-actions">
+        <button class="app-btn app-btn-ghost app-btn-sm" onclick="markAllRead()">Mark All Read</button>
+        <button class="app-btn app-btn-ghost app-btn-sm" onclick="clearRead()">Clear Read</button>
+      </div>
+    </div>
+
+    <div class="app-content">
+
+      <!-- SUMMARY CARDS -->
+      <div class="notif-summary" id="notifSummary"></div>
+
+      <!-- FILTER PILLS -->
+      <div class="filter-pills">
+        <div class="filter-pill active" data-filter="all"         onclick="filterNotifs('all',this)">All</div>
+        <div class="filter-pill"        data-filter="unread"      onclick="filterNotifs('unread',this)">Unread</div>
+        <div class="filter-pill"        data-filter="low_stock"   onclick="filterNotifs('low_stock',this)">📦 Low Stock</div>
+        <div class="filter-pill"        data-filter="wo_update"   onclick="filterNotifs('wo_update',this)">📋 Work Orders</div>
+        <div class="filter-pill"        data-filter="po_update"   onclick="filterNotifs('po_update',this)">🚚 Supply Chain</div>
+        <div class="filter-pill"        data-filter="payment"     onclick="filterNotifs('payment',this)">💰 Payments</div>
+        <div class="filter-pill"        data-filter="appointment" onclick="filterNotifs('appointment',this)">🗓️ Appointments</div>
+      </div>
+
+      <!-- NOTIFICATION LIST -->
+      <div class="panel">
+        <div id="notifList"></div>
+        <div id="notifEmpty" style="display:none">
+          <div class="empty-state">
+            <div class="empty-icon">🔔</div>
+            <div class="empty-title">ALL CLEAR</div>
+            <div class="empty-body">No notifications match this filter.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- NOTIFICATION DETAIL MODAL -->
+<div class="modal-backdrop" id="notifModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="notifModalTitle">Notification</span>
+      <button class="modal-close" onclick="Modal.close('notifModal')">✕</button>
+    </div>
+    <div class="modal-body" id="notifModalBody"></div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('notifModal')">Close</button>
+      <button class="app-btn app-btn-primary" id="notifModalAction">Go to Section →</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+<script src="../js/theme.js"></script>
+<script src="../js/main.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/supabase.js"></script>
+<script src="../js/rbac.js"></script>
+<script>
+let notifData = [];
+let activeFilter = 'all';
+
+const NOTIF_ICONS = {
+  low_stock:   '📦',
+  wo_update:   '📋',
+  po_update:   '🚚',
+  payment:     '💰',
+  appointment: '🗓️',
+};
+
+function timeAgo(iso) {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+function renderSummary() {
+  const types = ['low_stock','wo_update','po_update','payment','appointment'];
+  const labels = { low_stock:'Low Stock', wo_update:'Work Orders', po_update:'Supply Chain', payment:'Payments', appointment:'Appointments' };
+  const total   = notifData.length;
+  const unread  = notifData.filter(n => !n.read).length;
+
+  const cards = [
+    { key:'all',  icon:'🔔', count:total,  unread, label:'All' },
+    ...types.map(t => ({
+      key:t, icon:NOTIF_ICONS[t]||'•',
+      count:  notifData.filter(n => n.type===t).length,
+      unread: notifData.filter(n => n.type===t && !n.read).length,
+      label:  labels[t],
+    }))
+  ];
+
+  document.getElementById('notifSummary').innerHTML = cards.map(cd => `
+    <div class="ns-card${activeFilter===cd.key?' active':''}" onclick="filterNotifs('${cd.key}',null)">
+      <div class="ns-icon">${cd.icon}</div>
+      <div class="ns-count">${cd.count}</div>
+      <div class="ns-label">${cd.label}</div>
+      ${cd.unread ? `<div class="ns-unread">${cd.unread} unread</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function renderList() {
+  let list = [...notifData];
+  if (activeFilter === 'unread')   list = list.filter(n => !n.read);
+  else if (activeFilter !== 'all') list = list.filter(n => n.type === activeFilter);
+
+  const el    = document.getElementById('notifList');
+  const empty = document.getElementById('notifEmpty');
+
+  if (!list.length) {
+    el.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  el.innerHTML = list.map(n => `
+    <div class="notif-row${n.read ? '' : ' unread'}" onclick="openNotif('${n.id}')">
+      <div class="notif-icon-wrap ${n.type||''}">${NOTIF_ICONS[n.type]||'🔔'}</div>
+      <div class="notif-content">
+        <div class="notif-title">${n.title||'Notification'}</div>
+        <div class="notif-body">${n.body||''}</div>
+        <div class="notif-meta">
+          <span class="notif-time">${timeAgo(n.created_at)}</span>
+          ${n.type ? `<span style="font-family:var(--ff-mono);font-size:9px;color:var(--app-muted);text-transform:uppercase;letter-spacing:1px">${n.type.replace('_',' ')}</span>` : ''}
+        </div>
+      </div>
+      <div class="notif-actions" onclick="event.stopPropagation()">
+        ${!n.read ? `<button class="app-btn app-btn-ghost app-btn-sm" onclick="markRead('${n.id}')">✓ Read</button>` : ''}
+        <button class="app-btn app-btn-ghost app-btn-sm" style="color:var(--danger)" onclick="dismissNotif('${n.id}')">✕</button>
+      </div>
+      ${!n.read ? '<div class="unread-dot"></div>' : ''}
+    </div>
+  `).join('');
+}
+
+function filterNotifs(filter, el) {
+  activeFilter = filter;
+  document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+  if (el) el.classList.add('active');
+  else {
+    const pill = document.querySelector(`.filter-pill[data-filter="${filter}"]`);
+    if (pill) pill.classList.add('active');
+  }
+  renderSummary();
+  renderList();
+}
+
+function openNotif(id) {
+  const n = notifData.find(x => x.id === id);
+  if (!n) return;
+  if (!n.read) markRead(id);
+  document.getElementById('notifModalTitle').textContent = n.title || 'Notification';
+  document.getElementById('notifModalBody').innerHTML = `
+    <p style="color:var(--app-text);line-height:1.7;margin-bottom:16px">${n.body||''}</p>
+    <div style="font-family:var(--ff-mono);font-size:10px;color:var(--app-muted)">${new Date(n.created_at).toLocaleString()}</div>
+  `;
+  const actionBtn = document.getElementById('notifModalAction');
+  if (n.related_type === 'work_order' && n.related_id) {
+    actionBtn.style.display = '';
+    actionBtn.onclick = () => { Modal.close('notifModal'); window.location.href = 'work-orders.html'; };
+    actionBtn.textContent = 'Go to Work Orders →';
+  } else {
+    actionBtn.style.display = 'none';
+  }
+  Modal.open('notifModal');
+}
+
+async function initPage() {
+  const _user = await RBAC.guardPage('notifications');
+  if (!_user) return;
+  await RBAC.initSidebar('notifications');
+  await loadNotifications();
+
+  // Live subscription — new notifications appear instantly
+  Realtime.subscribe('notifications', {
+    onInsert: (n) => {
+      notifData.unshift(n);
+      renderSummary();
+      renderList();
+    },
+    onUpdate: (n) => {
+      const idx = notifData.findIndex(x => x.id === n.id);
+      if (idx >= 0) { notifData[idx] = { ...notifData[idx], ...n }; renderSummary(); renderList(); }
+    },
+    onDelete: (n) => {
+      notifData = notifData.filter(x => x.id !== n.id);
+      renderSummary(); renderList();
+    }
+  });
+}
+
+async function loadNotifications() {
+  notifData = await GS.getNotifications();
+  renderSummary();
+  renderList();
+}
+
+async function markRead(id) {
+  await GS.markNotificationRead(id);
+  const n = notifData.find(x => x.id === id);
+  if (n) n.read = true;
+  Toast.show('Marked as read', 'success', 1500);
+  renderSummary(); renderList();
+}
+
+async function markAllRead() {
+  await GS.markAllNotificationsRead();
+  notifData.forEach(n => n.read = true);
+  Toast.show('All notifications marked as read', 'success');
+  renderSummary(); renderList();
+}
+
+async function dismissNotif(id) {
+  await GS.deleteNotification(id);
+  notifData = notifData.filter(x => x.id !== id);
+  renderSummary(); renderList();
+}
+
+async function clearRead() {
+  const count = notifData.filter(n => n.read).length;
+  await GS.clearReadNotifications();
+  notifData = notifData.filter(n => !n.read);
+  Toast.show(`Cleared ${count} read notification${count !== 1 ? 's' : ''}`, 'info');
+  renderSummary(); renderList();
+}
+
+document.addEventListener('DOMContentLoaded', initPage);
+</script>
+</body>
+</html>

@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Book a Service — GearShift</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --rust:    #c94b1e;
+  --amber:   #e8a020;
+  --ink:     #0e0f0f;
+  --paper:   #f4f1eb;
+  --white:   #ffffff;
+  --border:  #d5d0c8;
+  --muted:   #6b6b6b;
+  --success: #1f7a4a;
+  --ff-display: 'Bebas Neue', sans-serif;
+  --ff-body:    'DM Sans', sans-serif;
+  --ff-mono:    'DM Mono', monospace;
+  --r: 4px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.10);
+}
+
+body {
+  font-family: var(--ff-body);
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
+}
+
+/* ── HEADER ── */
+.header {
+  background: var(--ink);
+  padding: 18px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.logo {
+  font-family: var(--ff-display);
+  font-size: 28px;
+  letter-spacing: 3px;
+  color: var(--white);
+  text-decoration: none;
+}
+.logo span { color: var(--rust); }
+.header-sub {
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: rgba(255,255,255,0.4);
+  text-transform: uppercase;
+}
+
+/* ── HERO ── */
+.hero {
+  background: var(--ink);
+  padding: 48px 32px 64px;
+  text-align: center;
+  border-bottom: 3px solid var(--rust);
+}
+.hero-title {
+  font-family: var(--ff-display);
+  font-size: clamp(36px, 6vw, 72px);
+  letter-spacing: 4px;
+  color: var(--white);
+  line-height: 1;
+  margin-bottom: 12px;
+}
+.hero-title span { color: var(--rust); }
+.hero-sub {
+  font-size: 15px;
+  color: rgba(255,255,255,0.5);
+  max-width: 480px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* ── MAIN LAYOUT ── */
+.main {
+  max-width: 680px;
+  margin: -32px auto 64px;
+  padding: 0 20px;
+}
+
+/* ── STEPS ── */
+.steps {
+  display: flex;
+  gap: 0;
+  margin-bottom: 32px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.step {
+  flex: 1;
+  padding: 14px 8px;
+  text-align: center;
+  font-family: var(--ff-mono);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-right: 1px solid var(--border);
+  transition: all 0.2s;
+}
+.step:last-child { border-right: none; }
+.step.active { background: var(--rust); color: var(--white); }
+.step.done { background: rgba(31,122,74,0.08); color: var(--success); }
+.step-num {
+  display: block;
+  font-size: 16px;
+  font-family: var(--ff-display);
+  letter-spacing: 0;
+  margin-bottom: 2px;
+}
+
+/* ── CARD ── */
+.card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 32px;
+  box-shadow: var(--shadow);
+  margin-bottom: 16px;
+}
+.card-title {
+  font-family: var(--ff-display);
+  font-size: 22px;
+  letter-spacing: 2px;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+.card-sub {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+/* ── FORM ── */
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 520px) { .form-row { grid-template-columns: 1fr; } }
+.form-group { margin-bottom: 18px; }
+.form-label {
+  display: block;
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 7px;
+}
+.form-label .req { color: var(--rust); }
+.form-input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  font-family: var(--ff-body);
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--white);
+  transition: border-color 0.15s;
+  outline: none;
+}
+.form-input:focus { border-color: var(--rust); }
+.form-input::placeholder { color: #bbb; }
+.form-input:disabled { background: #f8f8f8; color: var(--muted); }
+
+/* ── SLOTS ── */
+.slots-label {
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.slots-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.slot {
+  padding: 10px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  text-align: center;
+  font-family: var(--ff-mono);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--white);
+  color: var(--ink);
+  user-select: none;
+}
+.slot:hover:not(.taken):not(.selected) { border-color: var(--rust); color: var(--rust); }
+.slot.selected { background: var(--rust); border-color: var(--rust); color: var(--white); }
+.slot.taken {
+  background: #f8f8f8;
+  color: #ccc;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+.slots-loading {
+  text-align: center;
+  padding: 20px;
+  color: var(--muted);
+  font-size: 13px;
+  font-family: var(--ff-mono);
+}
+.slots-empty {
+  text-align: center;
+  padding: 20px;
+  color: var(--muted);
+  font-size: 13px;
+  background: #f8f8f8;
+  border-radius: var(--r);
+  border: 1px dashed var(--border);
+}
+
+/* ── SUMMARY ── */
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.summary-row:last-child { border-bottom: none; }
+.summary-label { color: var(--muted); font-size: 12px; font-family: var(--ff-mono); letter-spacing: 1px; }
+.summary-value { font-weight: 500; text-align: right; max-width: 60%; }
+
+/* ── BUTTONS ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 28px;
+  border: none;
+  border-radius: var(--r);
+  font-family: var(--ff-body);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-decoration: none;
+}
+.btn-primary {
+  background: var(--rust);
+  color: var(--white);
+  width: 100%;
+  justify-content: center;
+}
+.btn-primary:hover { background: #a33c17; }
+.btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover { border-color: var(--ink); color: var(--ink); }
+.btn-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+.btn-row .btn-primary { flex: 1; }
+
+/* ── SUCCESS ── */
+.success-screen {
+  text-align: center;
+  padding: 16px 0;
+}
+.success-icon {
+  font-size: 56px;
+  margin-bottom: 16px;
+  display: block;
+}
+.success-title {
+  font-family: var(--ff-display);
+  font-size: 36px;
+  letter-spacing: 3px;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+.success-ref {
+  font-family: var(--ff-mono);
+  font-size: 18px;
+  color: var(--rust);
+  margin-bottom: 16px;
+}
+.success-body {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.7;
+  margin-bottom: 24px;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.success-details {
+  background: var(--paper);
+  border-radius: var(--r);
+  padding: 20px;
+  text-align: left;
+  margin-bottom: 24px;
+}
+
+/* ── ERROR / INFO ── */
+.alert {
+  padding: 12px 16px;
+  border-radius: var(--r);
+  font-size: 13px;
+  margin-bottom: 16px;
+  display: none;
+}
+.alert-error { background: rgba(181,43,30,0.08); border: 1px solid rgba(181,43,30,0.3); color: #b52b1e; }
+.alert-info  { background: rgba(232,160,32,0.08); border: 1px solid rgba(232,160,32,0.3); color: #92650a; }
+
+/* ── FOOTER ── */
+.footer {
+  text-align: center;
+  padding: 32px;
+  font-size: 12px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  margin-top: 32px;
+}
+.footer a { color: var(--rust); text-decoration: none; }
+
+/* ── PANEL VISIBILITY ── */
+.panel { display: none; }
+.panel.active { display: block; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <a class="logo" href="#">GEAR<span>SHIFT</span></a>
+  <span class="header-sub">Online Booking</span>
+</header>
+
+<div class="hero">
+  <div class="hero-title">BOOK A <span>SERVICE</span></div>
+  <div id="shopBrand" style="font-family:var(--ff-mono);font-size:12px;letter-spacing:2px;color:rgba(255,255,255,0.4);margin-bottom:12px;text-transform:uppercase"></div>
+  <p class="hero-sub">Schedule your vehicle for repair or maintenance. Takes less than 2 minutes.</p>
+</div>
+
+<main class="main">
+
+  <!-- STEP INDICATOR -->
+  <div class="steps">
+    <div class="step active" id="step1"><span class="step-num">1</span>Your Details</div>
+    <div class="step" id="step2"><span class="step-num">2</span>Vehicle</div>
+    <div class="step" id="step3"><span class="step-num">3</span>Date & Time</div>
+    <div class="step" id="step4"><span class="step-num">4</span>Confirm</div>
+  </div>
+
+  <!-- PANEL 1: CUSTOMER DETAILS -->
+  <div class="panel active" id="panel1">
+    <div class="card">
+      <div class="card-title">YOUR DETAILS</div>
+      <p class="card-sub">We need a few details to confirm your appointment.</p>
+      <div class="alert alert-error" id="p1-error"></div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">First Name <span class="req">*</span></label>
+          <input class="form-input" id="f-firstname" type="text" placeholder="John">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Last Name <span class="req">*</span></label>
+          <input class="form-input" id="f-lastname" type="text" placeholder="Doe">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Phone Number <span class="req">*</span></label>
+          <input class="form-input" id="f-phone" type="tel" placeholder="+234 800 000 0000">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input class="form-input" id="f-email" type="email" placeholder="john@example.com">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="goStep2()">Continue →</button>
+    </div>
+  </div>
+
+  <!-- PANEL 2: VEHICLE & SERVICE -->
+  <div class="panel" id="panel2">
+    <div class="card">
+      <div class="card-title">YOUR VEHICLE</div>
+      <p class="card-sub">Tell us about the vehicle and what service you need.</p>
+      <div class="alert alert-error" id="p2-error"></div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Year <span class="req">*</span></label>
+          <input class="form-input" id="f-year" type="number" placeholder="2020" min="1990" max="2030">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Make <span class="req">*</span></label>
+          <input class="form-input" id="f-make" type="text" placeholder="Toyota">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Model <span class="req">*</span></label>
+          <input class="form-input" id="f-model" type="text" placeholder="Camry">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Plate Number</label>
+          <input class="form-input" id="f-plate" type="text" placeholder="ABC-123-XY">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Service Required <span class="req">*</span></label>
+        <select class="form-input" id="f-service">
+          <option value="">— Select a service —</option>
+          <option>Oil Change</option>
+          <option>Brake Service</option>
+          <option>Tire Rotation</option>
+          <option>Engine Diagnostic</option>
+          <option>AC Service</option>
+          <option>Battery Replacement</option>
+          <option>Transmission Service</option>
+          <option>Wheel Alignment</option>
+          <option>Annual Inspection</option>
+          <option>General Inspection</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Additional Notes</label>
+        <textarea class="form-input" id="f-notes" rows="3" placeholder="Describe the issue or any special requests…" style="resize:vertical"></textarea>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="goPanel(1)">← Back</button>
+        <button class="btn btn-primary" onclick="goStep3()">Continue →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 3: DATE & TIME -->
+  <div class="panel" id="panel3">
+    <div class="card">
+      <div class="card-title">DATE & TIME</div>
+      <p class="card-sub">Choose your preferred appointment date and an available time slot.</p>
+      <div class="alert alert-error" id="p3-error"></div>
+      <div class="alert alert-info" id="p3-info"></div>
+
+      <div class="form-group">
+        <label class="form-label">Preferred Date <span class="req">*</span></label>
+        <input class="form-input" id="f-date" type="date" onchange="loadSlots()">
+      </div>
+
+      <div id="slots-wrap" style="display:none">
+        <div class="slots-label">Available Time Slots</div>
+        <div class="slots-grid" id="slotsGrid"></div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="goPanel(2)">← Back</button>
+        <button class="btn btn-primary" onclick="goStep4()">Review Booking →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 4: CONFIRM -->
+  <div class="panel" id="panel4">
+    <div class="card">
+      <div class="card-title">CONFIRM BOOKING</div>
+      <p class="card-sub">Please review your appointment details before confirming.</p>
+      <div class="alert alert-error" id="p4-error"></div>
+
+      <div id="summaryBody" style="margin-bottom:24px"></div>
+
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="goPanel(3)">← Back</button>
+        <button class="btn btn-primary" id="confirmBtn" onclick="submitBooking()">Confirm Appointment</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 5: SUCCESS -->
+  <div class="panel" id="panel5">
+    <div class="card">
+      <div class="success-screen">
+        <span class="success-icon">✅</span>
+        <div class="success-title">BOOKING RECEIVED</div>
+        <div class="success-ref" id="successRef"></div>
+        <p class="success-body">
+          Your appointment request has been received and is <strong>pending confirmation</strong>.
+          Our team will review and confirm your booking shortly.
+        </p>
+        <div class="success-details" id="successDetails"></div>
+        <button class="btn btn-primary" onclick="resetForm()" style="max-width:280px;margin:0 auto">
+          Book Another Appointment
+        </button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer class="footer">
+  <p>GearShift Auto Shop &nbsp;·&nbsp; <a href="#">Back to site</a></p>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+var SUPABASE_URL  = 'https://tqwwnmgcvaqeigpodirc.supabase.co';
+var SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRxd3dubWdjdmFxZWlncG9kaXJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0Nzg5ODEsImV4cCI6MjA4ODA1NDk4MX0.mP5RNZ0Tu7ckrDkjCmrVcbnaMJ2Sf7QfuGCslElGLo0';
+var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// Shop ID — read from URL param: booking.html?shop=SHOP_ID
+var SHOP_ID = null;
+
+var ALL_SLOTS = [
+  '08:00','09:00','10:00','11:00',
+  '12:00','13:00','14:00','15:00','16:00'
+];
+
+var selectedSlot = null;
+var currentPanel = 1;
+
+/* ---- INIT ---- */
+window.addEventListener('DOMContentLoaded', async function() {
+  // Set min date to tomorrow
+  var tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  document.getElementById('f-date').min = tomorrow.toISOString().split('T')[0];
+
+  // Read shop ID from URL: booking.html?shop=SHOP_ID
+  var params = new URLSearchParams(window.location.search);
+  var shopParam = params.get('shop');
+
+  if (!shopParam) {
+    // No shop ID in URL — show error
+    document.querySelector('.hero-sub').innerHTML =
+      '<span style="color:#fca5a5">Invalid booking link. Please use the link provided by your auto shop.</span>';
+    document.querySelector('.steps').style.display = 'none';
+    document.getElementById('panel1').innerHTML =
+      '<div class="card" style="text-align:center;padding:48px">' +
+        '<div style="font-size:48px;margin-bottom:16px">🔗</div>' +
+        '<div style="font-family:var(--ff-display);font-size:24px;letter-spacing:2px;margin-bottom:12px">INVALID LINK</div>' +
+        '<p style="color:var(--muted);font-size:14px">This booking link is missing the shop identifier.<br>Please contact the shop for the correct link.</p>' +
+      '</div>';
+    return;
+  }
+
+  SHOP_ID = shopParam;
+
+  // Load shop name to personalise the page
+  try {
+    var res = await sb.from('shops').select('id,name,address,phone').eq('id', SHOP_ID).single();
+    if (res.data) {
+      var shop = res.data;
+      document.title = 'Book a Service — ' + shop.name;
+      document.querySelector('.logo').innerHTML = shop.name.toUpperCase().replace("'S SHOP", '') + ' <span>AUTO</span>';
+      // Update hero
+      document.querySelector('.hero-sub').textContent =
+        'Schedule your vehicle for service at ' + shop.name + '. Takes less than 2 minutes.';
+      // Update footer
+      var footer = document.querySelector('.footer p');
+      if (footer) footer.innerHTML = shop.name + (shop.phone ? ' &nbsp;·&nbsp; ' + shop.phone : '') + ' &nbsp;·&nbsp; <a href="#">Back to site</a>';
+    } else {
+      throw new Error('Shop not found');
+    }
+  } catch(e) {
+    document.querySelector('.hero-sub').innerHTML =
+      '<span style="color:#fca5a5">Could not load shop details. Please check your booking link.</span>';
+    console.warn('Shop load error:', e.message);
+  }
+});
+
+/* ---- STEP NAVIGATION ---- */
+function goPanel(n) {
+  document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+  document.getElementById('panel' + n).classList.add('active');
+  currentPanel = n;
+  updateSteps(n);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function updateSteps(n) {
+  for (var i = 1; i <= 4; i++) {
+    var el = document.getElementById('step' + i);
+    if (!el) continue;
+    el.classList.remove('active', 'done');
+    if (i < n) el.classList.add('done');
+    else if (i === n) el.classList.add('active');
+  }
+}
+
+function showError(panelId, msg) {
+  var el = document.getElementById(panelId);
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function hideError(panelId) {
+  var el = document.getElementById(panelId);
+  if (el) el.style.display = 'none';
+}
+
+/* ---- STEP 1 → 2 ---- */
+function goStep2() {
+  hideError('p1-error');
+  var first = document.getElementById('f-firstname').value.trim();
+  var last  = document.getElementById('f-lastname').value.trim();
+  var phone = document.getElementById('f-phone').value.trim();
+  if (!first) { showError('p1-error', 'Please enter your first name.'); return; }
+  if (!last)  { showError('p1-error', 'Please enter your last name.'); return; }
+  if (!phone) { showError('p1-error', 'Please enter your phone number.'); return; }
+  goPanel(2);
+}
+
+/* ---- STEP 2 → 3 ---- */
+function goStep3() {
+  hideError('p2-error');
+  var year    = document.getElementById('f-year').value.trim();
+  var make    = document.getElementById('f-make').value.trim();
+  var model   = document.getElementById('f-model').value.trim();
+  var service = document.getElementById('f-service').value;
+  if (!year)    { showError('p2-error', 'Please enter the vehicle year.'); return; }
+  if (!make)    { showError('p2-error', 'Please enter the vehicle make.'); return; }
+  if (!model)   { showError('p2-error', 'Please enter the vehicle model.'); return; }
+  if (!service) { showError('p2-error', 'Please select a service.'); return; }
+  goPanel(3);
+}
+
+/* ---- LOAD SLOTS ---- */
+async function loadSlots() {
+  var date = document.getElementById('f-date').value;
+  if (!date) return;
+  selectedSlot = null;
+
+  var wrap = document.getElementById('slots-wrap');
+  var grid = document.getElementById('slotsGrid');
+  wrap.style.display = 'block';
+  grid.innerHTML = '<div class="slots-loading">Checking availability…</div>';
+  hideError('p3-error');
+
+  try {
+    // Fetch already-booked slots for this date
+    var q = sb.from('appointments')
+      .select('appt_time')
+      .eq('appt_date', date)
+      .in('status', ['Confirmed', 'Pending']);
+    if (SHOP_ID) q = q.eq('shop_id', SHOP_ID);
+    var res = await q;
+
+    var takenTimes = (res.data || []).map(function(a) {
+      return a.appt_time ? a.appt_time.slice(0, 5) : null;
+    }).filter(Boolean);
+
+    var today = new Date().toISOString().split('T')[0];
+    var now   = new Date();
+    var nowH  = now.getHours();
+
+    var html = '';
+    var anyAvailable = false;
+    for (var i = 0; i < ALL_SLOTS.length; i++) {
+      var slot = ALL_SLOTS[i];
+      var slotH = parseInt(slot.split(':')[0]);
+      var isTaken = takenTimes.indexOf(slot) !== -1;
+      // Block past times if date is today
+      var isPast = date === today && slotH <= nowH;
+      var disabled = isTaken || isPast;
+      if (!disabled) anyAvailable = true;
+      html += '<div class="slot' + (disabled ? ' taken' : '') + '" '
+        + (disabled ? '' : 'onclick="selectSlot(this,\'' + slot + '\')" ')
+        + 'data-time="' + slot + '">'
+        + slot
+        + (isTaken ? '<br><span style="font-size:9px">Booked</span>' : '')
+        + '</div>';
+    }
+
+    if (!anyAvailable) {
+      grid.innerHTML = '<div class="slots-empty">No available slots on this date.<br>Please choose another day.</div>';
+    } else {
+      grid.innerHTML = html;
+    }
+  } catch(e) {
+    grid.innerHTML = '<div class="slots-empty">Could not load slots. Please try again.</div>';
+  }
+}
+
+function selectSlot(el, time) {
+  document.querySelectorAll('.slot').forEach(function(s) { s.classList.remove('selected'); });
+  el.classList.add('selected');
+  selectedSlot = time;
+}
+
+/* ---- STEP 3 → 4 ---- */
+function goStep4() {
+  hideError('p3-error');
+  var date = document.getElementById('f-date').value;
+  if (!date)        { showError('p3-error', 'Please select a date.'); return; }
+  if (!selectedSlot){ showError('p3-error', 'Please select a time slot.'); return; }
+  buildSummary();
+  goPanel(4);
+}
+
+/* ---- BUILD SUMMARY ---- */
+function buildSummary() {
+  var first   = document.getElementById('f-firstname').value.trim();
+  var last    = document.getElementById('f-lastname').value.trim();
+  var phone   = document.getElementById('f-phone').value.trim();
+  var email   = document.getElementById('f-email').value.trim();
+  var year    = document.getElementById('f-year').value.trim();
+  var make    = document.getElementById('f-make').value.trim();
+  var model   = document.getElementById('f-model').value.trim();
+  var plate   = document.getElementById('f-plate').value.trim();
+  var service = document.getElementById('f-service').value;
+  var notes   = document.getElementById('f-notes').value.trim();
+  var date    = document.getElementById('f-date').value;
+
+  var d = new Date(date + 'T12:00:00');
+  var dateLabel = d.toLocaleDateString('en-NG', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  var rows = [
+    { label: 'Name',    value: first + ' ' + last },
+    { label: 'Phone',   value: phone },
+    { label: 'Email',   value: email || '—' },
+    { label: 'Vehicle', value: year + ' ' + make + ' ' + model + (plate ? ' (' + plate + ')' : '') },
+    { label: 'Service', value: service },
+    { label: 'Date',    value: dateLabel },
+    { label: 'Time',    value: selectedSlot },
+    { label: 'Notes',   value: notes || '—' },
+  ];
+
+  var html = rows.map(function(r) {
+    return '<div class="summary-row">'
+      + '<span class="summary-label">' + r.label + '</span>'
+      + '<span class="summary-value">' + r.value + '</span>'
+      + '</div>';
+  }).join('');
+
+  document.getElementById('summaryBody').innerHTML = html;
+}
+
+/* ---- SUBMIT ---- */
+async function submitBooking() {
+  hideError('p4-error');
+  var btn = document.getElementById('confirmBtn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+
+  var first   = document.getElementById('f-firstname').value.trim();
+  var last    = document.getElementById('f-lastname').value.trim();
+  var phone   = document.getElementById('f-phone').value.trim();
+  var email   = document.getElementById('f-email').value.trim();
+  var year    = document.getElementById('f-year').value.trim();
+  var make    = document.getElementById('f-make').value.trim();
+  var model   = document.getElementById('f-model').value.trim();
+  var plate   = document.getElementById('f-plate').value.trim();
+  var service = document.getElementById('f-service').value;
+  var notes   = document.getElementById('f-notes').value.trim();
+  var date    = document.getElementById('f-date').value;
+
+  try {
+    // Double-check slot is still available
+    var checkQ = sb.from('appointments')
+      .select('id')
+      .eq('appt_date', date)
+      .eq('appt_time', selectedSlot + ':00')
+      .in('status', ['Confirmed', 'Pending']);
+    if (SHOP_ID) checkQ = checkQ.eq('shop_id', SHOP_ID);
+    var check = await checkQ;
+
+    if (check.data && check.data.length > 0) {
+      showError('p4-error', 'Sorry, this slot was just taken. Please go back and choose another time.');
+      btn.disabled = false;
+      btn.textContent = 'Confirm Appointment';
+      return;
+    }
+
+    var vehicleInfo = year + ' ' + make + ' ' + model + (plate ? ' — ' + plate : '');
+
+    var payload = {
+      shop_id:      SHOP_ID,
+      guest_name:   first + ' ' + last,
+      guest_phone:  phone,
+      guest_email:  email || null,
+      vehicle_info: vehicleInfo,
+      service:      service,
+      appt_date:    date,
+      appt_time:    selectedSlot + ':00',
+      status:       'Pending',
+      notes:        notes || null,
+      ref:          '',
+    };
+
+    var res = await sb.from('appointments').insert(payload).select().single();
+    if (res.error) throw res.error;
+
+    var appt = res.data;
+
+    // Show success screen
+    var d = new Date(date + 'T12:00:00');
+    var dateLabel = d.toLocaleDateString('en-NG', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+    document.getElementById('successRef').textContent = appt.ref || 'Booking Received';
+    document.getElementById('successDetails').innerHTML =
+      '<div class="summary-row"><span class="summary-label">Name</span><span class="summary-value">' + first + ' ' + last + '</span></div>' +
+      '<div class="summary-row"><span class="summary-label">Vehicle</span><span class="summary-value">' + vehicleInfo + '</span></div>' +
+      '<div class="summary-row"><span class="summary-label">Service</span><span class="summary-value">' + service + '</span></div>' +
+      '<div class="summary-row"><span class="summary-label">Date</span><span class="summary-value">' + dateLabel + '</span></div>' +
+      '<div class="summary-row"><span class="summary-label">Time</span><span class="summary-value">' + selectedSlot + '</span></div>' +
+      '<div class="summary-row"><span class="summary-label">Status</span><span class="summary-value" style="color:#92650a;font-weight:600">Pending Confirmation</span></div>';
+
+    goPanel(5);
+    // Remove step bar for success screen
+    document.querySelector('.steps').style.display = 'none';
+
+  } catch(e) {
+    showError('p4-error', 'Something went wrong: ' + (e.message || 'Please try again.'));
+    btn.disabled = false;
+    btn.textContent = 'Confirm Appointment';
+  }
+}
+
+/* ---- RESET ---- */
+function resetForm() {
+  ['f-firstname','f-lastname','f-phone','f-email',
+   'f-year','f-make','f-model','f-plate','f-notes'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('f-service').value = '';
+  document.getElementById('f-date').value = '';
+  document.getElementById('slots-wrap').style.display = 'none';
+  selectedSlot = null;
+  document.querySelector('.steps').style.display = 'flex';
+  goPanel(1);
+}
+</script>
+</body>
+</html>

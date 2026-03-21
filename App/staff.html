@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Staff — GearShift</title>
+<link rel="stylesheet" href="../css/main.css">
+<link rel="stylesheet" href="../css/app.css">
+<style>
+.staff-card {
+  display:flex; align-items:center; gap:16px; padding:16px 20px;
+  border-bottom:1px solid rgba(48,54,61,0.5); transition:background var(--t-fast);
+}
+.staff-card:last-child { border-bottom:none; }
+.staff-card:hover { background:var(--app-hover); }
+.staff-avatar {
+  width:44px; height:44px; border-radius:50%; background:var(--rust);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--ff-display); font-size:18px; color:var(--white); flex-shrink:0;
+}
+.staff-avatar.inactive { background:var(--app-surface2); color:var(--app-muted); }
+.staff-info { flex:1; min-width:0; }
+.staff-name { font-size:13px; font-weight:700; color:var(--app-text); }
+.staff-email { font-size:11px; color:var(--app-muted); font-family:var(--ff-mono); margin-top:2px; }
+.staff-actions { display:flex; gap:8px; align-items:center; flex-shrink:0; }
+.invite-row {
+  display:flex; align-items:center; gap:14px; padding:14px 20px;
+  border-bottom:1px solid rgba(48,54,61,0.5); font-size:13px;
+}
+.invite-row:last-child { border-bottom:none; }
+.invite-email { flex:1; color:var(--app-text); font-family:var(--ff-mono); font-size:12px; }
+.invite-token {
+  font-family:var(--ff-mono); font-size:10px; color:var(--app-muted);
+  background:var(--app-surface2); padding:4px 10px; border-radius:var(--r-sm);
+  max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.tab-content { display:none; }
+.tab-content.active { display:block; }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="app-sidebar">
+    <div class="sidebar-logo">
+      <span class="sidebar-logo-text">GEAR<span>SHIFT</span></span>
+      <a href="../index.html" class="sidebar-back">← Site</a>
+    </div>
+    <nav class="sidebar-nav"><!-- populated by RBAC.initSidebar --></nav>
+    <div class="sidebar-footer">
+      <div class="theme-toggle">
+        <span class="theme-toggle-label">☾ Dark</span>
+        <button class="theme-toggle-switch" onclick="Theme.toggle()" aria-label="Switch to light mode"></button>
+      </div>
+      
+      <div class="sidebar-user">
+        <div class="user-avatar" id="userAvatar">?</div>
+        <div>
+          <div class="user-name" id="userName">Loading…</div>
+          <div class="user-role" id="userRole">—</div>
+        </div>
+      </div>
+      <button class="btn-logout" onclick="localStorage.removeItem('gs_pending_invite');sessionStorage.clear();RBAC.clearCache();Auth.signOut().then(()=>window.location='../app/dashboard.html')">Sign Out</button>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <div class="app-topbar">
+      <span class="topbar-title">STAFF MANAGEMENT</span>
+      <div class="topbar-actions">
+        <button class="app-btn app-btn-ghost app-btn-sm" onclick="switchTab('invites')">📨 Pending Invites</button>
+        <button class="app-btn app-btn-primary" onclick="Modal.open('addStaffModal')">+ Add Staff Member</button>
+      </div>
+    </div>
+
+    <div class="app-content">
+
+      <!-- STATS -->
+      <div class="stats-grid" id="staffStats"></div>
+
+      <!-- TABS -->
+      <div class="app-sub-nav" style="margin-bottom:var(--space-4)">
+        <button class="app-sub-link active" data-tab-btn onclick="switchTab('active',this)">Active Staff</button>
+        <button class="app-sub-link" data-tab-btn onclick="switchTab('invites',this)">Pending Invites</button>
+        <button class="app-sub-link" data-tab-btn onclick="switchTab('inactive',this)">Inactive</button>
+      </div>
+
+      <!-- ACTIVE STAFF -->
+      <div class="tab-content active" id="tab-active">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">ACTIVE STAFF</span>
+            <input class="search-box" id="staffSearch" placeholder="Search name or role…"
+                   oninput="filterStaff()" style="width:220px">
+          </div>
+          <div id="staffList"></div>
+        </div>
+      </div>
+
+      <!-- PENDING INVITES -->
+      <div class="tab-content" id="tab-invites">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">PENDING INVITES</span>
+            <button class="app-btn app-btn-ghost app-btn-sm" onclick="loadInvites()">↻ Refresh</button>
+          </div>
+          <div id="inviteList"></div>
+        </div>
+      </div>
+
+      <!-- INACTIVE -->
+      <div class="tab-content" id="tab-inactive">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">INACTIVE STAFF</span></div>
+          <div id="inactiveList"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ADD STAFF MODAL -->
+<div class="modal-backdrop" id="addStaffModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">ADD STAFF MEMBER</span>
+      <button class="modal-close" onclick="Modal.close('addStaffModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Sub-tabs for direct create vs invite -->
+      <div style="display:flex;gap:0;border-bottom:1px solid var(--app-border);margin-bottom:20px;">
+        <button class="app-sub-link active" id="tab-btn-invite" onclick="switchAddTab('invite',this)" style="flex:1;border-radius:0">Send Invite Link</button>
+        <button class="app-sub-link" id="tab-btn-direct" onclick="switchAddTab('direct',this)" style="flex:1;border-radius:0">Create Account Directly</button>
+      </div>
+
+      <!-- INVITE TAB -->
+      <div id="add-tab-invite">
+        <div class="alert alert-info" style="margin-bottom:16px;font-size:12px;padding:10px 14px;background:rgba(232,160,32,0.1);border:1px solid rgba(232,160,32,0.25);color:var(--amber);border-radius:var(--r-sm);">
+          📧 An invite link will be generated. Share it with the staff member — they'll register using the link and be automatically added to your shop.
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Staff Email Address</label>
+          <input class="app-input" type="email" id="invite-email" placeholder="staff@yourshop.com">
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Role</label>
+          <select class="app-input" id="invite-role">
+            <option value="Service Advisor">Service Advisor</option>
+            <option value="Mechanic">Mechanic</option>
+            <option value="Parts Manager">Parts Manager</option>
+            <option value="Admin">Admin</option>
+          </select>
+        </div>
+        <div id="invite-result" style="display:none;margin-top:12px;">
+          <label class="app-label">Invite Link — share this with the staff member</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input class="app-input" id="invite-link-box" readonly style="font-family:var(--ff-mono);font-size:11px;flex:1">
+            <button class="app-btn app-btn-ghost app-btn-sm" onclick="copyInviteLinkBox()">Copy</button>
+          </div>
+          <div style="font-size:12px;color:var(--app-muted);margin-top:8px;line-height:1.6">⏱ Expires in 7 days · Send this link via <strong style="color:var(--amber)">WhatsApp</strong>, SMS or email — staff click it to set up their account</div>
+        </div>
+      </div>
+
+      <!-- DIRECT TAB -->
+      <div id="add-tab-direct" style="display:none">
+        <div class="alert alert-info" style="margin-bottom:16px;font-size:12px;padding:10px 14px;background:rgba(37,99,235,0.1);border:1px solid rgba(37,99,235,0.25);color:#60a5fa;border-radius:var(--r-sm);">
+          🔑 Create the account directly. The staff member will need to use Forgot Password to set their own password after you share their email.
+        </div>
+        <div class="app-form-row">
+          <div class="app-form-group">
+            <label class="app-label">First Name</label>
+            <input class="app-input" type="text" id="direct-fn" placeholder="Jane">
+          </div>
+          <div class="app-form-group">
+            <label class="app-label">Last Name</label>
+            <input class="app-input" type="text" id="direct-ln" placeholder="Smith">
+          </div>
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Email Address</label>
+          <input class="app-input" type="email" id="direct-email" placeholder="jane@yourshop.com">
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Role</label>
+          <select class="app-input" id="direct-role">
+            <option value="Service Advisor">Service Advisor</option>
+            <option value="Mechanic">Mechanic</option>
+            <option value="Parts Manager">Parts Manager</option>
+            <option value="Admin">Admin</option>
+          </select>
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Temporary Password</label>
+          <input class="app-input" type="text" id="direct-pw" placeholder="Staff will reset this themselves" value="GearShift2026!">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('addStaffModal');resetAddModal()">Cancel</button>
+      <button class="app-btn app-btn-primary" id="addStaffBtn" onclick="handleAddStaff()">Generate Invite Link</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT ROLE MODAL -->
+<div class="modal-backdrop" id="editRoleModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title">CHANGE ROLE</span>
+      <button class="modal-close" onclick="Modal.close('editRoleModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="editRoleInfo" style="font-size:13px;color:var(--app-muted);margin-bottom:16px;font-family:var(--ff-mono)"></div>
+      <div class="app-form-group">
+        <label class="app-label">New Role</label>
+        <select class="app-input" id="editRoleSelect">
+          <option value="Service Advisor">Service Advisor</option>
+          <option value="Mechanic">Mechanic</option>
+          <option value="Parts Manager">Parts Manager</option>
+          <option value="Admin">Admin</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('editRoleModal')">Cancel</button>
+      <button class="app-btn app-btn-primary" onclick="saveRoleChange()">Save Role</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/theme.js"></script>
+<script src="../js/main.js"></script>
+<script src="../js/supabase.js"></script>
+<script src="../js/rbac.js"></script>
+<script>
+let staffData   = [];
+let inviteData  = [];
+let currentUser = null;
+let editingProfileId = null;
+let activeAddTab = 'invite';
+
+async function initPage() {
+  currentUser = await RBAC.guardPage('staff');
+  if (!currentUser) return;
+  await RBAC.initSidebar('staff');
+  await loadAll();
+}
+
+async function loadAll() {
+  await Promise.all([loadStaff(), loadInvites()]);
+  renderStaffStats();
+}
+
+async function loadStaff() {
+  try {
+    staffData = await RBAC.getShopStaff();
+    renderStaff();
+  } catch(e) {
+    Toast.show('Failed to load staff', 'error');
+  }
+}
+
+async function loadInvites() {
+  try {
+    inviteData = await RBAC.getShopInvites();
+    renderInvites();
+  } catch(e) {}
+}
+
+/* ── STATS ── */
+function renderStaffStats() {
+  const active    = staffData.filter(s => s.active !== false);
+  const mechanics = active.filter(s => s.role === 'Mechanic').length;
+  const advisors  = active.filter(s => s.role === 'Service Advisor').length;
+  const pending   = inviteData.filter(i => !i.accepted).length;
+  document.getElementById('staffStats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Total Active Staff</div><div class="stat-value">${active.length}</div><div class="stat-delta">Members on your team</div></div>
+    <div class="stat-card"><div class="stat-label">Mechanics</div><div class="stat-value">${mechanics}</div><div class="stat-delta">On the workshop floor</div></div>
+    <div class="stat-card"><div class="stat-label">Service Advisors</div><div class="stat-value">${advisors}</div><div class="stat-delta">Front desk &amp; customer</div></div>
+    <div class="stat-card"><div class="stat-label">Pending Invites</div><div class="stat-value">${pending}</div><div class="stat-delta">${pending === 0 ? 'All invites accepted' : 'Waiting to join'}</div></div>
+  `;
+
+  // Update invites tab badge
+  const badge = document.getElementById('inviteBadge');
+  if (badge) { badge.textContent = pending > 0 ? pending : ''; badge.style.display = pending > 0 ? 'inline' : 'none'; }
+}
+
+/* ── STAFF LIST ── */
+function filterStaff() {
+  const q = (document.getElementById('staffSearch')?.value || '').toLowerCase();
+  const filtered = staffData.filter(s => s.active !== false).filter(s =>
+    (s.full_name||'').toLowerCase().includes(q) ||
+    (s.role||'').toLowerCase().includes(q) ||
+    (s.email||'').toLowerCase().includes(q)
+  );
+  renderStaffList(filtered, 'staffList');
+}
+
+function renderStaff() {
+  renderStaffList(staffData.filter(s => s.active !== false), 'staffList');
+  renderStaffList(staffData.filter(s => s.active === false), 'inactiveList', true);
+}
+
+function renderStaffList(list, containerId, showReactivate = false) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!list.length) {
+    el.innerHTML = `<div style="padding:36px;text-align:center;color:var(--app-muted);font-size:14px">
+      ${showReactivate ? 'No inactive staff members.' : 'No staff members yet. Add your first team member above.'}
+    </div>`;
+    return;
+  }
+  el.innerHTML = list.map(s => {
+    const name  = s.full_name || 'Unknown';
+    const initl = name.trim()[0]?.toUpperCase() || '?';
+    const isMe  = s.id === currentUser?.id;
+    const roleColors = {
+      'Admin': '#a78bfa', 'Service Advisor': 'var(--amber)',
+      'Mechanic': '#60a5fa', 'Parts Manager': '#34d399'
+    };
+    const roleColor = roleColors[s.role] || 'var(--app-muted)';
+
+    const actions = showReactivate
+      ? `<button class="app-btn app-btn-ghost app-btn-sm" onclick="reactivateStaff('${s.id}','${name.replace(/'/g,"\'")}')">Reactivate</button>`
+      : `
+        ${isMe
+          ? `<span style="font-family:var(--ff-mono);font-size:11px;color:var(--amber);padding:4px 10px;border:1px solid rgba(232,160,32,0.3);border-radius:4px">YOU</span>`
+          : `<button class="app-btn app-btn-ghost app-btn-sm" onclick="openEditRole('${s.id}','${name.replace(/'/g,"\'")}','${s.role}')">Change Role</button>
+             <button class="app-btn app-btn-ghost app-btn-sm" style="color:var(--danger)" onclick="deactivateStaff('${s.id}','${name.replace(/'/g,"\'")}')">Remove</button>`
+        }`;
+
+    return `
+      <div class="staff-card">
+        <div class="staff-avatar ${showReactivate ? 'inactive' : ''}" style="${!showReactivate ? 'background:'+roleColor+';' : ''}">${initl}</div>
+        <div class="staff-info">
+          <div class="staff-name">${name} ${isMe ? '' : ''}</div>
+          <div class="staff-email">${s.email || '—'}</div>
+        </div>
+        <span style="font-family:var(--ff-mono);font-size:12px;padding:4px 12px;border-radius:20px;
+          background:${roleColor}22;color:${roleColor};border:1px solid ${roleColor}44;white-space:nowrap">${s.role || '—'}</span>
+        <div class="staff-actions">${actions}</div>
+      </div>`;
+  }).join('');
+}
+
+/* ── INVITES ── */
+function renderInvites() {
+  const pending = inviteData.filter(i => !i.accepted);
+  const el = document.getElementById('inviteList');
+  if (!el) return;
+
+  if (!pending.length) {
+    el.innerHTML = `<div style="padding:36px;text-align:center;color:var(--app-muted);font-size:14px">
+      No pending invites. When you invite staff, their links will appear here.
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = pending.map(i => {
+    // Always point to the dedicated join page
+    const base = window.location.href.replace(/[^/]*$/, '');
+    const link = `${base}join.html?token=${i.token}`;
+    const expires   = new Date(i.expires_at);
+    const isExpired = expires < new Date();
+    const expiresStr = expires.toLocaleDateString('en-NG', { day:'numeric', month:'short', year:'numeric' });
+    const roleColors = {
+      'Admin': '#a78bfa', 'Service Advisor': 'var(--amber)',
+      'Mechanic': '#60a5fa', 'Parts Manager': '#34d399'
+    };
+    const roleColor = roleColors[i.role] || 'var(--app-muted)';
+
+    return `
+      <div class="invite-row" id="invite-row-${i.id}" style="${isExpired ? 'opacity:0.55' : ''}">
+        <div>
+          <div style="font-size:15px;font-weight:600;color:var(--app-text);margin-bottom:3px">${i.email}</div>
+          <div style="font-size:12px;color:var(--app-muted);font-family:var(--ff-mono)">
+            Invited ${new Date(i.created_at).toLocaleDateString('en-NG',{day:'numeric',month:'short'})}
+            · ${isExpired ? '<span style="color:var(--danger)">Expired</span>' : 'Expires ' + expiresStr}
+          </div>
+        </div>
+        <span style="font-family:var(--ff-mono);font-size:12px;padding:4px 12px;border-radius:20px;
+          background:${roleColor}22;color:${roleColor};border:1px solid ${roleColor}44;white-space:nowrap;flex-shrink:0">${i.role}</span>
+        <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-shrink:0">
+          ${!isExpired
+            ? `<button class="app-btn app-btn-ghost app-btn-sm" onclick="copyInviteLink('${link}','${i.email}')">📋 Copy Link</button>`
+            : `<button class="app-btn app-btn-ghost app-btn-sm" onclick="resendInvite('${i.email}','${i.role}','${i.id}')">↻ Resend</button>`
+          }
+          <button class="app-btn app-btn-ghost app-btn-sm" style="color:var(--danger)"
+            onclick="cancelInvite('${i.id}','${i.email}')">Cancel</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function copyInviteLink(link, email) {
+  navigator.clipboard.writeText(link)
+    .then(() => Toast.show(`Invite link for ${email} copied! Share it via WhatsApp or SMS.`, 'success', 5000))
+    .catch(() => {
+      prompt('Copy this link and send to your staff member:', link);
+    });
+}
+
+async function resendInvite(email, role, oldId) {
+  try {
+    // Cancel old, create new
+    await sb.from('staff_invites').delete().eq('id', oldId);
+    await RBAC.inviteStaff(email, role);
+    Toast.show(`New invite sent for ${email}`, 'success');
+    await loadInvites();
+    renderStaffStats();
+  } catch(err) {
+    Toast.show(err.message || 'Failed to resend invite', 'error');
+  }
+}
+
+async function cancelInvite(id, email) {
+  if (!confirm(`Cancel the invite for ${email}? The link will stop working immediately.`)) return;
+  try {
+    await sb.from('staff_invites').delete().eq('id', id);
+    inviteData = inviteData.filter(i => i.id !== id);
+    renderInvites();
+    renderStaffStats();
+    Toast.show(`Invite for ${email} cancelled`, 'success');
+  } catch(err) {
+    Toast.show(err.message || 'Failed to cancel', 'error');
+  }
+}
+
+/* ── TAB SWITCHER ── */
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('[data-tab-btn]').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-${tab}`)?.classList.add('active');
+  if (el) el.classList.add('active');
+}
+
+function switchAddTab(tab, el) {
+  activeAddTab = tab;
+  document.getElementById('add-tab-invite').style.display = tab === 'invite' ? 'block' : 'none';
+  document.getElementById('add-tab-direct').style.display = tab === 'direct' ? 'block' : 'none';
+  document.querySelectorAll('#addStaffModal .app-sub-link').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('addStaffBtn').textContent = tab === 'invite' ? 'Generate Invite Link' : 'Create Account';
+  document.getElementById('invite-result').style.display = 'none';
+}
+
+/* ── ADD STAFF ── */
+async function handleAddStaff() {
+  if (activeAddTab === 'invite') await handleSendInvite();
+  else await handleDirectCreate();
+}
+
+async function handleSendInvite() {
+  const email = document.getElementById('invite-email').value.trim().toLowerCase();
+  const role  = document.getElementById('invite-role').value;
+
+  if (!email) { Toast.show('Please enter an email address', 'error'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { Toast.show('Enter a valid email address', 'error'); return; }
+
+  const btn = document.getElementById('addStaffBtn');
+  btn.disabled = true; btn.textContent = 'Generating…';
+
+  try {
+    await RBAC.inviteStaff(email, role);
+    await loadInvites();
+
+    // Find the new invite and build link
+    const invite = inviteData.find(i => i.email === email && !i.accepted);
+    if (invite) {
+      const base = window.location.href.replace(/[^/]*$/, '');
+      const link = `${base}join.html?token=${invite.token}`;
+      document.getElementById('invite-link-box').value = link;
+      document.getElementById('invite-result').style.display = 'block';
+    }
+    Toast.show(`Invite created for ${email} — copy the link and send via WhatsApp or SMS`, 'success', 6000);
+    renderStaffStats();
+  } catch(err) {
+    Toast.show(err.message || 'Failed to create invite', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Generate Invite Link';
+  }
+}
+
+async function handleDirectCreate() {
+  const fn    = document.getElementById('direct-fn').value.trim();
+  const ln    = document.getElementById('direct-ln').value.trim();
+  const email = document.getElementById('direct-email').value.trim().toLowerCase();
+  const role  = document.getElementById('direct-role').value;
+  const pw    = document.getElementById('direct-pw').value;
+
+  if (!fn)    { Toast.show('First name is required', 'error'); return; }
+  if (!email) { Toast.show('Email address is required', 'error'); return; }
+  if (!pw || pw.length < 6) { Toast.show('Password must be at least 6 characters', 'error'); return; }
+
+  const { data: { session: adminSession } } = await sb.auth.getSession();
+  if (!adminSession) { Toast.show('Session expired — please sign in again', 'error'); return; }
+
+  const btn = document.getElementById('addStaffBtn');
+  btn.disabled = true; btn.textContent = 'Creating account…';
+
+  try {
+    const shopId = await RBAC.getShopId();
+    if (!shopId) throw new Error('Could not find your shop — please reload');
+
+    // Try the server-side RPC first (safest — no session swap)
+    const { data: rpcData, error: rpcErr } = await sb.rpc('admin_create_staff_profile', {
+      p_email:     email,
+      p_password:  pw,
+      p_full_name: `${fn} ${ln}`.trim(),
+      p_role:      role,
+      p_shop_id:   shopId,
+    });
+
+    if (rpcErr) {
+      // RPC not deployed — fall back to client signUp + restore admin session
+      if (rpcErr.code === '42883' || (rpcErr.message||'').includes('does not exist')) {
+        await _directCreateFallback(fn, ln, email, role, pw, shopId, adminSession);
+      } else {
+        throw rpcErr;
+      }
+    }
+
+    Toast.show(`✅ Account created for ${fn} ${ln}. They can sign in with "${email}" and password "${pw}".`, 'success', 9000);
+    Modal.close('addStaffModal');
+    resetAddModal();
+    await loadAll();
+  } catch(err) {
+    // Always restore admin session on failure
+    try { await sb.auth.setSession({ access_token: adminSession.access_token, refresh_token: adminSession.refresh_token }); } catch(e) {}
+    const msg = err.message || '';
+    if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('duplicate')) {
+      Toast.show('An account with this email already exists', 'error');
+    } else {
+      Toast.show(msg || 'Failed to create account', 'error', 7000);
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = 'Create Account';
+  }
+}
+
+async function _directCreateFallback(fn, ln, email, role, pw, shopId, adminSession) {
+  const { data: signUpData, error: signUpErr } = await sb.auth.signUp({
+    email, password: pw,
+    options: { data: { full_name: `${fn} ${ln}`, role } }
+  });
+  if (signUpErr) throw signUpErr;
+  const newUserId = signUpData?.user?.id;
+  if (!newUserId) throw new Error('Signup did not return a user ID');
+
+  // Restore admin session immediately
+  await sb.auth.setSession({ access_token: adminSession.access_token, refresh_token: adminSession.refresh_token });
+
+  await new Promise(r => setTimeout(r, 1500));
+
+  const { error: linkErr } = await sb.rpc('admin_link_staff_profile', {
+    p_user_id: newUserId, p_full_name: `${fn} ${ln}`,
+    p_email: email, p_role: role, p_shop_id: shopId,
+  });
+  if (linkErr) console.warn('admin_link_staff_profile:', linkErr.message);
+}
+
+/* ── ROLE EDIT ── */
+function openEditRole(id, name, currentRole) {
+  editingProfileId = id;
+  document.getElementById('editRoleInfo').innerHTML =
+    `Changing role for: <strong>${name}</strong>`;
+  document.getElementById('editRoleSelect').value = currentRole;
+  Modal.open('editRoleModal');
+}
+
+async function saveRoleChange() {
+  if (!editingProfileId) return;
+  const role = document.getElementById('editRoleSelect').value;
+  const btn = document.querySelector('#editRoleModal .app-btn-primary');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await RBAC.updateStaffRole(editingProfileId, role);
+    Toast.show('Role updated', 'success');
+    Modal.close('editRoleModal');
+    await loadStaff();
+  } catch(err) {
+    Toast.show(err.message || 'Failed to update role', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Role';
+  }
+}
+
+/* ── DEACTIVATE / REACTIVATE ── */
+async function deactivateStaff(id, name) {
+  if (!confirm(`Remove ${name} from this shop?
+
+They will lose access immediately but their account data is kept.`)) return;
+  try {
+    await RBAC.deactivateStaff(id);
+    Toast.show(`${name} removed from shop`, 'success');
+    await loadAll();
+  } catch(err) { Toast.show(err.message || 'Failed to remove', 'error'); }
+}
+
+async function reactivateStaff(id, name) {
+  try {
+    await sb.from('profiles').update({ active: true }).eq('id', id);
+    Toast.show(`${name} reactivated`, 'success');
+    await loadAll();
+  } catch(err) { Toast.show(err.message || 'Failed to reactivate', 'error'); }
+}
+
+/* ── HELPERS ── */
+function copyInviteLinkBox() {
+  const val = document.getElementById('invite-link-box').value;
+  navigator.clipboard.writeText(val)
+    .then(() => Toast.show('Link copied! Send it via WhatsApp or SMS.', 'success'))
+    .catch(() => { document.getElementById('invite-link-box').select(); document.execCommand('copy'); });
+}
+
+function resetAddModal() {
+  ['invite-email','direct-fn','direct-ln','direct-email'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('direct-pw').value = 'GearShift2026!';
+  document.getElementById('invite-result').style.display = 'none';
+  switchAddTab('invite', document.getElementById('tab-btn-invite'));
+}
+
+document.addEventListener('DOMContentLoaded', initPage);
+</script>
+</body>
+</html>

@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Appointments — GearShift</title>
+<link rel="stylesheet" href="../css/main.css">
+<link rel="stylesheet" href="../css/app.css">
+<style>
+/* ── CALENDAR NAV ── */
+.cal-nav {
+  display:flex; align-items:center; gap:12px; margin-bottom:var(--space-4);
+}
+.cal-nav-title {
+  font-family:var(--ff-display); font-size:22px; letter-spacing:1px;
+  color:var(--app-text); flex:1; text-align:center;
+}
+.cal-month-grid {
+  display:grid; grid-template-columns:repeat(7,1fr); gap:4px;
+}
+.cal-day-header {
+  text-align:center; padding:8px 4px;
+  font-family:var(--ff-mono); font-size:9px;
+  letter-spacing:1.5px; text-transform:uppercase; color:var(--app-muted);
+}
+.cal-cell {
+  min-height:110px; background:var(--app-surface2);
+  border:1px solid var(--app-border); border-radius:var(--r-sm);
+  padding:8px; transition:border-color var(--t-fast); cursor:pointer;
+  position:relative; overflow:hidden;
+}
+.cal-cell:hover { border-color:var(--app-muted); }
+.cal-cell.today  { border-color:var(--amber); }
+.cal-cell.other-month { opacity:.35; pointer-events:none; }
+.cal-cell.selected { border-color:var(--rust); background:rgba(201,75,30,0.06); }
+.cal-date {
+  font-size:12px; font-weight:600; color:var(--app-muted); margin-bottom:5px;
+}
+.cal-cell.today .cal-date { color:var(--amber); }
+.cal-cell.selected .cal-date { color:var(--rust); }
+.cal-pill {
+  padding:2px 7px; border-radius:3px; font-size:10px;
+  margin-bottom:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  cursor:pointer; font-weight:500;
+}
+.cal-pill.confirmed { background:rgba(31,122,74,0.25); color:#6ee7b7; }
+.cal-pill.pending   { background:rgba(232,160,32,0.25); color:#fcd34d; }
+.cal-pill.noshow    { background:rgba(100,100,100,.25);  color:#9ca3af; }
+.cal-more { font-family:var(--ff-mono); font-size:9px; color:var(--app-muted); margin-top:2px; }
+
+/* ── DAY SIDEBAR ── */
+.day-panel {
+  position:sticky; top:100px; display:flex; flex-direction:column; gap:12px;
+}
+.day-header {
+  font-family:var(--ff-display); font-size:20px; letter-spacing:1px;
+  color:var(--app-text); padding:16px 20px; border-bottom:1px solid var(--app-border);
+}
+.day-slot {
+  padding:14px 16px; background:var(--app-surface2);
+  border:1px solid var(--app-border); border-left:3px solid transparent;
+  border-radius:var(--r-sm); transition:all var(--t-fast);
+}
+.day-slot.confirmed { border-left-color:#27ae60; }
+.day-slot.pending   { border-left-color:var(--amber); }
+.day-slot.noshow    { border-left-color:#6b7280; }
+.day-slot:hover { background:var(--app-surface3,#263140); }
+.day-slot-time { font-family:var(--ff-mono); font-size:11px; color:var(--amber); margin-bottom:5px; }
+.day-slot-name { font-size:13px; font-weight:700; color:var(--app-text); }
+.day-slot-service { font-size:12px; color:var(--app-muted); margin-top:2px; }
+.day-slot-meta { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center; }
+
+/* ── REQUESTS TABLE ── */
+.pending-row { transition:background var(--t-fast); }
+.pending-row:hover td { background:var(--app-hover); }
+</style>
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- SIDEBAR (shared) -->
+  <aside class="app-sidebar">
+    <div class="sidebar-logo">
+      <span class="sidebar-logo-text">GEAR<span>SHIFT</span></span>
+      <a href="../index.html" class="sidebar-back">← Site</a>
+    </div>
+    <nav class="sidebar-nav"><!-- populated by RBAC.initSidebar --></nav>
+    <div class="sidebar-footer">
+      <div class="theme-toggle">
+        <span class="theme-toggle-label">☾ Dark</span>
+        <button class="theme-toggle-switch" onclick="Theme.toggle()" aria-label="Switch to light mode"></button>
+      </div>
+      
+      <div class="sidebar-user"><div class="user-avatar" id="userAvatar">?</div><div><div class="user-name" id="userName">Loading…</div><div class="user-role" id="userRole">—</div></div></div>
+      <button class="btn-logout" onclick="Auth.signOut().then(()=>window.location='dashboard.html')">Sign Out</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="app-main">
+    <div class="app-topbar">
+      <span class="topbar-title">APPOINTMENTS</span>
+      <div class="topbar-actions">
+        <button class="app-btn app-btn-ghost app-btn-sm" onclick="openBookingModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Book Appointment
+        </button>
+      </div>
+    </div>
+
+    <!-- SUB NAV -->
+    <div class="app-sub-nav">
+      <button class="app-sub-link active" data-pane="pane-calendar" onclick="switchPane(this)">Calendar View</button>
+      <button class="app-sub-link"        data-pane="pane-list"     onclick="switchPane(this)">All Appointments</button>
+      <button class="app-sub-link"        data-pane="pane-requests" onclick="switchPane(this)">
+        Booking Requests
+        <span style="margin-left:4px;background:var(--rust);color:var(--white);font-family:var(--ff-mono);font-size:9px;padding:1px 6px;border-radius:10px" id="pendingBadge"></span>
+      </button>
+    </div>
+
+    <div class="app-content">
+
+      <!-- ── PANE: CALENDAR ── -->
+      <div class="view-pane active" id="pane-calendar">
+        <div style="display:grid;grid-template-columns:1fr 300px;gap:var(--space-5);align-items:start;">
+
+          <!-- Calendar -->
+          <div class="panel">
+            <div class="panel-header">
+              <button class="icon-btn" onclick="changeMonth(-1)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15,18 9,12 15,6"/></svg>
+              </button>
+              <span class="cal-nav-title" id="calMonthTitle"></span>
+              <button class="icon-btn" onclick="changeMonth(1)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+              </button>
+            </div>
+            <div class="panel-body-sm">
+              <div class="cal-month-grid">
+                <div class="cal-day-header">Sun</div><div class="cal-day-header">Mon</div>
+                <div class="cal-day-header">Tue</div><div class="cal-day-header">Wed</div>
+                <div class="cal-day-header">Thu</div><div class="cal-day-header">Fri</div>
+                <div class="cal-day-header">Sat</div>
+              </div>
+              <div class="cal-month-grid" id="calGrid" style="margin-top:4px;"></div>
+            </div>
+          </div>
+
+          <!-- Day panel -->
+          <div class="day-panel">
+            <div class="panel">
+              <div class="day-header" id="dayPanelTitle">Select a day</div>
+              <div id="daySlots" style="padding:12px;display:flex;flex-direction:column;gap:8px;">
+                <div style="text-align:center;padding:24px;color:var(--app-muted);font-size:13px;">Click a date to see appointments</div>
+              </div>
+            </div>
+            <button class="app-btn app-btn-primary" style="width:100%" onclick="openBookingModal()">
+              + Book New Appointment
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── PANE: ALL APPOINTMENTS ── -->
+      <div class="view-pane" id="pane-list">
+        <div class="filter-bar">
+          <input class="search-box" id="apptSearch" placeholder="Search customer or service…" oninput="renderApptList()">
+          <select class="filter-select" id="apptStatusFilter" onchange="renderApptList()">
+            <option value="">All Statuses</option>
+            <option value="Confirmed">Confirmed</option>
+            <option value="Pending">Pending</option>
+            <option value="No Show">No Show</option>
+          </select>
+          <select class="filter-select" id="apptTechFilter" onchange="renderApptList()">
+            <option value="">All Technicians</option>
+            <option>Mike Torres</option><option>Sam Lee</option><option>Rita Patel</option>
+          </select>
+        </div>
+        <div class="panel">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th><th>Customer</th><th>Vehicle</th><th>Service</th>
+                <th>Date & Time</th><th>Technician</th><th>Status</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="apptListBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── PANE: REQUESTS ── -->
+      <div class="view-pane" id="pane-requests">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">PENDING BOOKING REQUESTS</span>
+            <span style="font-size:12px;color:var(--app-muted)">Confirm or reschedule each request</span>
+          </div>
+          <table class="data-table">
+            <thead><tr><th>Customer</th><th>Service Requested</th><th>Vehicle</th><th>Preferred Date</th><th>Notes</th><th>Actions</th></tr></thead>
+            <tbody id="requestsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- BOOK APPOINTMENT MODAL -->
+<div class="modal-backdrop" id="bookingModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="bookingModalTitle">BOOK APPOINTMENT</span>
+      <button class="modal-close" onclick="Modal.close('bookingModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="app-form-row">
+        <div class="app-form-group">
+          <label class="app-label">Customer</label>
+          <select class="app-input" id="b-cust" onchange="populateVehicles()"></select>
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Vehicle</label>
+          <select class="app-input" id="b-veh"></select>
+        </div>
+      </div>
+      <div class="app-form-group">
+        <label class="app-label">Service</label>
+        <select class="app-input" id="b-service">
+          <option>Oil Change</option><option>Brake Service</option><option>Tire Rotation</option>
+          <option>Engine Diagnostic</option><option>AC Service</option><option>Battery Replacement</option>
+          <option>Transmission Service</option><option>Annual Inspection</option><option>General Inspection</option>
+          <option>Wheel Alignment</option><option>Other</option>
+        </select>
+      </div>
+      <div class="app-form-row">
+        <div class="app-form-group">
+          <label class="app-label">Date</label>
+          <input class="app-input" type="date" id="b-date" min="2026-03-01">
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Time</label>
+          <select class="app-input" id="b-time">
+            <option>08:00</option><option>09:00</option><option>10:00</option><option>11:00</option>
+            <option>12:00</option><option>13:00</option><option>14:00</option><option>15:00</option><option>16:00</option>
+          </select>
+        </div>
+      </div>
+      <div class="app-form-row">
+        <div class="app-form-group">
+          <label class="app-label">Technician</label>
+          <select class="app-input" id="b-tech">
+            <option value="">-- Select Technician --</option>
+          </select>
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Status</label>
+          <select class="app-input" id="b-status">
+            <option>Confirmed</option><option>Pending</option>
+          </select>
+        </div>
+      </div>
+      <div class="app-form-group">
+        <label class="app-label">Notes</label>
+        <textarea class="app-input" id="b-notes" placeholder="Any special instructions or customer requests…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('bookingModal')">Cancel</button>
+      <button class="app-btn app-btn-primary" onclick="saveAppointment()">Save Appointment</button>
+    </div>
+  </div>
+</div>
+
+<!-- APPOINTMENT DETAIL MODAL -->
+<div class="modal-backdrop" id="apptDetailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="adTitle">Appointment</span>
+      <button class="modal-close" onclick="Modal.close('apptDetailModal')">✕</button>
+    </div>
+    <div class="modal-body" id="adBody"></div>
+    <div class="modal-footer" id="adFooter"></div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/theme.js"></script>
+<script src="../js/main.js"></script>
+<script src="../js/supabase.js"></script>
+<script src="../js/rbac.js"></script>
+<script>
+var apptData  = [];
+var custData  = [];
+var staffData = [];
+var vehCache  = {};
+
+var CAL_MONTH = new Date().getMonth();
+var CAL_YEAR  = new Date().getFullYear();
+var selectedDate = null;
+
+/* ---- INIT ---- */
+async function initPage() {
+  var user = await RBAC.guardPage('appointments');
+  if (!user) return;
+  await RBAC.initSidebar('appointments');
+
+  // Load all reference data in parallel
+  var results = await Promise.all([
+    GS.getAppointments().catch(function(){ return []; }),
+    GS.getCustomers().catch(function(){ return []; }),
+    GS.getStaff().catch(function(){ return []; }),
+  ]);
+  apptData  = results[0];
+  custData  = results[1];
+  staffData = results[2];
+
+  populateCustomerDropdown(custData);
+  populateTechDropdown(staffData);
+  renderCalendar();
+  renderApptList();
+  renderRequests();
+  updatePendingBadge();
+
+  Realtime.subscribe('appointments', {
+    onInsert: function() { loadAppointments(); },
+    onUpdate: function(a) {
+      var idx = apptData.findIndex(function(x){ return x.id === a.id; });
+      if (idx >= 0) { apptData[idx] = Object.assign({}, apptData[idx], a); }
+      else apptData.push(a);
+      renderCalendar(); renderApptList(); renderRequests(); updatePendingBadge();
+    },
+    onDelete: function(a) {
+      apptData = apptData.filter(function(x){ return x.id !== a.id; });
+      renderCalendar(); renderApptList(); renderRequests(); updatePendingBadge();
+    }
+  });
+}
+
+async function loadAppointments() {
+  apptData = await GS.getAppointments().catch(function(){ return []; });
+  renderCalendar(); renderApptList(); renderRequests(); updatePendingBadge();
+}
+
+/* ---- DROPDOWNS ---- */
+function populateCustomerDropdown(custs) {
+  var sel = document.getElementById('b-cust');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">-- Select Customer --</option>' +
+    custs.map(function(c) {
+      return '<option value="' + c.id + '">' + c.first_name + ' ' + c.last_name + '</option>';
+    }).join('');
+}
+
+function populateTechDropdown(staff) {
+  var sel = document.getElementById('b-tech');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">-- Select Technician --</option>' +
+    staff.map(function(s) {
+      return '<option value="' + s.id + '">' + s.full_name + (s.speciality ? ' (' + s.speciality + ')' : '') + '</option>';
+    }).join('');
+}
+
+async function populateVehicles() {
+  var custId = (document.getElementById('b-cust') || {}).value;
+  var sel    = document.getElementById('b-veh');
+  if (!sel) return;
+  if (!custId) { sel.innerHTML = '<option value="">Select customer first</option>'; return; }
+  sel.innerHTML = '<option value="">Loading...</option>';
+  try {
+    if (!vehCache[custId]) vehCache[custId] = await GS.getVehicles(custId);
+    var vehs = vehCache[custId] || [];
+    sel.innerHTML = vehs.length
+      ? '<option value="">-- Select Vehicle --</option>' + vehs.map(function(v) {
+          return '<option value="' + v.id + '">' + (v.year||'') + ' ' + v.make + ' ' + v.model + (v.plate ? ' - ' + v.plate : '') + '</option>';
+        }).join('')
+      : '<option value="">No vehicles found for this customer</option>';
+  } catch(e) {
+    sel.innerHTML = '<option value="">Could not load vehicles</option>';
+  }
+}
+
+/* ---- OPEN BOOKING MODAL ---- */
+function openBookingModal(date) {
+  document.getElementById('bookingModalTitle').textContent = 'BOOK APPOINTMENT';
+  // Reset form
+  ['b-notes'].forEach(function(id) { var el = document.getElementById(id); if(el) el.value = ''; });
+  var custSel = document.getElementById('b-cust');
+  if (custSel) custSel.value = '';
+  var vehSel = document.getElementById('b-veh');
+  if (vehSel) vehSel.innerHTML = '<option value="">Select customer first</option>';
+  var dateEl = document.getElementById('b-date');
+  if (dateEl) dateEl.value = date || '';
+  Modal.open('bookingModal');
+}
+
+/* ---- SAVE APPOINTMENT ---- */
+async function saveAppointment() {
+  var custId  = (document.getElementById('b-cust')    || {}).value;
+  var vehId   = (document.getElementById('b-veh')     || {}).value;
+  var service = (document.getElementById('b-service') || {}).value;
+  var date    = (document.getElementById('b-date')    || {}).value;
+  var time    = (document.getElementById('b-time')    || {}).value;
+  var techId  = (document.getElementById('b-tech')    || {}).value;
+  var status  = (document.getElementById('b-status')  || {}).value || 'Confirmed';
+  var notes   = (document.getElementById('b-notes')   || {}).value || '';
+
+  if (!custId)  { Toast.show('Please select a customer', 'error'); return; }
+  if (!service) { Toast.show('Please select a service', 'error'); return; }
+  if (!date)    { Toast.show('Please select a date', 'error'); return; }
+
+  var btn = document.querySelector('#bookingModal .app-btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+  try {
+    var payload = {
+      customer_id:  custId,
+      vehicle_id:   vehId   || null,
+      mechanic_id:  techId  || null,
+      service:      service,
+      appt_date:    date,
+      appt_time:    time,
+      status:       status,
+      notes:        notes || null,
+    };
+    var apt = await GS.createAppointment(payload);
+    Toast.show('Appointment booked successfully', 'success');
+    Modal.close('bookingModal');
+    await loadAppointments();
+  } catch(e) {
+    Toast.show(e.message || 'Failed to save appointment', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Appointment'; }
+  }
+}
+
+/* ---- CALENDAR ---- */
+function changeMonth(delta) {
+  CAL_MONTH += delta;
+  if (CAL_MONTH > 11) { CAL_MONTH = 0;  CAL_YEAR++; }
+  if (CAL_MONTH < 0)  { CAL_MONTH = 11; CAL_YEAR--; }
+  renderCalendar();
+}
+
+function renderCalendar() {
+  var titleEl = document.getElementById('calMonthTitle');
+  var gridEl  = document.getElementById('calGrid');
+  if (!titleEl || !gridEl) return;
+
+  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  titleEl.textContent = months[CAL_MONTH] + ' ' + CAL_YEAR;
+
+  var today    = new Date();
+  var firstDay = new Date(CAL_YEAR, CAL_MONTH, 1).getDay();
+  var daysInMonth = new Date(CAL_YEAR, CAL_MONTH + 1, 0).getDate();
+  var daysInPrev  = new Date(CAL_YEAR, CAL_MONTH, 0).getDate();
+
+  var html = '';
+  var totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
+
+  for (var i = 0; i < totalCells; i++) {
+    var day, isCurrentMonth = true, isPrev = false;
+    if (i < firstDay) {
+      day = daysInPrev - firstDay + i + 1;
+      isCurrentMonth = false; isPrev = true;
+    } else if (i >= firstDay + daysInMonth) {
+      day = i - firstDay - daysInMonth + 1;
+      isCurrentMonth = false;
+    } else {
+      day = i - firstDay + 1;
+    }
+
+    var dateStr = CAL_YEAR + '-' +
+      String(CAL_MONTH + 1).padStart(2, '0') + '-' +
+      String(day).padStart(2, '0');
+    var isToday = isCurrentMonth &&
+      day === today.getDate() && CAL_MONTH === today.getMonth() && CAL_YEAR === today.getFullYear();
+    var isSelected = selectedDate === dateStr;
+
+    var cellAppts = isCurrentMonth ? apptData.filter(function(a) { return a.appt_date === dateStr; }) : [];
+    var pills = cellAppts.slice(0, 3).map(function(a) {
+      var cls = a.status === 'Confirmed' ? 'confirmed' : a.status === 'No Show' ? 'noshow' : 'pending';
+      return '<div class="cal-pill ' + cls + '">' + (a.customer_name || a.service || '') + '</div>';
+    }).join('');
+    var more = cellAppts.length > 3 ? '<div class="cal-more">+' + (cellAppts.length - 3) + ' more</div>' : '';
+
+    var cls = 'cal-cell' +
+      (!isCurrentMonth ? ' other-month' : '') +
+      (isToday ? ' today' : '') +
+      (isSelected ? ' selected' : '');
+
+    html += '<div class="' + cls + '" ' +
+      (isCurrentMonth ? 'data-date="' + dateStr + '" onclick="selectCalDay(this.dataset.date)"' : '') + '>' +
+      '<div class="cal-date">' + day + '</div>' +
+      pills + more +
+      '</div>';
+  }
+
+  gridEl.innerHTML = html;
+}
+
+function selectCalDay(dateStr) {
+  selectedDate = dateStr;
+  renderCalendar();
+  renderDayPanel(dateStr);
+}
+
+function renderDayPanel(dateStr) {
+  var titleEl = document.getElementById('dayPanelTitle');
+  var slotsEl = document.getElementById('daySlots');
+  if (!titleEl || !slotsEl) return;
+
+  var d = new Date(dateStr + 'T12:00:00');
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var days   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  titleEl.textContent = days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate();
+
+  var dayAppts = apptData.filter(function(a) { return a.appt_date === dateStr; })
+    .sort(function(a, b) { return (a.appt_time||'').localeCompare(b.appt_time||''); });
+
+  if (!dayAppts.length) {
+    slotsEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--app-muted);font-size:13px">No appointments this day</div>';
+    return;
+  }
+
+  slotsEl.innerHTML = dayAppts.map(function(a) {
+    var cls = a.status === 'Confirmed' ? 'confirmed' : a.status === 'No Show' ? 'noshow' : 'pending';
+    return '<div class="day-slot ' + cls + '">' +
+      '<div class="day-slot-time">' + (a.appt_time ? a.appt_time.slice(0,5) : '--') + '</div>' +
+      '<div class="day-slot-name">' + (a.customer_name || '--') + '</div>' +
+      '<div class="day-slot-service">' + (a.service || '--') + '</div>' +
+      '<div class="day-slot-meta">' + makeBadge(a.status) + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+/* ---- ALL APPOINTMENTS LIST ---- */
+function renderApptList() {
+  var tbody = document.getElementById('apptListBody');
+  if (!tbody) return;
+  var q      = ((document.getElementById('apptSearch') || {}).value || '').toLowerCase();
+  var status = (document.getElementById('apptStatusFilter') || {}).value || '';
+
+  var filtered = apptData.filter(function(a) {
+    if (status && a.status !== status) return false;
+    if (q && !(a.customer_name||'').toLowerCase().includes(q) && !(a.service||'').toLowerCase().includes(q)) return false;
+    return true;
+  }).sort(function(a,b){ return (a.appt_date||'').localeCompare(b.appt_date||''); });
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--app-muted)">No appointments found</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(function(a) {
+    return '<tr>' +
+      '<td class="td-mono" style="color:var(--amber)">' + (a.ref||'--') + '</td>' +
+      '<td>' + (a.customer_name||'--') + '</td>' +
+      '<td class="td-muted">' + (a.vehicle_label||'--') + '</td>' +
+      '<td>' + (a.service||'--') + '</td>' +
+      '<td class="td-mono" style="font-size:11px">' + formatDate(a.appt_date) + ' ' + (a.appt_time?a.appt_time.slice(0,5):'') + '</td>' +
+      '<td class="td-muted">' + (a.mechanic_name||'Unassigned') + '</td>' +
+      '<td>' + makeBadge(a.status) + '</td>' +
+      '<td><button class="app-btn app-btn-ghost app-btn-xs" data-id="' + a.id + '" onclick="cancelAppt(this.dataset.id)">Cancel</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+/* ---- REQUESTS (PENDING) ---- */
+function renderRequests() {
+  var tbody = document.getElementById('requestsBody');
+  if (!tbody) return;
+  var pending = apptData.filter(function(a) { return a.status === 'Pending'; });
+
+  if (!pending.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--app-muted)">No pending requests</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = pending.map(function(a) {
+    return '<tr>' +
+      '<td>' + (a.customer_name||'--') + '</td>' +
+      '<td>' + (a.service||'--') + '</td>' +
+      '<td class="td-muted">' + (a.vehicle_label||'--') + '</td>' +
+      '<td class="td-mono" style="font-size:11px">' + formatDate(a.appt_date) + '</td>' +
+      '<td class="td-muted">' + (a.notes||'--') + '</td>' +
+      '<td><div style="display:flex;gap:6px">' +
+        '<button class="app-btn app-btn-success app-btn-xs" data-id="' + a.id + '" onclick="confirmAppt(this.dataset.id)">Confirm</button>' +
+        '<button class="app-btn app-btn-ghost app-btn-xs" style="color:var(--danger)" data-id="' + a.id + '" onclick="cancelAppt(this.dataset.id)">Cancel</button>' +
+      '</div></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function updatePendingBadge() {
+  var badge   = document.getElementById('pendingBadge');
+  var pending = apptData.filter(function(a) { return a.status === 'Pending'; }).length;
+  if (badge) { badge.textContent = pending || ''; badge.style.display = pending ? '' : 'none'; }
+}
+
+/* ---- ACTIONS ---- */
+async function confirmAppt(id) {
+  try {
+    await GS.updateAppointment(id, { status: 'Confirmed' });
+    Toast.show('Appointment confirmed', 'success');
+    await loadAppointments();
+  } catch(e) { Toast.show(e.message || 'Failed to confirm', 'error'); }
+}
+
+async function cancelAppt(id) {
+  confirmAction('Cancel this appointment?', async function() {
+    try {
+      await GS.cancelAppointment(id);
+      Toast.show('Appointment cancelled', 'info');
+      await loadAppointments();
+    } catch(e) { Toast.show(e.message || 'Failed to cancel', 'error'); }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', initPage);
+</script>
+</body>
+</html>

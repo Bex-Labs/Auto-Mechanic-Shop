@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventory — GearShift</title>
+<link rel="stylesheet" href="../css/main.css">
+<link rel="stylesheet" href="../css/app.css">
+<style>
+.inv-card {
+  background:var(--app-surface); border:1px solid var(--app-border);
+  border-radius:var(--r-sm); padding:18px 20px;
+  transition:all var(--t-fast); position:relative; overflow:hidden;
+}
+.inv-card.low  { border-left:3px solid var(--danger); }
+.inv-card.ok   { border-left:3px solid var(--success); }
+.inv-card:hover { background:var(--app-surface2); }
+.inv-card-sku { font-family:var(--ff-mono); font-size:12px; color:var(--app-muted); margin-bottom:6px; }
+.inv-card-name { font-size:16px; font-weight:700; color:var(--app-text); margin-bottom:4px; }
+.inv-card-cat { font-size:13px; color:var(--app-muted); margin-bottom:12px; }
+.inv-card-qty-row { display:flex; align-items:baseline; gap:6px; margin-bottom:4px; }
+.inv-card-qty { font-family:var(--ff-display); font-size:42px; line-height:1; }
+.inv-card-qty.low { color:var(--danger); }
+.inv-card-qty.ok  { color:var(--app-text); }
+.inv-card-thresh { font-size:13px; color:var(--app-muted); }
+.inv-card-footer { display:flex; align-items:center; justify-content:space-between; margin-top:10px; }
+.inv-card-cost { font-family:var(--ff-mono); font-size:13px; color:var(--amber); }
+.inv-card-loc { font-family:var(--ff-mono); font-size:12px; color:var(--app-muted); }
+.cat-pill-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:var(--space-4); }
+.cat-pill {
+  padding:8px 18px; background:var(--app-surface2); border:1px solid var(--app-border);
+  color:var(--app-muted); font-family:var(--ff-mono); font-size:12px; letter-spacing:1px;
+  text-transform:uppercase; border-radius:20px; cursor:pointer; transition:all var(--t-fast);
+}
+.cat-pill:hover { color:var(--app-text); border-color:var(--app-muted); }
+.cat-pill.active { background:var(--rust); border-color:var(--rust); color:var(--white); }
+.inv-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+@media(max-width:1100px){ .inv-grid { grid-template-columns:repeat(2,1fr); } }
+@media(max-width:700px)  { .inv-grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="app-sidebar">
+    <div class="sidebar-logo">
+      <span class="sidebar-logo-text">GEAR<span>SHIFT</span></span>
+      <a href="../index.html" class="sidebar-back">← Site</a>
+    </div>
+    <nav class="sidebar-nav"><!-- populated by RBAC.initSidebar --></nav>
+    <div class="sidebar-footer">
+      <div class="theme-toggle">
+        <span class="theme-toggle-label">☾ Dark</span>
+        <button class="theme-toggle-switch" onclick="Theme.toggle()" aria-label="Switch to light mode"></button>
+      </div>
+      
+      <div class="sidebar-user"><div class="user-avatar" id="userAvatar">?</div><div><div class="user-name" id="userName">Loading…</div><div class="user-role" id="userRole">—</div></div></div>
+      <button class="btn-logout" onclick="Auth.signOut().then(()=>window.location='dashboard.html')">Sign Out</button>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <div class="app-topbar">
+      <span class="topbar-title">INVENTORY</span>
+      <div class="topbar-actions">
+        <a href="supply-chain.html" class="app-btn app-btn-ghost app-btn-sm">Create PO →</a>
+        <button class="app-btn app-btn-primary" onclick="openPartModal()">+ Add Part</button>
+      </div>
+    </div>
+    <div class="app-sub-nav">
+      <button class="app-sub-link active" data-pane="pane-catalog"  onclick="switchPane(this)">Parts Catalog</button>
+      <button class="app-sub-link"        data-pane="pane-lowstock" onclick="switchPane(this)">Low Stock Alerts <span id="lowBadge" style="margin-left:4px;background:var(--rust);color:var(--white);font-family:var(--ff-mono);font-size:9px;padding:1px 6px;border-radius:10px"></span></button>
+      <button class="app-sub-link"        data-pane="pane-table"    onclick="switchPane(this)">Table View</button>
+    </div>
+
+    <div class="app-content">
+
+      <!-- CATALOG (card grid) -->
+      <div class="view-pane active" id="pane-catalog">
+        <div class="stats-grid" id="invStats"></div>
+        <div style="display:flex;gap:var(--space-4);align-items:flex-start;flex-wrap:wrap;margin-bottom:var(--space-4);">
+          <input class="search-box" style="max-width:280px" id="invSearch" placeholder="Search parts…" oninput="renderCatalog()">
+          <div class="cat-pill-row" id="catPills"></div>
+        </div>
+        <div class="inv-grid" id="invGrid"></div>
+      </div>
+
+      <!-- LOW STOCK -->
+      <div class="view-pane" id="pane-lowstock">
+        <div class="alert alert-error" style="margin-bottom:var(--space-4)">
+          ⚠ The following parts are at or below their reorder threshold. Create a purchase order to restock.
+        </div>
+        <div class="panel">
+          <table class="data-table">
+            <thead><tr><th>Part Name</th><th>SKU</th><th>In Stock</th><th>Threshold</th><th>Deficit</th><th>Supplier</th><th>Est. Cost</th><th>Action</th></tr></thead>
+            <tbody id="lowStockBody"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:16px;display:flex;justify-content:flex-end;">
+          <a href="supply-chain.html" class="app-btn app-btn-primary">Create Purchase Order for All →</a>
+        </div>
+      </div>
+
+      <!-- TABLE VIEW -->
+      <div class="view-pane" id="pane-table">
+        <div class="filter-bar">
+          <input class="search-box" id="tblSearch" placeholder="Search SKU, name…" oninput="renderTableView()">
+          <select class="filter-select" id="tblCatFilter" onchange="renderTableView()">
+            <option value="">All Categories</option>
+          </select>
+          <select class="filter-select" id="tblSuppFilter" onchange="renderTableView()">
+            <option value="">All Suppliers</option>
+          </select>
+          <select class="filter-select" id="tblStockFilter" onchange="renderTableView()">
+            <option value="">All Stock Levels</option>
+            <option value="low">Low Stock</option>
+            <option value="ok">In Stock</option>
+          </select>
+        </div>
+        <div class="panel">
+          <table class="data-table">
+            <thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Qty</th><th>Threshold</th><th>Stock Level</th><th>Unit Cost</th><th>Supplier</th><th>Location</th><th>Actions</th></tr></thead>
+            <tbody id="invTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ADD / EDIT PART MODAL -->
+<div class="modal-backdrop" id="partModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="partModalTitle">ADD PART</span>
+      <button class="modal-close" onclick="Modal.close('partModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="app-form-row">
+        <div class="app-form-group"><label class="app-label">Part Name</label><input class="app-input" id="p-name" placeholder="Brake Pad Set (Front)"></div>
+        <div class="app-form-group"><label class="app-label">SKU</label><input class="app-input" id="p-sku" placeholder="BRK-001"><div id="p-sku-error" style="display:none;color:var(--danger);font-size:12px;margin-top:4px"></div></div>
+      </div>
+      <div class="app-form-row">
+        <div class="app-form-group">
+          <label class="app-label">Category</label>
+          <select class="app-input" id="p-cat">
+            <option>Brakes</option><option>Engine</option><option>Filters</option><option>Electrical</option>
+            <option>Suspension</option><option>Exhaust</option><option>Transmission</option><option>Other</option>
+          </select>
+        </div>
+        <div class="app-form-group"><label class="app-label">Shelf Location</label><input class="app-input" id="p-loc" placeholder="Shelf A1"></div>
+      </div>
+      <div class="app-form-row-3">
+        <div class="app-form-group"><label class="app-label">Quantity in Stock</label><input class="app-input" type="number" id="p-qty" min="0" placeholder="0"></div>
+        <div class="app-form-group"><label class="app-label">Reorder Threshold</label><input class="app-input" type="number" id="p-thresh" min="0" placeholder="5"></div>
+        <div class="app-form-group"><label class="app-label">Unit Cost ($)</label><input class="app-input" type="number" id="p-cost" min="0" step="0.01" placeholder="0.00"></div>
+      </div>
+      <div class="app-form-group">
+        <label class="app-label">Supplier</label>
+        <select class="app-input" id="p-supp"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('partModal')">Cancel</button>
+      <button class="app-btn app-btn-primary" onclick="savePart()">Save Part</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADJUST STOCK MODAL -->
+<div class="modal-backdrop" id="adjustModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title" id="adjTitle">ADJUST STOCK</span>
+      <button class="modal-close" onclick="Modal.close('adjustModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="adjInfo" style="font-size:13px;color:var(--app-muted);margin-bottom:16px;line-height:1.7"></div>
+      <div class="app-form-row">
+        <div class="app-form-group">
+          <label class="app-label">Adjustment Type</label>
+          <select class="app-input" id="adj-type">
+            <option value="add">Add Stock (received delivery)</option>
+            <option value="remove">Remove Stock (manual adjustment)</option>
+            <option value="set">Set Exact Quantity</option>
+          </select>
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Quantity</label>
+          <input class="app-input" type="number" id="adj-qty" min="0" placeholder="0">
+        </div>
+      </div>
+      <div class="app-form-group"><label class="app-label">Reason</label><input class="app-input" id="adj-reason" placeholder="e.g. PO-301 delivery, count correction…"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('adjustModal')">Cancel</button>
+      <button class="app-btn app-btn-primary" onclick="doAdjust()">Apply Adjustment</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/theme.js"></script>
+<script src="../js/main.js"></script>
+<script src="../js/supabase.js"></script>
+<script src="../js/rbac.js"></script>
+<script>
+let invData      = [];
+let _activeCat   = '';
+let _activeSupp  = '';
+
+/* ── INIT ── */
+async function initPage() {
+  const _user = await RBAC.guardPage('inventory');
+  if (!_user) return;
+  await RBAC.initSidebar('inventory');
+  await loadInventory();
+
+  Realtime.subscribe('inventory', {
+    onInsert: () => loadInventory(),
+    onUpdate: () => loadInventory(),
+    onDelete: () => loadInventory(),
+  });
+}
+
+async function loadInventory() {
+  try {
+    invData = await GS.getInventory();
+    renderStats();
+    renderCatPills();
+    renderSuppFilter();
+    renderCatalog();
+    renderLowStock();
+    renderTableView();
+  } catch (err) {
+    Toast.show('Failed to load inventory', 'error');
+  }
+}
+
+/* ── PANE SWITCHER ── */
+function switchPane(btn) {
+  document.querySelectorAll('.app-sub-link').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.view-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(btn.dataset.pane).classList.add('active');
+}
+
+/* ── STAT CARDS ── */
+function renderStats() {
+  const total    = invData.length;
+  const lowStock = invData.filter(p => p.qty > 0 && p.qty <= p.threshold).length;
+  const outStock = invData.filter(p => p.qty === 0).length;
+  const inStock  = total - lowStock - outStock;
+
+  // Update low stock badge on tab
+  const badge = document.getElementById('lowBadge');
+  const alertCount = lowStock + outStock;
+  badge.textContent = alertCount > 0 ? alertCount : '';
+  badge.style.display = alertCount > 0 ? 'inline' : 'none';
+
+  document.getElementById('invStats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Total Parts</div><div class="stat-value">${total}</div></div>
+    <div class="stat-card" style="--accent:var(--success)"><div class="stat-label">In Stock</div><div class="stat-value" style="color:var(--success)">${inStock}</div></div>
+    <div class="stat-card" style="--accent:var(--amber)"><div class="stat-label">Low Stock</div><div class="stat-value" style="color:var(--amber)">${lowStock}</div></div>
+    <div class="stat-card" style="--accent:var(--danger)"><div class="stat-label">Out of Stock</div><div class="stat-value" style="color:var(--danger)">${outStock}</div></div>
+  `;
+}
+
+/* ── CATEGORY PILLS ── */
+function renderCatPills() {
+  const cats = ['All', ...new Set(invData.map(p => p.category).filter(Boolean).sort())];
+  document.getElementById('catPills').innerHTML = cats.map(cat => `
+    <button class="cat-pill ${(_activeCat === '' && cat === 'All') || _activeCat === cat ? 'active' : ''}"
+      onclick="setCat('${cat}')">${cat}</button>
+  `).join('');
+}
+
+function setCat(cat) {
+  _activeCat = cat === 'All' ? '' : cat;
+  renderCatPills();
+  renderCatalog();
+}
+
+/* ── SUPPLIER FILTER (table view) ── */
+function renderSuppFilter() {
+  const sel = document.getElementById('tblSuppFilter');
+  if (!sel) return;
+  const current = sel.value;
+  const supps = [...new Set(invData.map(p => p.supplier_name).filter(Boolean).sort())];
+  sel.innerHTML = '<option value="">All Suppliers</option>' +
+    supps.map(s => `<option value="${s}" ${current === s ? 'selected' : ''}>${s}</option>`).join('');
+
+  // Also populate category filter in table view
+  const catSel = document.getElementById('tblCatFilter');
+  if (catSel) {
+    const currentCat = catSel.value;
+    const cats = [...new Set(invData.map(p => p.category).filter(Boolean).sort())];
+    catSel.innerHTML = '<option value="">All Categories</option>' +
+      cats.map(c => `<option value="${c}" ${currentCat === c ? 'selected' : ''}>${c}</option>`).join('');
+  }
+}
+
+/* ── CATALOG VIEW (card grid) ── */
+function renderCatalog() {
+  const q = (document.getElementById('invSearch')?.value || '').toLowerCase();
+
+  const filtered = invData.filter(p => {
+    const matchQ   = !q || p.name.toLowerCase().includes(q) || (p.sku||'').toLowerCase().includes(q) || (p.supplier_name||'').toLowerCase().includes(q);
+    const matchCat = !_activeCat || p.category === _activeCat;
+    return matchQ && matchCat;
+  });
+
+  if (!filtered.length) {
+    document.getElementById('invGrid').innerHTML = `
+      <div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-icon">📦</div>
+        <div class="empty-title">No Parts Found</div>
+        <div class="empty-body">Try a different search or category filter.</div>
+      </div>`;
+    return;
+  }
+
+  document.getElementById('invGrid').innerHTML = filtered.map(p => {
+    const isLow  = p.qty > 0 && p.qty <= p.threshold;
+    const isOut  = p.qty === 0;
+    const cls    = isOut ? 'low' : isLow ? 'low' : 'ok';
+    const qtyCls = isOut || isLow ? 'low' : 'ok';
+    const pct    = p.threshold > 0 ? Math.min(100, Math.round((p.qty / (p.threshold * 3)) * 100)) : 100;
+    const barCol = isOut ? 'var(--danger)' : isLow ? 'var(--amber)' : 'var(--success)';
+    const stockLabel = isOut ? '🔴 Out of Stock' : isLow ? '🟡 Low Stock' : '🟢 In Stock';
+
+    return `
+      <div class="inv-card ${cls}">
+        <div class="inv-card-sku">${p.sku || '—'}</div>
+        <div class="inv-card-name">${p.name}</div>
+        <div class="inv-card-cat">${p.category || '—'} ${p.supplier_name ? '· ' + p.supplier_name : ''}</div>
+        <div class="inv-card-qty-row">
+          <span class="inv-card-qty ${qtyCls}">${p.qty}</span>
+          <span class="inv-card-thresh">in stock (min: ${p.threshold})</span>
+        </div>
+        <div class="stock-bar" style="margin-bottom:10px">
+          <div class="stock-fill" style="width:${pct}%;background:${barCol}"></div>
+        </div>
+        <div class="inv-card-footer">
+          <span class="inv-card-cost">₦${Number(p.cost||0).toLocaleString('en-NG',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+          <span style="font-size:12px">${stockLabel}</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="app-btn app-btn-ghost app-btn-sm" style="flex:1" onclick="openEditPart('${p.id}')">✏ Edit</button>
+          <button class="app-btn app-btn-ghost app-btn-sm" style="flex:1" onclick="openAdjustModal('${p.id}', ${p.qty}, '${p.name.replace(/'/g,"\'")}')">📦 Adjust</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* ── LOW STOCK VIEW ── */
+function renderLowStock() {
+  const low = invData.filter(p => p.qty <= p.threshold);
+  const tbody = document.getElementById('lowStockBody');
+  if (!tbody) return;
+
+  if (!low.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--success)">
+      ✅ All parts are adequately stocked
+    </td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = low.map(p => {
+    const deficit  = Math.max(0, p.threshold - p.qty);
+    const estCost  = deficit * (p.cost || 0);
+    const isOut    = p.qty === 0;
+    return `<tr style="${isOut ? 'background:rgba(181,43,30,0.06)' : 'background:rgba(232,160,32,0.04)'}">
+      <td><strong>${p.name}</strong></td>
+      <td style="font-family:var(--ff-mono);font-size:13px">${p.sku || '—'}</td>
+      <td style="font-family:var(--ff-mono);font-weight:700;color:${isOut ? 'var(--danger)' : 'var(--amber)'};font-size:16px">${p.qty}</td>
+      <td style="font-family:var(--ff-mono)">${p.threshold}</td>
+      <td style="font-family:var(--ff-mono);color:var(--danger);font-weight:700">${deficit > 0 ? '+' + deficit + ' needed' : '—'}</td>
+      <td>${p.supplier_name || '<span style="color:var(--app-muted)">No supplier</span>'}</td>
+      <td style="font-family:var(--ff-mono);color:var(--amber)">${estCost > 0 ? '₦' + estCost.toLocaleString('en-NG',{minimumFractionDigits:2}) : '—'}</td>
+      <td>
+        <button class="app-btn app-btn-sm app-btn-ghost" onclick="openAdjustModal('${p.id}',${p.qty},'${p.name.replace(/'/g,"\'")}')">Adjust Stock</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── TABLE VIEW ── */
+function renderTableView() {
+  const tbody = document.getElementById('invTableBody');
+  if (!tbody) return;
+  const q        = (document.getElementById('tblSearch')?.value || '').toLowerCase();
+  const cat      = document.getElementById('tblCatFilter')?.value || '';
+  const supp     = document.getElementById('tblSuppFilter')?.value || '';
+  const stockF   = document.getElementById('tblStockFilter')?.value || '';
+
+  const filtered = invData.filter(p => {
+    const matchQ    = !q || p.name.toLowerCase().includes(q) || (p.sku||'').toLowerCase().includes(q);
+    const matchCat  = !cat  || p.category === cat;
+    const matchSupp = !supp || p.supplier_name === supp;
+    const matchStk  = !stockF ||
+      (stockF === 'low' && p.qty <= p.threshold) ||
+      (stockF === 'ok'  && p.qty > p.threshold);
+    return matchQ && matchCat && matchSupp && matchStk;
+  });
+
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--app-muted)">No parts match your filters</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(p => {
+    const isLow = p.qty > 0 && p.qty <= p.threshold;
+    const isOut = p.qty === 0;
+    const rowStyle = isOut ? 'background:rgba(181,43,30,0.05)' : isLow ? 'background:rgba(232,160,32,0.04)' : '';
+    const qtyStyle = isOut ? 'color:var(--danger);font-weight:700' : isLow ? 'color:var(--amber);font-weight:700' : 'font-weight:600';
+    const statusBadge = isOut
+      ? '<span class="badge badge-outofstock">Out of Stock</span>'
+      : isLow
+      ? '<span class="badge badge-lowstock">Low Stock</span>'
+      : '<span class="badge badge-instock">In Stock</span>';
+
+    return `<tr style="${rowStyle}">
+      <td style="font-family:var(--ff-mono);font-size:13px">${p.sku || '—'}</td>
+      <td><strong>${p.name}</strong></td>
+      <td>${p.category || '—'}</td>
+      <td style="${qtyStyle};font-family:var(--ff-mono);font-size:16px;text-align:center">${p.qty}</td>
+      <td style="font-family:var(--ff-mono);text-align:center">${p.threshold}</td>
+      <td>${statusBadge}</td>
+      <td style="font-family:var(--ff-mono);color:var(--amber)">₦${Number(p.cost||0).toLocaleString('en-NG',{minimumFractionDigits:2})}</td>
+      <td>${p.supplier_name || '<span style="color:var(--app-muted)">—</span>'}</td>
+      <td style="font-family:var(--ff-mono);font-size:13px;color:var(--app-muted)">${p.location || '—'}</td>
+      <td>
+        <button class="app-btn app-btn-ghost app-btn-sm" onclick="openEditPart('${p.id}')">✏ Edit</button>
+        <button class="app-btn app-btn-ghost app-btn-sm" onclick="openAdjustModal('${p.id}',${p.qty},'${p.name.replace(/'/g,"\'")}')">📦</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── ADJUST STOCK MODAL ── */
+function openAdjustModal(id, currentQty, name) {
+  document.getElementById('adjTitle').textContent  = 'ADJUST STOCK — ' + name.toUpperCase();
+  document.getElementById('adjInfo').innerHTML =
+    `Part: <strong>${name}</strong><br>Current Stock: <strong style="font-size:18px">${currentQty} units</strong>`;
+  document.getElementById('adj-qty').value    = '';
+  document.getElementById('adj-reason').value = '';
+  document.getElementById('adj-type').value   = 'add';
+  document.getElementById('adjustModal').dataset.partId = id;
+  document.getElementById('adjustModal').dataset.currentQty = currentQty;
+  Modal.open('adjustModal');
+}
+
+async function doAdjust() {
+  const id         = document.getElementById('adjustModal').dataset.partId;
+  const currentQty = parseInt(document.getElementById('adjustModal').dataset.currentQty) || 0;
+  const type       = document.getElementById('adj-type').value;
+  const qty        = parseInt(document.getElementById('adj-qty').value);
+  const reason     = document.getElementById('adj-reason').value.trim();
+
+  if (isNaN(qty) || qty <= 0) { Toast.show('Enter a valid quantity', 'error'); return; }
+
+  let newQty;
+  if (type === 'add')    newQty = currentQty + qty;
+  if (type === 'remove') newQty = Math.max(0, currentQty - qty);
+  if (type === 'set')    newQty = qty;
+
+  const btn = document.querySelector('#adjustModal .app-btn-primary');
+  btn.textContent = 'Saving…'; btn.disabled = true;
+
+  try {
+    await GS.updateInventoryItem(id, { qty: newQty });
+    Toast.show(`Stock updated to ${newQty} units`, 'success');
+    Modal.close('adjustModal');
+    await loadInventory();
+  } catch(err) {
+    Toast.show(err.message || 'Failed to adjust stock', 'error');
+  } finally {
+    btn.textContent = 'Apply Adjustment'; btn.disabled = false;
+  }
+}
+
+/* ── PART MODAL ── */
+let _editingPartId = null;
+
+async function openPartModal() {
+  _editingPartId = null;
+  document.getElementById('partModalTitle').textContent = 'ADD PART';
+  ['p-name','p-sku','p-loc','p-qty','p-thresh','p-cost'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('p-cat').value = 'Brakes';
+  document.getElementById('p-sku-error').style.display = 'none';
+  await populateSupplierDropdown();
+  Modal.open('partModal');
+  document.getElementById('p-name').focus();
+}
+
+async function openEditPart(id) {
+  _editingPartId = id;
+  document.getElementById('partModalTitle').textContent = 'EDIT PART';
+  document.getElementById('p-sku-error').style.display = 'none';
+  await populateSupplierDropdown();
+  const part = invData.find(p => p.id === id);
+  if (!part) return;
+  document.getElementById('p-name').value   = part.name || '';
+  document.getElementById('p-sku').value    = part.sku || '';
+  document.getElementById('p-cat').value    = part.category || 'Other';
+  document.getElementById('p-loc').value    = part.location || '';
+  document.getElementById('p-qty').value    = part.qty ?? '';
+  document.getElementById('p-thresh').value = part.threshold ?? '';
+  document.getElementById('p-cost').value   = part.cost ?? '';
+  document.getElementById('p-supp').value   = part.supplier_id || '';
+  Modal.open('partModal');
+}
+
+async function populateSupplierDropdown() {
+  try {
+    const suppliers = await GS.getSuppliers();
+    document.getElementById('p-supp').innerHTML =
+      '<option value="">— No supplier —</option>' +
+      suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+  } catch(e) {}
+}
+
+async function savePart() {
+  const name      = document.getElementById('p-name').value.trim();
+  const sku       = document.getElementById('p-sku').value.trim().toUpperCase();
+  const category  = document.getElementById('p-cat').value;
+  const location  = document.getElementById('p-loc').value.trim();
+  const qty       = parseInt(document.getElementById('p-qty').value) || 0;
+  const threshold = parseInt(document.getElementById('p-thresh').value) || 0;
+  const cost      = parseFloat(document.getElementById('p-cost').value) || 0;
+  const supplierId = document.getElementById('p-supp').value || null;
+  const skuErr    = document.getElementById('p-sku-error');
+
+  if (!name) { Toast.show('Part name is required', 'error'); document.getElementById('p-name').focus(); return; }
+  if (!sku)  { Toast.show('SKU is required', 'error'); document.getElementById('p-sku').focus(); return; }
+
+  const duplicate = invData.find(p => (p.sku||'').toUpperCase() === sku && p.id !== _editingPartId);
+  if (duplicate) {
+    skuErr.textContent = `SKU "${sku}" already used by "${duplicate.name}"`;
+    skuErr.style.display = 'block';
+    document.getElementById('p-sku').focus();
+    return;
+  }
+  skuErr.style.display = 'none';
+
+  const payload = { name, sku, category, location, qty, threshold, cost, supplier_id: supplierId };
+  const btn = document.querySelector('#partModal .app-btn-primary');
+  btn.textContent = 'Saving…'; btn.disabled = true;
+
+  try {
+    if (_editingPartId) {
+      await GS.updateInventoryItem(_editingPartId, payload);
+      Toast.show('Part updated', 'success');
+    } else {
+      await GS.createInventoryItem(payload);
+      Toast.show(`"${name}" added to inventory`, 'success');
+    }
+    Modal.close('partModal');
+    await loadInventory();
+  } catch(err) {
+    Toast.show(err.message || 'Failed to save part', 'error');
+  } finally {
+    btn.textContent = 'Save Part'; btn.disabled = false;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initPage);
+</script>
+</body>
+</html>

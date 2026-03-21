@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reports — GearShift</title>
+<link rel="stylesheet" href="../css/main.css">
+<link rel="stylesheet" href="../css/app.css">
+<style>
+.report-card { background:var(--app-surface); border:1px solid var(--app-border); border-radius:var(--r-sm); padding:28px; margin-bottom:var(--space-4); }
+.report-card-title { font-family:var(--ff-display); font-size:18px; letter-spacing:1px; color:var(--app-text); margin-bottom:4px; }
+.report-card-sub { font-size:12px; color:var(--app-muted); margin-bottom:20px; }
+.kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:var(--space-5); }
+.kpi-box { background:var(--app-surface); border:1px solid var(--app-border); border-radius:var(--r-sm); padding:20px 18px; }
+.kpi-label { font-family:var(--ff-mono); font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--app-muted); margin-bottom:8px; }
+.kpi-value { font-family:var(--ff-display); font-size:38px; line-height:1; color:var(--app-text); }
+.kpi-delta { font-size:12px; margin-top:6px; }
+.kpi-delta.up   { color:var(--success); }
+.kpi-delta.down { color:var(--danger); }
+.chart-legend { display:flex; gap:20px; flex-wrap:wrap; margin-top:14px; }
+.legend-item { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--app-muted); }
+.legend-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.export-bar { display:flex; gap:10px; justify-content:flex-end; margin-bottom:var(--space-4); flex-wrap:wrap; }
+.turnover-row { display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid rgba(48,54,61,.4); }
+.turnover-row:last-child { border-bottom:none; }
+.turnover-name { flex:1; font-size:13px; color:var(--app-text); }
+.turnover-bar-wrap { width:160px; height:6px; background:var(--app-surface2); border-radius:3px; overflow:hidden; }
+.turnover-fill { height:100%; border-radius:3px; background:var(--rust); }
+.supplier-row { display:grid; grid-template-columns:1fr 100px 100px 120px 80px; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid rgba(48,54,61,.4); font-size:13px; }
+.supplier-row:last-child { border-bottom:none; }
+.supplier-row-head { font-family:var(--ff-mono); font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--app-muted); }
+
+/* ── INVENTORY TURNOVER REPORT ── */
+.turnover-report-header {
+  display:flex; align-items:center; justify-content:space-between;
+  flex-wrap:wrap; gap:12px; margin-bottom:var(--space-5);
+}
+.date-range-bar {
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+}
+.date-range-bar label {
+  font-family:var(--ff-mono); font-size:10px; letter-spacing:1.5px;
+  text-transform:uppercase; color:var(--app-muted);
+}
+.turnover-table-row {
+  display:grid;
+  grid-template-columns: 2fr 80px 80px 90px 110px 110px 120px 100px;
+  gap:10px; align-items:center;
+  padding:11px 16px; border-bottom:1px solid rgba(48,54,61,.4);
+  font-size:13px; transition:background var(--t-fast);
+}
+.turnover-table-row:hover { background:var(--app-hover); }
+.turnover-table-row.slow-mover { border-left:3px solid var(--danger); background:rgba(181,43,30,.04); }
+.turnover-table-row.fast-mover { border-left:3px solid var(--success); }
+.turnover-table-head {
+  font-family:var(--ff-mono); font-size:9px; letter-spacing:2px;
+  text-transform:uppercase; color:var(--app-muted);
+}
+.rate-badge {
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:3px 10px; border-radius:20px; font-family:var(--ff-mono);
+  font-size:10px; font-weight:600; letter-spacing:.5px;
+}
+.rate-fast   { background:rgba(31,122,74,.2);  color:#6ee7b7; }
+.rate-medium { background:rgba(232,160,32,.2); color:#fcd34d; }
+.rate-slow   { background:rgba(181,43,30,.2);  color:#fca5a5; }
+.rate-dead   { background:rgba(100,100,100,.2);color:#9ca3af; }
+.inv-summary-grid {
+  display:grid; grid-template-columns:repeat(5,1fr); gap:12px;
+  margin-bottom:var(--space-5);
+}
+.inv-summary-card {
+  background:var(--app-surface); border:1px solid var(--app-border);
+  border-radius:var(--r-sm); padding:16px 18px;
+}
+.inv-summary-card::before { content:''; display:block; height:2px; margin-bottom:12px; border-radius:1px; }
+.inv-summary-card.rust::before  { background:var(--rust); }
+.inv-summary-card.amber::before { background:var(--amber); }
+.inv-summary-card.green::before { background:var(--success); }
+.inv-summary-card.blue::before  { background:var(--blue); }
+.inv-summary-card.red::before   { background:var(--danger); }
+.inv-summary-label { font-family:var(--ff-mono); font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--app-muted); margin-bottom:6px; }
+.inv-summary-value { font-family:var(--ff-display); font-size:32px; line-height:1; color:var(--app-text); }
+.inv-summary-sub { font-size:11px; color:var(--app-muted); margin-top:4px; }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="app-sidebar">
+    <div class="sidebar-logo"><span class="sidebar-logo-text">GEAR<span>SHIFT</span></span><a href="../index.html" class="sidebar-back">← Site</a></div>
+    <nav class="sidebar-nav"><!-- populated by RBAC.initSidebar --></nav>
+    <div class="sidebar-footer">
+      <div class="theme-toggle">
+        <span class="theme-toggle-label">☾ Dark</span>
+        <button class="theme-toggle-switch" onclick="Theme.toggle()" aria-label="Switch to light mode"></button>
+      </div>
+      
+      <div class="sidebar-user"><div class="user-avatar" id="userAvatar">?</div><div><div class="user-name" id="userName">Loading…</div><div class="user-role" id="userRole">—</div></div></div>
+      <button class="btn-logout" onclick="Auth.signOut().then(()=>window.location='dashboard.html')">Sign Out</button>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <div class="app-topbar">
+      <span class="topbar-title">REPORTS & ANALYTICS</span>
+      <div class="topbar-actions">
+        <select class="filter-select" id="periodFilter" onchange="renderAll()">
+          <option value="week">This Week</option>
+          <option value="month" selected>This Month</option>
+          <option value="quarter">This Quarter</option>
+          <option value="year">This Year</option>
+        </select>
+      </div>
+    </div>
+    <div class="app-sub-nav">
+      <button class="app-sub-link active" data-pane="pane-revenue"   onclick="switchPane(this)">Revenue</button>
+      <button class="app-sub-link"        data-pane="pane-inventory" onclick="switchPane(this)">Inventory</button>
+      <button class="app-sub-link"        data-pane="pane-suppliers" onclick="switchPane(this)">Suppliers</button>
+      <button class="app-sub-link"        data-pane="pane-ops"       onclick="switchPane(this)">Operations</button>
+    </div>
+
+    <div class="app-content">
+
+      <!-- REVENUE -->
+      <div class="view-pane active" id="pane-revenue">
+        <div class="export-bar">
+          <button class="app-btn app-btn-ghost app-btn-sm" onclick="Toast.show('Exported as CSV','success')">Export CSV</button>
+          <button class="app-btn app-btn-ghost app-btn-sm" onclick="Toast.show('Report PDF downloaded','success')">Export PDF</button>
+        </div>
+        <div class="kpi-row" id="revenueKPIs"></div>
+        <div class="app-grid-2">
+          <div class="report-card">
+            <div class="report-card-title">REVENUE BY MONTH</div>
+            <div class="report-card-sub">Paid invoices — last 7 months</div>
+            <div class="bar-chart" id="revMonthChart" style="height:180px"></div>
+            <div style="display:flex;gap:0" id="revMonthX"></div>
+          </div>
+          <div class="report-card">
+            <div class="report-card-title">REVENUE BY DAY (THIS WEEK)</div>
+            <div class="report-card-sub">Mon – Sun, current week</div>
+            <div class="bar-chart" id="revWeekChart" style="height:180px"></div>
+            <div style="display:flex;gap:0" id="revWeekX"></div>
+          </div>
+        </div>
+        <div class="report-card">
+          <div class="report-card-title">INVOICE BREAKDOWN</div>
+          <div class="report-card-sub">Status distribution of all invoices</div>
+          <table class="data-table">
+            <thead><tr><th>Status</th><th>Count</th><th>Total Value</th><th>% of Invoiced</th></tr></thead>
+            <tbody id="invBreakBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- INVENTORY -->
+      <div class="view-pane" id="pane-inventory">
+
+        <!-- EXPORT + DATE RANGE -->
+        <div class="turnover-report-header">
+          <div class="date-range-bar">
+            <label>From</label>
+            <input class="app-input" type="date" id="inv-date-from" style="width:150px" onchange="renderInventory()">
+            <label>To</label>
+            <input class="app-input" type="date" id="inv-date-to" style="width:150px" onchange="renderInventory()">
+            <button class="app-btn app-btn-ghost app-btn-sm" onclick="resetInvDates()">Reset</button>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="app-btn app-btn-ghost app-btn-sm" onclick="setInvPreset(30)">30 Days</button>
+            <button class="app-btn app-btn-ghost app-btn-sm" onclick="setInvPreset(90)">90 Days</button>
+            <button class="app-btn app-btn-ghost app-btn-sm" onclick="setInvPreset(180)">6 Months</button>
+            <button class="app-btn app-btn-ghost app-btn-sm" onclick="exportTurnoverCSV()">Export CSV</button>
+          </div>
+        </div>
+
+        <!-- SUMMARY CARDS -->
+        <div class="inv-summary-grid" id="invKPIs"></div>
+
+        <!-- STOCK + VALUE CHARTS -->
+        <div class="app-grid-2">
+          <div class="report-card">
+            <div class="report-card-title">STOCK LEVELS BY CATEGORY</div>
+            <div class="report-card-sub">Current quantity by part category</div>
+            <div id="catStockChart" style="display:flex;flex-direction:column;gap:12px;margin-top:8px;"></div>
+          </div>
+          <div class="report-card">
+            <div class="report-card-title">INVENTORY VALUE BY CATEGORY</div>
+            <div class="report-card-sub">Total cost value (qty × unit cost)</div>
+            <div id="catValueChart" style="display:flex;flex-direction:column;gap:10px;margin-top:8px;"></div>
+          </div>
+        </div>
+
+        <!-- TURNOVER TABLE -->
+        <div class="report-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
+            <div>
+              <div class="report-card-title">PARTS USAGE & TURNOVER RATE</div>
+              <div class="report-card-sub" id="turnoverSub">Usage frequency and turnover rate within selected date range</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <select class="filter-select" id="turnoverFilter" onchange="renderInventory()">
+                <option value="all">All Parts</option>
+                <option value="fast">Fast Movers</option>
+                <option value="medium">Medium Movers</option>
+                <option value="slow">Slow Movers</option>
+                <option value="dead">No Movement</option>
+              </select>
+              <input class="search-box" id="turnoverSearch" placeholder="Search part…" style="width:160px" oninput="renderInventory()">
+            </div>
+          </div>
+
+          <!-- TABLE HEADER -->
+          <div class="turnover-table-row turnover-table-head" style="border-left:3px solid transparent;padding-top:6px;padding-bottom:6px;">
+            <span>Part Name</span>
+            <span>SKU</span>
+            <span style="text-align:right">In Stock</span>
+            <span style="text-align:right">Times Used</span>
+            <span style="text-align:right">Qty Used</span>
+            <span style="text-align:right">Stock Value</span>
+            <span style="text-align:right">Turnover Rate</span>
+            <span style="text-align:center">Rating</span>
+          </div>
+
+          <div id="turnoverList"></div>
+          <div id="turnoverEmpty" style="display:none;text-align:center;padding:32px;color:var(--app-muted);font-size:13px">
+            No parts match this filter.
+          </div>
+        </div>
+
+      </div>
+
+      <!-- SUPPLIERS -->
+      <div class="view-pane" id="pane-suppliers">
+        <div class="export-bar">
+          <button class="app-btn app-btn-ghost app-btn-sm" onclick="Toast.show('Exported as CSV','success')">Export CSV</button>
+        </div>
+        <div class="kpi-row" id="suppKPIs"></div>
+        <div class="report-card">
+          <div class="report-card-title">SUPPLIER PERFORMANCE</div>
+          <div class="report-card-sub">On-time delivery rate, PO count, average lead time, total spend</div>
+          <div style="display:grid;grid-template-columns:1fr 100px 100px 100px 100px 100px;gap:10px;padding:12px 0;border-bottom:2px solid var(--app-border);">
+            <span style="font-family:var(--ff-mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--app-muted)">Supplier</span>
+            <span style="font-family:var(--ff-mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--app-muted);text-align:right">POs</span>
+            <span style="font-family:var(--ff-mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--app-muted);text-align:right">On-Time</span>
+            <span style="font-family:var(--ff-mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--app-muted);text-align:right">Lead Time</span>
+            <span style="font-family:var(--ff-mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--app-muted);text-align:right">Rating</span>
+            <span style="font-family:var(--ff-mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--app-muted);text-align:right">Spend</span>
+          </div>
+          <div id="suppPerfList"></div>
+        </div>
+        <div class="report-card">
+          <div class="report-card-title">SPEND BY SUPPLIER</div>
+          <div class="report-card-sub">Total purchase order value per supplier</div>
+          <div id="suppSpendChart" style="display:flex;flex-direction:column;gap:12px;margin-top:8px;"></div>
+        </div>
+      </div>
+
+      <!-- OPERATIONS -->
+      <div class="view-pane" id="pane-ops">
+        <div class="export-bar">
+          <button class="app-btn app-btn-ghost app-btn-sm" onclick="Toast.show('Exported as CSV','success')">Export CSV</button>
+        </div>
+        <div class="kpi-row" id="opsKPIs"></div>
+        <div class="app-grid-2">
+          <div class="report-card">
+            <div class="report-card-title">WORK ORDERS BY STATUS</div>
+            <div class="report-card-sub">Current distribution across all jobs</div>
+            <div id="woStatusChart" style="display:flex;flex-direction:column;gap:10px;margin-top:8px;"></div>
+          </div>
+          <div class="report-card">
+            <div class="report-card-title">JOBS BY MECHANIC</div>
+            <div class="report-card-sub">Total work orders assigned per technician</div>
+            <div id="mechChart" style="display:flex;flex-direction:column;gap:10px;margin-top:8px;"></div>
+          </div>
+        </div>
+        <div class="report-card">
+          <div class="report-card-title">APPOINTMENT STATS</div>
+          <div class="report-card-sub">Confirmation rate and no-show tracking</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:8px;" id="apptStats"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/theme.js"></script>
+<script src="../js/main.js"></script>
+<script src="../js/supabase.js"></script>
+<script src="../js/rbac.js"></script>
+<script>
+var _invoices = [], _inventory = [], _workOrders = [], _suppliers = [], _purchaseOrders = [], _appointments = [];
+var _revenueMonthly = [], _revenueWeekly = [], _woParts = [];
+
+function switchPane(btn) {
+  document.querySelectorAll('.view-pane').forEach(function(p){ p.classList.remove('active'); });
+  document.querySelectorAll('.app-sub-link').forEach(function(b){ b.classList.remove('active'); });
+  var pane = btn.dataset.pane;
+  var el = document.getElementById(pane);
+  if (el) el.classList.add('active');
+  btn.classList.add('active');
+}
+
+async function initPage() {
+  var user = await RBAC.guardPage('reports');
+  if (!user) return;
+  await RBAC.initSidebar('reports');
+  await loadData();
+  renderAll();
+}
+
+async function loadData() {
+  try {
+    var results = await Promise.all([
+      GS.getInvoices().catch(function(){ return []; }),
+      GS.getInventory().catch(function(){ return []; }),
+      GS.getWorkOrders().catch(function(){ return []; }),
+      GS.getSuppliers().catch(function(){ return []; }),
+      GS.getPurchaseOrders().catch(function(){ return []; }),
+      GS.getAppointments().catch(function(){ return []; }),
+      GS.getRevenueMonthly(7).catch(function(){ return []; }),
+      GS.getRevenueWeekly().catch(function(){ return []; }),
+      GS.getAllWorkOrderParts().catch(function(){ return []; }),
+    ]);
+    _invoices = results[0]; _inventory = results[1]; _workOrders = results[2];
+    _suppliers = results[3]; _purchaseOrders = results[4]; _appointments = results[5];
+    _revenueMonthly = results[6]; _revenueWeekly = results[7]; _woParts = results[8];
+  } catch(e) { console.warn('Report data load error:', e); }
+}
+
+function renderAll() {
+  renderRevenue();
+  renderInventory();
+  renderSuppliers();
+  renderOps();
+}
+
+/* REVENUE */
+function renderRevenue() {
+  var paid = _invoices.filter(function(i){ return i.status === 'Paid'; });
+  var totalRev = paid.reduce(function(s,i){ return s + (i.total || 0); }, 0);
+  var avgInv = _invoices.length ? _invoices.reduce(function(s,i){ return s + (i.total || 0); }, 0) / _invoices.length : 0;
+  var outstanding = _invoices.filter(function(i){ return i.status !== 'Paid'; }).reduce(function(s,i){ return s + (i.total || 0); }, 0);
+
+  document.getElementById('revenueKPIs').innerHTML =
+    '<div class="kpi-box"><div class="kpi-label">Total Revenue</div><div class="kpi-value">' + formatCurrency(totalRev) + '</div><div class="kpi-delta up">From paid invoices</div></div>' +
+    '<div class="kpi-box"><div class="kpi-label">Outstanding</div><div class="kpi-value">' + formatCurrency(outstanding) + '</div><div class="kpi-delta ' + (outstanding > 0 ? 'down' : '') + '">Unpaid invoices</div></div>' +
+    '<div class="kpi-box"><div class="kpi-label">Avg Invoice</div><div class="kpi-value">' + formatCurrency(avgInv) + '</div><div class="kpi-delta">Per invoice</div></div>' +
+    '<div class="kpi-box"><div class="kpi-label">Total Invoiced</div><div class="kpi-value">' + _invoices.length + '</div><div class="kpi-delta">All time</div></div>';
+
+  var maxM = Math.max.apply(null, _revenueMonthly.map(function(d){ return d.value; }).concat([1]));
+  document.getElementById('revMonthChart').innerHTML = _revenueMonthly.length
+    ? _revenueMonthly.map(function(d){
+        return '<div class="bar-col"><div class="bar" style="height:' + ((d.value/maxM)*100) + '%;background:var(--rust)"><div class="bar-tooltip">' + formatCurrency(d.value) + '</div></div></div>';
+      }).join('')
+    : '<div style="color:var(--app-muted);font-size:12px;padding:20px">No data yet</div>';
+  document.getElementById('revMonthX').innerHTML = _revenueMonthly.map(function(d){
+    return '<div style="flex:1;text-align:center;font-family:var(--ff-mono);font-size:9px;color:var(--app-muted)">' + d.label + '</div>';
+  }).join('');
+
+  var maxW = Math.max.apply(null, _revenueWeekly.map(function(d){ return d.value; }).concat([1]));
+  document.getElementById('revWeekChart').innerHTML = _revenueWeekly.length
+    ? _revenueWeekly.map(function(d){
+        return '<div class="bar-col"><div class="bar" style="height:' + ((d.value/maxW)*100) + '%;background:var(--amber)"><div class="bar-tooltip">' + formatCurrency(d.value) + '</div></div></div>';
+      }).join('')
+    : '<div style="color:var(--app-muted);font-size:12px;padding:20px">No data yet</div>';
+  document.getElementById('revWeekX').innerHTML = _revenueWeekly.map(function(d){
+    return '<div style="flex:1;text-align:center;font-family:var(--ff-mono);font-size:9px;color:var(--app-muted)">' + d.label + '</div>';
+  }).join('');
+
+  var totalVal = _invoices.reduce(function(s,i){ return s + (i.total || 0); }, 0);
+  var statuses = ['Paid','Unpaid','Partial','Overdue'];
+  document.getElementById('invBreakBody').innerHTML = statuses.map(function(st){
+    var group = _invoices.filter(function(i){ return i.status === st; });
+    var val = group.reduce(function(s,i){ return s + (i.total || 0); }, 0);
+    var pct = totalVal > 0 ? ((val / totalVal) * 100).toFixed(1) : '0.0';
+    return '<tr><td>' + makeBadge(st) + '</td><td class="td-mono">' + group.length + '</td><td class="td-mono">' + formatCurrency(val) + '</td><td class="td-mono">' + pct + '%</td></tr>';
+  }).join('') || '<tr><td colspan="4" class="td-muted" style="text-align:center;padding:20px">No invoices yet</td></tr>';
+}
+
+/* INVENTORY DATE RANGE HELPERS */
+function setInvPreset(days) {
+  var to = new Date();
+  var from = new Date();
+  from.setDate(from.getDate() - days);
+  document.getElementById('inv-date-from').value = from.toISOString().substring(0, 10);
+  document.getElementById('inv-date-to').value = to.toISOString().substring(0, 10);
+  renderInventory();
+}
+
+function resetInvDates() {
+  document.getElementById('inv-date-from').value = '';
+  document.getElementById('inv-date-to').value = '';
+  renderInventory();
+}
+
+function getInvDateRange() {
+  var from = document.getElementById('inv-date-from').value || null;
+  var to = document.getElementById('inv-date-to').value || null;
+  return { from: from, to: to };
+}
+
+function getFilteredWOParts() {
+  var range = getInvDateRange();
+  if (!range.from && !range.to) return _woParts;
+  return _woParts.filter(function(p) {
+    var d = (p.wo_date || '').substring(0, 10);
+    if (range.from && d < range.from) return false;
+    if (range.to && d > range.to) return false;
+    return true;
+  });
+}
+
+function classifyTurnover(qtyUsed, currentQty) {
+  var avgStock = currentQty + qtyUsed;
+  if (avgStock === 0) return { rate: 0, label: 'Dead Stock', cls: 'rate-dead' };
+  var rate = qtyUsed / avgStock;
+  if (rate >= 0.6) return { rate: rate, label: 'Fast Mover', cls: 'rate-fast' };
+  if (rate >= 0.3) return { rate: rate, label: 'Medium Mover', cls: 'rate-medium' };
+  if (rate > 0)    return { rate: rate, label: 'Slow Mover', cls: 'rate-slow' };
+  return { rate: 0, label: 'Dead Stock', cls: 'rate-dead' };
+}
+
+function buildTurnoverRows() {
+  var parts = getFilteredWOParts();
+  var usageCount = {}, usageQty = {}, seenWOs = {};
+  parts.forEach(function(p) {
+    if (!p.part_id) return;
+    var key = p.part_id + '_' + p.work_order_id;
+    if (!seenWOs[key]) { seenWOs[key] = true; usageCount[p.part_id] = (usageCount[p.part_id] || 0) + 1; }
+    usageQty[p.part_id] = (usageQty[p.part_id] || 0) + (p.qty || 1);
+  });
+  return _inventory.map(function(part) {
+    var timesUsed = usageCount[part.id] || 0;
+    var qtyUsed = usageQty[part.id] || 0;
+    var turnover = classifyTurnover(qtyUsed, part.qty || 0);
+    return { part: part, timesUsed: timesUsed, qtyUsed: qtyUsed, turnover: turnover };
+  }).sort(function(a, b) { return b.qtyUsed - a.qtyUsed || b.timesUsed - a.timesUsed; });
+}
+
+function exportTurnoverCSV() {
+  var rows = buildTurnoverRows();
+  var header = 'Part Name,SKU,Category,In Stock,Times Used,Qty Used,Stock Value,Turnover Rate,Rating';
+  var lines = rows.map(function(r) {
+    var stockVal = ((r.part.qty || 0) * (r.part.cost || 0)).toFixed(2);
+    return '"' + r.part.name + '","' + (r.part.sku||'') + '","' + (r.part.category||'') + '",' +
+      (r.part.qty||0) + ',' + r.timesUsed + ',' + r.qtyUsed + ',' + stockVal + ',' +
+      (r.turnover.rate*100).toFixed(1) + '%,"' + r.turnover.label + '"';
+  });
+  var csv = [header].concat(lines).join('\n');
+  var blob = new Blob([csv], { type: 'text/csv' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'inventory-turnover.csv'; a.click();
+  URL.revokeObjectURL(url);
+  Toast.show('CSV downloaded', 'success');
+}
+
+/* INVENTORY */
+function renderInventory() {
+  var range = getInvDateRange();
+  var sub = document.getElementById('turnoverSub');
+  if (sub) {
+    sub.textContent = (range.from || range.to)
+      ? 'Usage from ' + (range.from || 'all time') + ' to ' + (range.to || 'today')
+      : 'All time -- use date filters above to narrow the range';
+  }
+
+  var totalVal = _inventory.reduce(function(s,p){ return s + (p.qty||0)*(p.cost||0); }, 0);
+  var low = _inventory.filter(function(p){ return (p.qty||0) <= (p.threshold||0); }).length;
+  var cats = new Set(_inventory.map(function(p){ return p.category; }).filter(Boolean)).size;
+  var rows = buildTurnoverRows();
+  var fastCount = rows.filter(function(r){ return r.turnover.label === 'Fast Mover'; }).length;
+  var slowCount = rows.filter(function(r){ return r.turnover.label === 'Slow Mover'; }).length;
+  var deadCount = rows.filter(function(r){ return r.turnover.label === 'Dead Stock'; }).length;
+  var totalUsed = rows.reduce(function(s,r){ return s + r.qtyUsed; }, 0);
+
+  document.getElementById('invKPIs').innerHTML =
+    '<div class="inv-summary-card rust"><div class="inv-summary-label">Total Parts</div><div class="inv-summary-value">' + _inventory.length + '</div><div class="inv-summary-sub">' + cats + ' categories</div></div>' +
+    '<div class="inv-summary-card amber"><div class="inv-summary-label">Inventory Value</div><div class="inv-summary-value" style="font-size:22px">' + formatCurrency(totalVal) + '</div><div class="inv-summary-sub">At cost price</div></div>' +
+    '<div class="inv-summary-card green"><div class="inv-summary-label">Fast Movers</div><div class="inv-summary-value">' + fastCount + '</div><div class="inv-summary-sub">High turnover parts</div></div>' +
+    '<div class="inv-summary-card red"><div class="inv-summary-label">Slow / Dead Stock</div><div class="inv-summary-value">' + (slowCount + deadCount) + '</div><div class="inv-summary-sub">' + deadCount + ' with zero usage</div></div>' +
+    '<div class="inv-summary-card blue"><div class="inv-summary-label">Total Qty Used</div><div class="inv-summary-value">' + totalUsed + '</div><div class="inv-summary-sub">In selected period</div></div>';
+
+  var catQty = {};
+  _inventory.forEach(function(p){ var k = p.category||'Uncategorised'; catQty[k] = (catQty[k]||0) + (p.qty||0); });
+  var maxQty = Math.max.apply(null, Object.values(catQty).concat([1]));
+  document.getElementById('catStockChart').innerHTML = Object.entries(catQty).sort(function(a,b){ return b[1]-a[1]; }).map(function(e){
+    return '<div class="turnover-row"><span class="turnover-name">' + e[0] + '</span>' +
+      '<div class="turnover-bar-wrap"><div class="turnover-fill" style="width:' + ((e[1]/maxQty)*100) + '%;background:var(--rust)"></div></div>' +
+      '<span class="td-mono" style="font-size:12px;color:var(--app-muted);min-width:40px;text-align:right">' + e[1] + '</span></div>';
+  }).join('') || '<div style="color:var(--app-muted);font-size:12px;padding:12px">No inventory data</div>';
+
+  var catVal = {};
+  _inventory.forEach(function(p){ var k = p.category||'Uncategorised'; catVal[k] = (catVal[k]||0) + (p.qty||0)*(p.cost||0); });
+  var maxVal = Math.max.apply(null, Object.values(catVal).concat([1]));
+  document.getElementById('catValueChart').innerHTML = Object.entries(catVal).sort(function(a,b){ return b[1]-a[1]; }).map(function(e){
+    return '<div class="turnover-row"><span class="turnover-name">' + e[0] + '</span>' +
+      '<div class="turnover-bar-wrap"><div class="turnover-fill" style="width:' + ((e[1]/maxVal)*100) + '%;background:var(--amber)"></div></div>' +
+      '<span class="td-mono" style="font-size:12px;color:var(--app-muted);min-width:70px;text-align:right">' + formatCurrency(e[1]) + '</span></div>';
+  }).join('') || '<div style="color:var(--app-muted);font-size:12px;padding:12px">No data</div>';
+
+  var filterVal = (document.getElementById('turnoverFilter') || {}).value || 'all';
+  var search = ((document.getElementById('turnoverSearch') || {}).value || '').toLowerCase().trim();
+  var filterMap = { fast:'Fast Mover', medium:'Medium Mover', slow:'Slow Mover', dead:'Dead Stock' };
+  var filtered = rows.slice();
+  if (filterVal !== 'all') filtered = filtered.filter(function(r){ return r.turnover.label === filterMap[filterVal]; });
+  if (search) filtered = filtered.filter(function(r){
+    return r.part.name.toLowerCase().indexOf(search) >= 0 ||
+           (r.part.sku||'').toLowerCase().indexOf(search) >= 0 ||
+           (r.part.category||'').toLowerCase().indexOf(search) >= 0;
+  });
+
+  var listEl = document.getElementById('turnoverList');
+  var emptyEl = document.getElementById('turnoverEmpty');
+  if (!filtered.length) {
+    listEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  listEl.innerHTML = filtered.map(function(r) {
+    var stockVal = (r.part.qty||0) * (r.part.cost||0);
+    var ratePct = (r.turnover.rate * 100).toFixed(1);
+    var isSlow = r.turnover.label === 'Slow Mover' || r.turnover.label === 'Dead Stock';
+    var isFast = r.turnover.label === 'Fast Mover';
+    var rowCls = isSlow ? 'slow-mover' : isFast ? 'fast-mover' : '';
+    var stockColor = (r.part.qty||0) <= (r.part.threshold||0) ? 'var(--danger)' : 'var(--app-text)';
+    var catSpan = r.part.category ? '<span style="font-size:10px;color:var(--app-muted);font-weight:400;margin-left:6px">' + r.part.category + '</span>' : '';
+    return '<div class="turnover-table-row ' + rowCls + '">' +
+      '<span style="font-weight:600;color:var(--app-text)">' + r.part.name + catSpan + '</span>' +
+      '<span class="td-mono" style="color:var(--app-muted);font-size:11px">' + (r.part.sku||'--') + '</span>' +
+      '<span class="td-mono" style="text-align:right;color:' + stockColor + '">' + (r.part.qty||0) + '</span>' +
+      '<span class="td-mono" style="text-align:right">' + r.timesUsed + '</span>' +
+      '<span class="td-mono" style="text-align:right;color:var(--amber)">' + r.qtyUsed + '</span>' +
+      '<span class="td-mono" style="text-align:right">' + formatCurrency(stockVal) + '</span>' +
+      '<span class="td-mono" style="text-align:right">' + (r.qtyUsed > 0 ? ratePct + '%' : '--') + '</span>' +
+      '<span style="text-align:center"><span class="rate-badge ' + r.turnover.cls + '">' + r.turnover.label + '</span></span>' +
+      '</div>';
+  }).join('');
+}
+
+/* SUPPLIERS */
+function renderSuppliers() {
+  var totalPOs = _purchaseOrders.length;
+  var totalSpend = _purchaseOrders.reduce(function(s,p){
+    return s + (p.purchase_order_items||[]).reduce(function(ss,i){ return ss + (i.qty||0)*(i.unit_cost||0); }, 0);
+  }, 0);
+
+  document.getElementById('suppKPIs').innerHTML =
+    '<div class="kpi-box"><div class="kpi-label">Suppliers</div><div class="kpi-value">' + _suppliers.length + '</div><div class="kpi-delta">Active</div></div>' +
+    '<div class="kpi-box"><div class="kpi-label">Total POs</div><div class="kpi-value">' + totalPOs + '</div><div class="kpi-delta">All time</div></div>' +
+    '<div class="kpi-box"><div class="kpi-label">Total Spend</div><div class="kpi-value">' + formatCurrency(totalSpend) + '</div><div class="kpi-delta">Across all POs</div></div>' +
+    '<div class="kpi-box"><div class="kpi-label">Avg per PO</div><div class="kpi-value">' + formatCurrency(totalPOs ? totalSpend/totalPOs : 0) + '</div><div class="kpi-delta">Per order</div></div>';
+
+  document.getElementById('suppPerfList').innerHTML = _suppliers.length
+    ? _suppliers.map(function(s) {
+        var pos = _purchaseOrders.filter(function(p){ return p.supplier_id === s.id; });
+        var spend = pos.reduce(function(acc,p){
+          return acc + (p.purchase_order_items||[]).reduce(function(ss,i){ return ss+(i.qty||0)*(i.unit_cost||0); }, 0);
+        }, 0);
+        return '<div style="display:grid;grid-template-columns:1fr 100px 100px 100px 100px 100px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--app-border);">' +
+          '<span style="font-size:13px;font-weight:600">' + s.name + '</span>' +
+          '<span class="td-mono" style="text-align:right">' + pos.length + '</span>' +
+          '<span class="td-mono" style="text-align:right;color:var(--success)">' + (s.on_time_rate != null ? s.on_time_rate : '--') + '%</span>' +
+          '<span class="td-mono" style="text-align:right">' + (s.lead_time_days != null ? s.lead_time_days : '--') + 'd</span>' +
+          '<span class="td-mono" style="text-align:right">' + (s.rating != null ? s.rating : '--') + '/5</span>' +
+          '<span class="td-mono" style="text-align:right">' + formatCurrency(spend) + '</span>' +
+          '</div>';
+      }).join('')
+    : '<div style="color:var(--app-muted);font-size:12px;padding:20px">No suppliers yet</div>';
+
+  var suppSpend = _suppliers.map(function(s) {
+    return { name: s.name, spend: _purchaseOrders.filter(function(p){ return p.supplier_id === s.id; })
+      .reduce(function(acc,p){ return acc + (p.purchase_order_items||[]).reduce(function(ss,i){ return ss+(i.qty||0)*(i.unit_cost||0); }, 0); }, 0) };
+  }).sort(function(a,b){ return b.spend - a.spend; });
+  var maxSpend = Math.max.apply(null, suppSpend.map(function(s){ return s.spend; }).concat([1]));
+  document.getElementById('suppSpendChart').innerHTML = suppSpend.length
+    ? suppSpend.map(function(s) {
+        return '<div class="turnover-row"><span class="turnover-name">' + s.name + '</span>' +
+          '<div class="turnover-bar-wrap" style="width:200px"><div class="turnover-fill" style="width:' + ((s.spend/maxSpend)*100) + '%;background:var(--blue)"></div></div>' +
+          '<span class="td-mono" style="font-size:12px;color:var(--app-muted);min-width:80px;text-align:right">' + formatCurrency(s.spend) + '</span></div>';
+      }).join('')
+    : '<div style="color:var(--app-muted);font-size:12px;padding:12px">No PO data yet</div>';
+}
+
+/* OPERATIONS */
+function renderOps() {
+  var statuses = ['Open','In Progress','Awaiting Parts','Completed','Cancelled'];
+  var statusColours = { 'Open':'var(--blue)', 'In Progress':'var(--amber)', 'Awaiting Parts':'#a78bfa', 'Completed':'var(--success)', 'Cancelled':'var(--danger)' };
+  var completedWOs = _workOrders.filter(function(w){ return w.status === 'Completed'; });
+  var avgLabor = completedWOs.length
+    ? (completedWOs.reduce(function(s,w){ return s + (w.labor_hours||0); }, 0) / completedWOs.length).toFixed(1) : 0;
+
+  document.getElementById('opsKPIs').innerHTML =
+    '<div class="kpi-box"><div class="kpi-label">Total Work Orders</div><div class="kpi-value">' + _workOrders.length + '</div><div class="kpi-delta">All time</div></div>' +
+    '<div class="kpi-box"><div class="kpi-label">Completed</div><div class="kpi-value">' + completedWOs.length + '</div><div class="kpi-delta up">Finished jobs</div></div>' +
+    '<div class="kpi-box"><div class="kpi-label">Avg Labor Hours</div><div class="kpi-value">' + avgLabor + '</div><div class="kpi-delta">Per completed job</div></div>' +
+    '<div class="kpi-box"><div class="kpi-label">Total Appointments</div><div class="kpi-value">' + _appointments.length + '</div><div class="kpi-delta">Booked</div></div>';
+
+  var maxWO = Math.max.apply(null, statuses.map(function(st){ return _workOrders.filter(function(w){ return w.status===st; }).length; }).concat([1]));
+  document.getElementById('woStatusChart').innerHTML = statuses.map(function(st) {
+    var cnt = _workOrders.filter(function(w){ return w.status === st; }).length;
+    return '<div class="turnover-row">' +
+      '<span class="turnover-name" style="color:' + statusColours[st] + '">' + st + '</span>' +
+      '<div class="turnover-bar-wrap"><div class="turnover-fill" style="width:' + ((cnt/maxWO)*100) + '%;background:' + statusColours[st] + '"></div></div>' +
+      '<span class="td-mono" style="font-size:12px;color:var(--app-muted);min-width:30px;text-align:right">' + cnt + '</span>' +
+      '</div>';
+  }).join('');
+
+  var mechMap = {};
+  _workOrders.forEach(function(w){ var n = w.mechanic_name||'Unassigned'; mechMap[n] = (mechMap[n]||0)+1; });
+  var sortedMechs = Object.entries(mechMap).sort(function(a,b){ return b[1]-a[1]; });
+  var maxMech = Math.max.apply(null, sortedMechs.map(function(e){ return e[1]; }).concat([1]));
+  document.getElementById('mechChart').innerHTML = sortedMechs.length
+    ? sortedMechs.map(function(e) {
+        return '<div class="turnover-row"><span class="turnover-name">' + e[0] + '</span>' +
+          '<div class="turnover-bar-wrap"><div class="turnover-fill" style="width:' + ((e[1]/maxMech)*100) + '%;background:var(--rust)"></div></div>' +
+          '<span class="td-mono" style="font-size:12px;color:var(--app-muted);min-width:30px;text-align:right">' + e[1] + '</span></div>';
+      }).join('')
+    : '<div style="color:var(--app-muted);font-size:12px;padding:12px">No work orders yet</div>';
+
+  var confirmed = _appointments.filter(function(a){ return a.status==='Confirmed'; }).length;
+  var noShow    = _appointments.filter(function(a){ return a.status==='No Show'; }).length;
+  var cancelled = _appointments.filter(function(a){ return a.status==='Cancelled'; }).length;
+  var total = _appointments.length || 1;
+  document.getElementById('apptStats').innerHTML =
+    '<div class="kpi-box"><div class="kpi-label">Confirmed</div><div class="kpi-value">' + confirmed + '</div><div class="kpi-delta up">' + ((confirmed/total)*100).toFixed(0) + '% rate</div></div>' +
+    '<div class="kpi-box"><div class="kpi-label">No Shows</div><div class="kpi-value">' + noShow + '</div><div class="kpi-delta ' + (noShow>0?'down':'') + '">' + ((noShow/total)*100).toFixed(0) + '% rate</div></div>' +
+    '<div class="kpi-box"><div class="kpi-label">Cancelled</div><div class="kpi-value">' + cancelled + '</div><div class="kpi-delta">' + ((cancelled/total)*100).toFixed(0) + '% rate</div></div>';
+}
+
+document.addEventListener('DOMContentLoaded', initPage);
+</script>
+</body>
+</html>
