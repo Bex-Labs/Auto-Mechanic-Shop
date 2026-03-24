@@ -641,7 +641,7 @@ const GS = (() => {
       po_id:     po.id,
       part_id:   i.part_id || i.inventory_id || i.partId,
       qty:       i.qty || i.qty_ordered || 1,
-      unit_cost: i.unit_cost ?? i.cost ?? i.unitCost ?? 0,
+      unit_cost: i.cost ?? i.unitCost ?? 0,
     }));
     const { error: itemErr } = await sb.from('purchase_order_items').insert(poItems);
     if (itemErr) throw itemErr;
@@ -730,24 +730,37 @@ const GS = (() => {
   async function getAppointments(filters = {}) {
     const sid = await _shopId();
 
-    // Step 1: get IDs scoped to this shop from the base table
+    // Step 1: get base data including guest columns from the base table
     let baseQ = sb.from('appointments')
-      .select('id').eq('shop_id', sid);
+      .select('id, guest_name, guest_phone, guest_email, vehicle_info, customer_id')
+      .eq('shop_id', sid);
     if (filters.upcoming)    baseQ = baseQ.gte('appt_date', new Date().toISOString().split('T')[0]);
     if (filters.mechanic_id) baseQ = baseQ.eq('mechanic_id', filters.mechanic_id);
     const { data: baseRows, error: baseErr } = await baseQ;
     if (baseErr) throw baseErr;
     if (!baseRows?.length) return [];
 
-    // Step 2: query the view (which has customer_name, vehicle_label, mechanic_name)
-    // filtered to only IDs belonging to this shop
+    // Build a map of id → guest fields for merging
+    const guestMap = {};
+    baseRows.forEach(r => {
+      guestMap[r.id] = {
+        guest_name:   r.guest_name,
+        guest_phone:  r.guest_phone,
+        guest_email:  r.guest_email,
+        vehicle_info: r.vehicle_info,
+      };
+    });
+
+    // Step 2: query the view for enriched data (customer_name, vehicle_label, mechanic_name)
     const ids = baseRows.map(r => r.id);
     const { data, error } = await sb.from('v_appointments')
       .select('*')
       .in('id', ids)
       .order('appt_date').order('appt_time');
     if (error) throw error;
-    return data;
+
+    // Step 3: merge guest fields back in — these aren't in the view
+    return (data || []).map(a => ({ ...guestMap[a.id], ...a }));
   }
 
   async function createAppointment(payload) {

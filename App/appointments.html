@@ -197,7 +197,7 @@
             <span style="font-size:12px;color:var(--app-muted)">Confirm or reschedule each request</span>
           </div>
           <table class="data-table">
-            <thead><tr><th>Customer</th><th>Service Requested</th><th>Vehicle</th><th>Preferred Date</th><th>Notes</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Customer</th><th>Service</th><th>Vehicle</th><th>Date & Time</th><th>Contact / Notes</th><th>Actions</th></tr></thead>
             <tbody id="requestsBody"></tbody>
           </table>
         </div>
@@ -282,6 +282,94 @@
     </div>
     <div class="modal-body" id="adBody"></div>
     <div class="modal-footer" id="adFooter"></div>
+  </div>
+</div>
+
+<!-- EDIT APPOINTMENT MODAL -->
+<div class="modal-backdrop" id="editApptModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title">EDIT APPOINTMENT</span>
+      <button class="modal-close" onclick="Modal.close(&quot;editApptModal&quot;)">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editApptId">
+      <div style="background:rgba(232,160,32,0.08);border:1px solid rgba(232,160,32,0.2);border-radius:var(--r-sm);padding:10px 14px;font-size:12px;color:var(--amber);margin-bottom:20px">
+        &#x2139; Review and edit the customer details. When confirmed, a customer record will be created automatically.
+      </div>
+      <div style="font-family:var(--ff-mono);font-size:10px;color:var(--app-muted);letter-spacing:1px;margin-bottom:12px">CUSTOMER DETAILS</div>
+      <div class="app-form-row">
+        <div class="app-form-group">
+          <label class="app-label">Full Name <span style="color:var(--danger)">*</span></label>
+          <input class="app-input" type="text" id="editGuestName" placeholder="John Doe">
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Phone Number</label>
+          <input class="app-input" type="tel" id="editGuestPhone" placeholder="+234 800 000 0000">
+        </div>
+      </div>
+      <div class="app-form-row">
+        <div class="app-form-group">
+          <label class="app-label">Email Address</label>
+          <input class="app-input" type="email" id="editGuestEmail" placeholder="customer@email.com">
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Vehicle</label>
+          <input class="app-input" type="text" id="editVehicleInfo" placeholder="2020 Toyota Camry - ABC123">
+        </div>
+      </div>
+      <div style="font-family:var(--ff-mono);font-size:10px;color:var(--app-muted);letter-spacing:1px;margin:16px 0 12px">APPOINTMENT DETAILS</div>
+      <div class="app-form-group">
+        <label class="app-label">Service</label>
+        <select class="app-input" id="editService">
+          <option>Oil Change</option>
+          <option>Brake Service</option>
+          <option>Tire Rotation</option>
+          <option>Engine Diagnostic</option>
+          <option>AC Service</option>
+          <option>Battery Replacement</option>
+          <option>Transmission Service</option>
+          <option>Wheel Alignment</option>
+          <option>Annual Inspection</option>
+          <option>General Inspection</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="app-form-row">
+        <div class="app-form-group">
+          <label class="app-label">Date <span style="color:var(--danger)">*</span></label>
+          <input class="app-input" type="date" id="editApptDate">
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Time</label>
+          <select class="app-input" id="editApptTime">
+            <option value="08:00">08:00</option>
+            <option value="09:00">09:00</option>
+            <option value="10:00">10:00</option>
+            <option value="11:00">11:00</option>
+            <option value="12:00">12:00</option>
+            <option value="13:00">13:00</option>
+            <option value="14:00">14:00</option>
+            <option value="15:00">15:00</option>
+            <option value="16:00">16:00</option>
+          </select>
+        </div>
+      </div>
+      <div class="app-form-group">
+        <label class="app-label">Assign Technician</label>
+        <select class="app-input" id="editTechId">
+          <option value="">-- Unassigned --</option>
+        </select>
+      </div>
+      <div class="app-form-group">
+        <label class="app-label">Notes</label>
+        <textarea class="app-input" id="editNotes" rows="2" placeholder="Additional notes"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close(&quot;editApptModal&quot;)">Cancel</button>
+      <button class="app-btn app-btn-primary" onclick="saveEditAppt()">Save Changes</button>
+    </div>
   </div>
 </div>
 
@@ -558,7 +646,7 @@ function renderApptList() {
     return '<tr>' +
       '<td class="td-mono" style="color:var(--amber)">' + (a.ref||'--') + '</td>' +
       '<td>' + (a.customer_name||'--') + '</td>' +
-      '<td class="td-muted">' + (a.vehicle_label||'--') + '</td>' +
+      '<td class="td-muted">' + (a.vehicle_label||a.vehicle_info||'--') + '</td>' +
       '<td>' + (a.service||'--') + '</td>' +
       '<td class="td-mono" style="font-size:11px">' + formatDate(a.appt_date) + ' ' + (a.appt_time?a.appt_time.slice(0,5):'') + '</td>' +
       '<td class="td-muted">' + (a.mechanic_name||'Unassigned') + '</td>' +
@@ -573,25 +661,36 @@ function renderRequests() {
   var tbody = document.getElementById('requestsBody');
   if (!tbody) return;
   var pending = apptData.filter(function(a) { return a.status === 'Pending'; });
-
   if (!pending.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--app-muted)">No pending requests</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--app-muted)">No pending requests</td></tr>';
     return;
   }
-
-  tbody.innerHTML = pending.map(function(a) {
-    return '<tr>' +
-      '<td>' + (a.customer_name||'--') + '</td>' +
+  var html = '';
+  for (var k = 0; k < pending.length; k++) {
+    var a = pending[k];
+    var isGuest = !a.customer_id && a.guest_name;
+    var displayName = a.customer_name || a.guest_name || '--';
+    var displayVehicle = a.vehicle_label || a.vehicle_info || '--';
+    var guestBadge = isGuest
+      ? ' <span style="font-family:var(--ff-mono);font-size:9px;background:rgba(232,160,32,0.15);color:var(--amber);border:1px solid rgba(232,160,32,0.3);padding:1px 6px;border-radius:10px">ONLINE</span>'
+      : '';
+    var contact = isGuest
+      ? ((a.guest_phone||'') + (a.guest_email ? ' · ' + a.guest_email : '') || '--')
+      : (a.notes || '--');
+    html += '<tr>' +
+      '<td>' + displayName + guestBadge + '</td>' +
       '<td>' + (a.service||'--') + '</td>' +
-      '<td class="td-muted">' + (a.vehicle_label||'--') + '</td>' +
-      '<td class="td-mono" style="font-size:11px">' + formatDate(a.appt_date) + '</td>' +
-      '<td class="td-muted">' + (a.notes||'--') + '</td>' +
+      '<td class="td-muted">' + displayVehicle + '</td>' +
+      '<td class="td-mono" style="font-size:11px">' + formatDate(a.appt_date) + ' ' + (a.appt_time?a.appt_time.slice(0,5):'') + '</td>' +
+      '<td class="td-muted" style="font-size:12px">' + contact + '</td>' +
       '<td><div style="display:flex;gap:6px">' +
+        '<button class="app-btn app-btn-ghost app-btn-xs" data-id="' + a.id + '" onclick="openEditAppt(this.dataset.id)">Edit</button>' +
         '<button class="app-btn app-btn-success app-btn-xs" data-id="' + a.id + '" onclick="confirmAppt(this.dataset.id)">Confirm</button>' +
         '<button class="app-btn app-btn-ghost app-btn-xs" style="color:var(--danger)" data-id="' + a.id + '" onclick="cancelAppt(this.dataset.id)">Cancel</button>' +
       '</div></td>' +
       '</tr>';
-  }).join('');
+  }
+  tbody.innerHTML = html;
 }
 
 function updatePendingBadge() {
@@ -603,10 +702,122 @@ function updatePendingBadge() {
 /* ---- ACTIONS ---- */
 async function confirmAppt(id) {
   try {
+    var appt = apptData.find(function(a){ return a.id === id; });
     await GS.updateAppointment(id, { status: 'Confirmed' });
     Toast.show('Appointment confirmed', 'success');
+    if (appt && !appt.customer_id && appt.guest_name) {
+      await autoCreateCustomerFromBooking(appt);
+    }
     await loadAppointments();
   } catch(e) { Toast.show(e.message || 'Failed to confirm', 'error'); }
+}
+
+async function autoCreateCustomerFromBooking(appt) {
+  try {
+    var nameParts = (appt.guest_name || '').trim().split(' ');
+    var firstName = nameParts[0] || 'Guest';
+    var lastName  = nameParts.slice(1).join(' ') || '-';
+    var phone     = appt.guest_phone || null;
+    var email     = appt.guest_email || null;
+
+    // Check for existing customer
+    var existing = null;
+    try {
+      var all = await GS.getCustomers();
+      existing = all.find(function(c) {
+        return (phone && c.phone === phone) || (email && c.email === email);
+      });
+    } catch(e) {}
+
+    var customerId;
+    if (existing) {
+      customerId = existing.id;
+      Toast.show('Linked to existing customer: ' + existing.first_name + ' ' + existing.last_name, 'info', 3000);
+    } else {
+      var customer = await GS.createCustomer({ first_name: firstName, last_name: lastName, phone: phone, email: email });
+      customerId = customer.id;
+
+      // Create vehicle from vehicle_info
+      var vInfo = appt.vehicle_info || '';
+      if (vInfo && customerId) {
+        var parts  = vInfo.split(' ');
+        var year   = parseInt(parts[0]) || null;
+        var make   = parts[1] || '';
+        var rest   = parts.slice(2).join(' ');
+        var model  = rest.split('—')[0].trim() || make;
+        var plate  = rest.includes('—') ? rest.split('—')[1].trim() : null;
+        if (make) {
+          await GS.createVehicle({ customer_id: customerId, year: year, make: make, model: model, plate: plate });
+        }
+      }
+      Toast.show('New customer created: ' + firstName + ' ' + lastName, 'success', 3000);
+    }
+    await GS.updateAppointment(appt.id, { customer_id: customerId });
+  } catch(e) { console.warn('Auto-create customer failed:', e.message); }
+}
+
+/* ---- EDIT APPOINTMENT MODAL ---- */
+function openEditAppt(id) {
+  var a = apptData.find(function(x){ return x.id === id; });
+  if (!a) return;
+  document.getElementById('editApptId').value      = id;
+  document.getElementById('editGuestName').value   = a.guest_name  || a.customer_name || '';
+  document.getElementById('editGuestPhone').value  = a.guest_phone || '';
+  document.getElementById('editGuestEmail').value  = a.guest_email || '';
+  document.getElementById('editVehicleInfo').value = a.vehicle_info || a.vehicle_label || '';
+  document.getElementById('editService').value     = a.service || '';
+  document.getElementById('editNotes').value       = a.notes   || '';
+  document.getElementById('editApptDate').value    = a.appt_date || '';
+  document.getElementById('editApptTime').value    = a.appt_time ? a.appt_time.slice(0,5) : '';
+
+  // Populate technician dropdown
+  var techSel = document.getElementById('editTechId');
+  techSel.innerHTML = '<option value="">-- Unassigned --</option>' +
+    staffData.map(function(s) {
+      return '<option value="' + s.id + '"' + (a.mechanic_id === s.id ? ' selected' : '') + '>' + s.full_name + '</option>';
+    }).join('');
+
+  Modal.open('editApptModal');
+}
+
+async function saveEditAppt() {
+  var id          = document.getElementById('editApptId').value;
+  var guestName   = document.getElementById('editGuestName').value.trim();
+  var guestPhone  = document.getElementById('editGuestPhone').value.trim();
+  var guestEmail  = document.getElementById('editGuestEmail').value.trim();
+  var vehicleInfo = document.getElementById('editVehicleInfo').value.trim();
+  var service     = document.getElementById('editService').value;
+  var notes       = document.getElementById('editNotes').value.trim();
+  var apptDate    = document.getElementById('editApptDate').value;
+  var apptTime    = document.getElementById('editApptTime').value;
+  var techId      = document.getElementById('editTechId').value;
+
+  if (!guestName) { Toast.show('Name is required', 'error'); return; }
+  if (!apptDate)  { Toast.show('Date is required', 'error'); return; }
+
+  var btn = document.querySelector('#editApptModal .app-btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+  try {
+    await GS.updateAppointment(id, {
+      guest_name:   guestName,
+      guest_phone:  guestPhone  || null,
+      guest_email:  guestEmail  || null,
+      vehicle_info: vehicleInfo || null,
+      service:      service,
+      notes:        notes       || null,
+      appt_date:    apptDate,
+      appt_time:    apptTime    ? apptTime + ':00' : null,
+      mechanic_id:  techId      || null,
+    });
+    Toast.show('Appointment updated', 'success');
+    Modal.close('editApptModal');
+    await loadAppointments();
+  } catch(e) {
+    Toast.show(e.message || 'Failed to save', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Changes'; }
+  }
 }
 
 async function cancelAppt(id) {
