@@ -165,7 +165,16 @@
         <div class="app-form-group"><label class="app-label">Year</label><input class="app-input" type="number" id="v-year" placeholder="2020" min="1980" max="2027"></div>
       </div>
       <div class="app-form-row">
-        <div class="app-form-group"><label class="app-label">VIN</label><input class="app-input" id="v-vin" placeholder="17 characters" maxlength="17"></div>
+        <div class="app-form-group">
+          <label class="app-label" style="display:flex;align-items:center;gap:6px;">
+            VIN
+            <span style="font-family:var(--ff-mono);font-size:9px;color:var(--amber);letter-spacing:0.5px;background:rgba(232,160,32,0.1);border:1px solid rgba(232,160,32,0.25);padding:1px 6px;border-radius:4px;">AUTO-FILL</span>
+          </label>
+          <input class="app-input" id="v-vin" placeholder="Enter 17-char VIN to auto-fill details" maxlength="17"
+            oninput="vinDecode(event,'v-vin',{make:'v-make',model:'v-model',year:'v-year'},'v-vin-status')"
+            style="text-transform:uppercase;font-family:var(--ff-mono);letter-spacing:0.5px;">
+          <div id="v-vin-status" style="margin-top:4px;min-height:16px;"></div>
+        </div>
         <div class="app-form-group"><label class="app-label">License Plate</label><input class="app-input" id="v-plate" placeholder="ABC 1234"></div>
       </div>
       <div class="app-form-row">
@@ -196,7 +205,16 @@
         <div class="app-form-group"><label class="app-label">Year</label><input class="app-input" type="number" id="av-year" placeholder="2020"></div>
       </div>
       <div class="app-form-row">
-        <div class="app-form-group"><label class="app-label">VIN</label><input class="app-input" id="av-vin" placeholder="17 characters" maxlength="17"></div>
+        <div class="app-form-group">
+          <label class="app-label" style="display:flex;align-items:center;gap:6px;">
+            VIN
+            <span style="font-family:var(--ff-mono);font-size:9px;color:var(--amber);letter-spacing:0.5px;background:rgba(232,160,32,0.1);border:1px solid rgba(232,160,32,0.25);padding:1px 6px;border-radius:4px;">AUTO-FILL</span>
+          </label>
+          <input class="app-input" id="av-vin" placeholder="Enter 17-char VIN to auto-fill details" maxlength="17"
+            oninput="vinDecode(event,'av-vin',{make:'av-make',model:'av-model',year:'av-year'},'av-vin-status')"
+            style="text-transform:uppercase;font-family:var(--ff-mono);letter-spacing:0.5px;">
+          <div id="av-vin-status" style="margin-top:4px;min-height:16px;"></div>
+        </div>
         <div class="app-form-group"><label class="app-label">Plate</label><input class="app-input" id="av-plate" placeholder="ABC 1234"></div>
       </div>
       <div class="app-form-row">
@@ -235,17 +253,41 @@
         &#8226; All vehicles<br>
         &#8226; Status history &amp; audit logs
       </div>
-      <div style="font-size:12px;color:var(--danger);margin-top:10px;font-family:var(--ff-mono);letter-spacing:0.5px;">
-        This action cannot be undone.
-      </div>
+      <div style="font-size:12px;color:var(--danger);margin-top:10px;font-family:var(--ff-mono);letter-spacing:0.5px;">This action cannot be undone.</div>
     </div>
     <div class="modal-footer">
       <button class="app-btn app-btn-ghost" onclick="Modal.close('deleteCustomerModal')">Cancel</button>
       <button class="app-btn app-btn-primary" id="delCustConfirmBtn"
         style="background:var(--danger);border-color:var(--danger);"
-        onclick="confirmDeleteCustomer()">
-        Yes, Delete Everything
-      </button>
+        onclick="confirmDeleteCustomer()">Yes, Delete Everything</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE VEHICLE CONFIRMATION MODAL -->
+<div class="modal-backdrop" id="deleteVehicleModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title" style="color:var(--danger)">DELETE VEHICLE</span>
+      <button class="modal-close" onclick="Modal.close('deleteVehicleModal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;align-items:flex-start;gap:14px;">
+        <div style="font-size:28px;flex-shrink:0;">&#128663;</div>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--app-text);margin-bottom:6px;" id="delVehName">this vehicle</div>
+          <div style="font-size:13px;color:var(--app-muted);line-height:1.65;">
+            Are you sure you want to remove this vehicle from the customer's profile?<br><br>
+            <span style="color:var(--danger);font-family:var(--ff-mono);font-size:11px;letter-spacing:0.5px;">This cannot be undone.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('deleteVehicleModal')">Cancel</button>
+      <button class="app-btn app-btn-primary" id="delVehConfirmBtn"
+        style="background:var(--danger);border-color:var(--danger);"
+        onclick="confirmDeleteVehicle()">Delete Vehicle</button>
     </div>
   </div>
 </div>
@@ -507,6 +549,7 @@ function openAddVehicle(presetCustomerId = null) {
     `<option value="${c.id}" ${c.id===presetCustomerId?'selected':''}>${c.first_name} ${c.last_name}</option>`
   ).join('');
   ['av-make','av-model','av-vin','av-plate','av-color'].forEach(id => { document.getElementById(id).value = ''; });
+  const avSt = document.getElementById('av-vin-status'); if (avSt) avSt.innerHTML = '';
   document.getElementById('av-year').value  = '';
   document.getElementById('av-miles').value = '';
   Modal.open('addVehicleModal');
@@ -522,7 +565,10 @@ function openEditVehicle(id) {
   document.getElementById('av-make').value  = v.make    || '';
   document.getElementById('av-model').value = v.model   || '';
   document.getElementById('av-year').value  = v.year    || '';
-  document.getElementById('av-vin').value   = v.vin     || '';
+  document.getElementById('av-vin').value   = (v.vin     || '').toUpperCase();
+  // Clear the VIN status when opening an existing vehicle for edit
+  const avStatus = document.getElementById('av-vin-status');
+  if (avStatus) avStatus.innerHTML = '';
   document.getElementById('av-plate').value = v.plate   || '';
   document.getElementById('av-color').value = v.color   || '';
   document.getElementById('av-miles').value = v.mileage || '';
@@ -572,59 +618,66 @@ async function saveVehicle() {
 }
 
 /* ── DELETE ── */
-// Stores the ID currently pending deletion
 let _pendingDeleteId = null;
 
 function deleteCustomer(id) {
   const cust = customerData.find(c => c.id === id);
   const name = cust ? `${cust.first_name} ${cust.last_name}` : 'this customer';
-
   _pendingDeleteId = id;
   document.getElementById('delCustName').textContent = name;
-
-  // Reset button state in case it was loading from a previous attempt
   const btn = document.getElementById('delCustConfirmBtn');
-  btn.disabled    = false;
-  btn.textContent = 'Yes, Delete Everything';
-
+  btn.disabled = false; btn.textContent = 'Yes, Delete Everything';
   Modal.open('deleteCustomerModal');
 }
 
 async function confirmDeleteCustomer() {
   if (!_pendingDeleteId) return;
-
   const btn = document.getElementById('delCustConfirmBtn');
-  btn.disabled    = true;
-  btn.textContent = 'Deleting…';
-
+  btn.disabled = true; btn.textContent = 'Deleting…';
   try {
     await GS.deleteCustomer(_pendingDeleteId);
     Modal.close('deleteCustomerModal');
     Toast.show('Customer and all linked records deleted', 'info');
-    selectedCustomerId = null;
-    _pendingDeleteId   = null;
+    selectedCustomerId = null; _pendingDeleteId = null;
     document.getElementById('custProfile').innerHTML = `
       <div class="empty-state" style="padding:64px 24px">
-        <div class="empty-icon">👤</div><div class="empty-title">SELECT A CUSTOMER</div>
+        <div class="empty-icon">&#128100;</div><div class="empty-title">SELECT A CUSTOMER</div>
         <div class="empty-body">Click any customer on the left to view their profile.</div>
       </div>`;
     await loadAll();
   } catch(err) {
     Toast.show(err.message || 'Delete failed. Please try again.', 'error');
-    btn.disabled    = false;
-    btn.textContent = 'Yes, Delete Everything';
+    btn.disabled = false; btn.textContent = 'Yes, Delete Everything';
   }
 }
 
-async function deleteVehicleConfirm(id) {
-  confirmAction('Delete this vehicle?', async () => {
-    try {
-      await GS.deleteVehicle(id);
-      Toast.show('Vehicle removed', 'info');
-      await loadAll();
-      if (selectedCustomerId) selectCustomer(selectedCustomerId);
-    } catch(err) { Toast.show(err.message, 'error'); }
-  });
+let _pendingDeleteVehicleId = null;
+
+function deleteVehicleConfirm(id) {
+  const veh  = vehicleData.find(v => v.id === id);
+  const name = veh ? `${veh.year || ''} ${veh.make || ''} ${veh.model || ''}`.trim() : 'this vehicle';
+  _pendingDeleteVehicleId = id;
+  document.getElementById('delVehName').textContent = name;
+  const btn = document.getElementById('delVehConfirmBtn');
+  btn.disabled = false; btn.textContent = 'Delete Vehicle';
+  Modal.open('deleteVehicleModal');
+}
+
+async function confirmDeleteVehicle() {
+  if (!_pendingDeleteVehicleId) return;
+  const btn = document.getElementById('delVehConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Deleting…';
+  try {
+    await GS.deleteVehicle(_pendingDeleteVehicleId);
+    Modal.close('deleteVehicleModal');
+    Toast.show('Vehicle removed', 'info');
+    _pendingDeleteVehicleId = null;
+    await loadAll();
+    if (selectedCustomerId) selectCustomer(selectedCustomerId);
+  } catch(err) {
+    Toast.show(err.message || 'Delete failed. Please try again.', 'error');
+    btn.disabled = false; btn.textContent = 'Delete Vehicle';
+  }
 }
 
 document.addEventListener('DOMContentLoaded', initPage);

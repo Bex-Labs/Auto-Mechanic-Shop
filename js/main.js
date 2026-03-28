@@ -375,149 +375,183 @@ function switchPane(btn) {
   if (target) target.classList.add('active');
 }
 
-
-/* -----------------------------------------------------------------
-   SESSION TIMEOUT
-   Auto-logout after 10 minutes of inactivity.
-   Shows a 2-minute warning before signing out.
-   Only active on app pages (not login/public pages).
-   ----------------------------------------------------------------- */
-(function () {
-  var TIMEOUT_MS  = 10 * 60 * 1000; // 10 minutes
-  var WARNING_MS  = 2  * 60 * 1000; // warn 2 minutes before
-  var _timer      = null;
-  var _warnTimer  = null;
-  var _warnShown  = false;
-  var _warningEl  = null;
-  var _countdownTimer = null;
-  var _secondsLeft = 0;
-
-  // Only run on app pages (they have .app-layout)
-  function isAppPage() {
-    return !!document.querySelector('.app-layout');
-  }
-
-  function createWarningBanner() {
-    if (_warningEl) return;
-    _warningEl = document.createElement('div');
-    _warningEl.id = 'session-warning';
-    _warningEl.style.cssText = [
-      'position:fixed', 'bottom:24px', 'left:50%', 'transform:translateX(-50%)',
-      'background:#1f2937', 'border:1px solid #e8a020', 'border-radius:8px',
-      'padding:16px 24px', 'display:flex', 'align-items:center', 'gap:16px',
-      'z-index:99999', 'box-shadow:0 8px 32px rgba(0,0,0,0.4)',
-      'font-family:var(--ff-body,sans-serif)', 'font-size:14px',
-      'color:#e6edf3', 'min-width:340px', 'max-width:480px',
-      'animation:slideUp 0.3s ease'
-    ].join(';');
-
-    var style = document.createElement('style');
-    style.textContent = '@keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
-    document.head.appendChild(style);
-
-    _warningEl.innerHTML =
-      '<span style="font-size:22px">⏱</span>' +
-      '<div style="flex:1">' +
-        '<div style="font-weight:600;color:#e8a020;margin-bottom:3px">Session Expiring</div>' +
-        '<div style="font-size:13px;color:#7d8590">You will be logged out in <span id="session-countdown" style="color:#e8a020;font-weight:700;font-family:monospace"></span></div>' +
-      '</div>' +
-      '<button onclick="SessionTimeout.keepAlive()" style="' +
-        'background:#c94b1e;color:#fff;border:none;border-radius:6px;' +
-        'padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;' +
-        'white-space:nowrap;font-family:inherit' +
-      '">Stay Logged In</button>';
-
-    document.body.appendChild(_warningEl);
-  }
-
-  function removeWarningBanner() {
-    if (_warningEl) {
-      _warningEl.remove();
-      _warningEl = null;
-    }
-    if (_countdownTimer) {
-      clearInterval(_countdownTimer);
-      _countdownTimer = null;
-    }
-    _warnShown = false;
-  }
-
-  function updateCountdown() {
-    var el = document.getElementById('session-countdown');
-    if (!el) return;
-    var m = Math.floor(_secondsLeft / 60);
-    var s = _secondsLeft % 60;
-    el.textContent = (m > 0 ? m + 'm ' : '') + s + 's';
-    _secondsLeft--;
-    if (_secondsLeft < 0) _secondsLeft = 0;
-  }
-
-  function showWarning() {
-    if (_warnShown) return;
-    _warnShown = true;
-    createWarningBanner();
-    _secondsLeft = Math.floor(WARNING_MS / 1000);
-    updateCountdown();
-    _countdownTimer = setInterval(updateCountdown, 1000);
-  }
-
-  function resetTimer() {
-    if (!isAppPage()) return;
-    clearTimeout(_timer);
-    clearTimeout(_warnTimer);
-    removeWarningBanner();
-
-    // Set warning timer (fires 2 minutes before timeout)
-    _warnTimer = setTimeout(showWarning, TIMEOUT_MS - WARNING_MS);
-
-    // Set logout timer
-    _timer = setTimeout(function () {
-      removeWarningBanner();
-      // Sign out via Supabase if available
-      if (typeof Auth !== 'undefined' && Auth.signOut) {
-        Auth.signOut().catch(function(){});
-      } else if (typeof supabase !== 'undefined') {
-        supabase.auth.signOut().catch(function(){});
-      }
-      // Redirect to login
-      var base = window.location.pathname.replace(/\/app\/.*$/, '/app/');
-      window.location.href = base + 'dashboard.html?session=expired';
-    }, TIMEOUT_MS);
-  }
-
-  function keepAlive() {
-    resetTimer();
-  }
-
-  // Start tracking once DOM is ready
-  document.addEventListener('DOMContentLoaded', function () {
-    if (!isAppPage()) return;
-
-    // Activity events that reset the timer
-    var events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
-    events.forEach(function (ev) {
-      document.addEventListener(ev, resetTimer, { passive: true });
-    });
-
-    // Show expired message if redirected here after timeout
-    if (window.location.search.includes('session=expired')) {
-      setTimeout(function () {
-        if (typeof Toast !== 'undefined') {
-          Toast.show('Your session expired due to inactivity. Please sign in again.', 'warn', 5000);
-        }
-      }, 1000);
-    }
-
-    resetTimer(); // start the clock
-  });
-
-  // Expose keepAlive globally for the button onclick
-  window.SessionTimeout = { keepAlive: keepAlive };
-})();
-
 /* -----------------------------------------------------------------
    INIT CALL
    ----------------------------------------------------------------- */
 document.addEventListener('DOMContentLoaded', () => {
   initContactForm();
 });
+
+/* -----------------------------------------------------------------
+   VIN DECODER  — NHTSA free API, no key required
+   Decodes a 17-character VIN and returns { make, model, year, bodyClass, fuelType }
+   Automatically fills form fields and shows a status indicator.
+
+   Usage:
+     <input id="my-vin" oninput="vinDecode(event, 'my-vin', {
+       make:  'my-make',
+       model: 'my-model',
+       year:  'my-year',
+       color: 'my-color'
+     })">
+     <div id="my-vin-status"></div>
+   ----------------------------------------------------------------- */
+
+const VINDecoder = (() => {
+
+  // Cache results so the same VIN doesn't hit the API twice
+  const _cache = {};
+
+  async function decode(vin) {
+    const v = vin.trim().toUpperCase();
+    if (v.length !== 17) return null;
+    if (_cache[v]) return _cache[v];
+
+    const url = `https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/${v}?format=json`;
+    const res  = await fetch(url);
+    if (!res.ok) throw new Error('NHTSA API unreachable');
+    const json = await res.json();
+
+    // Pull key fields out of the Results array
+    const get = (variable) => {
+      const row = (json.Results || []).find(r => r.Variable === variable);
+      return row?.Value && row.Value !== 'Not Applicable' && row.Value !== '0' ? row.Value : null;
+    };
+
+    const result = {
+      make:      get('Make'),
+      model:     get('Model'),
+      year:      get('Model Year'),
+      bodyClass: get('Body Class'),
+      fuelType:  get('Fuel Type - Primary'),
+      drive:     get('Drive Type'),
+      cylinders: get('Engine Number of Cylinders'),
+      country:   get('Plant Country'),
+      errorCode: get('Error Code'),          // '0' = no errors
+      errorText: get('Error Text'),
+    };
+
+    // A valid decode has at least make + model
+    if (!result.make && !result.model) {
+      throw new Error('VIN not recognised — check the number and try again');
+    }
+
+    _cache[v] = result;
+    return result;
+  }
+
+  return { decode };
+})();
+
+/**
+ * Called oninput on any VIN field.
+ * @param {Event}  e          - the input event
+ * @param {string} vinId      - id of the VIN input
+ * @param {object} fieldMap   - { make, model, year, color } — ids of fields to fill
+ * @param {string} statusId   - id of the status div (defaults to vinId + '-status')
+ */
+async function vinDecode(e, vinId, fieldMap = {}, statusId) {
+  const vinInput = document.getElementById(vinId);
+  if (!vinInput) return;
+
+  const vin      = vinInput.value.trim().toUpperCase();
+  const sid      = statusId || vinId + '-status';
+  const statusEl = document.getElementById(sid);
+
+  // Keep VIN uppercase as user types
+  vinInput.value = vin;
+
+  // Only decode once we have all 17 characters
+  if (vin.length < 17) {
+    if (statusEl) {
+      statusEl.innerHTML = vin.length > 0
+        ? `<span style="color:var(--app-muted);font-family:var(--ff-mono);font-size:11px">${vin.length}/17 characters</span>`
+        : '';
+    }
+    return;
+  }
+
+  if (vin.length > 17) {
+    if (statusEl) statusEl.innerHTML = `<span style="color:#f87171;font-size:11px">⚠ VIN must be exactly 17 characters</span>`;
+    return;
+  }
+
+  // Show loading
+  if (statusEl) {
+    statusEl.innerHTML = `
+      <span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--app-muted)">
+        <span style="width:11px;height:11px;border:2px solid var(--app-border);border-top-color:var(--amber);border-radius:50%;animation:spin 0.65s linear infinite;display:inline-block"></span>
+        Looking up VIN…
+      </span>`;
+  }
+
+  try {
+    const info = await VINDecoder.decode(vin);
+    if (!info) return;
+
+    // Fill in the mapped fields (only if currently empty OR field is auto-fillable)
+    const fill = (fieldId, value) => {
+      if (!fieldId || !value) return;
+      const el = document.getElementById(fieldId);
+      if (el && !el.value) el.value = value;   // don't overwrite if already filled
+    };
+
+    // For year specifically, always overwrite since user can't know it from VIN
+    const fillYear = (fieldId, value) => {
+      if (!fieldId || !value) return;
+      const el = document.getElementById(fieldId);
+      if (el) el.value = value;
+    };
+
+    fill(fieldMap.make,  info.make ? _toTitleCase(info.make)   : null);
+    fill(fieldMap.model, info.model ? _toTitleCase(info.model) : null);
+    fillYear(fieldMap.year, info.year);
+
+    // Build success banner
+    const parts = [
+      info.year, info.make ? _toTitleCase(info.make) : null,
+      info.model ? _toTitleCase(info.model) : null
+    ].filter(Boolean);
+
+    const extras = [
+      info.bodyClass, info.fuelType, info.drive,
+      info.cylinders ? info.cylinders + '-cyl' : null,
+    ].filter(Boolean).join(' · ');
+
+    if (statusEl) {
+      statusEl.innerHTML = `
+        <div style="
+          display:flex;align-items:flex-start;gap:8px;
+          background:rgba(31,122,74,0.1);border:1px solid rgba(31,122,74,0.3);
+          border-radius:6px;padding:8px 12px;margin-top:4px;
+        ">
+          <span style="font-size:16px;flex-shrink:0">✅</span>
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#6ee7b7;line-height:1.4">${parts.join(' ')}</div>
+            ${extras ? `<div style="font-size:11px;color:var(--app-muted);margin-top:2px">${extras}</div>` : ''}
+            <div style="font-size:10px;color:var(--app-muted);margin-top:3px;font-family:var(--ff-mono);letter-spacing:0.3px">
+              Fields auto-filled from VIN — review before saving
+            </div>
+          </div>
+        </div>`;
+    }
+
+  } catch (err) {
+    if (statusEl) {
+      statusEl.innerHTML = `
+        <div style="
+          display:flex;align-items:center;gap:8px;
+          background:rgba(181,43,30,0.1);border:1px solid rgba(181,43,30,0.3);
+          border-radius:6px;padding:8px 12px;margin-top:4px;
+          font-size:11px;color:#f87171;
+        ">
+          ⚠ ${err.message || 'Could not decode VIN — fill fields manually'}
+        </div>`;
+    }
+  }
+}
+
+function _toTitleCase(str) {
+  if (!str) return str;
+  return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+}
