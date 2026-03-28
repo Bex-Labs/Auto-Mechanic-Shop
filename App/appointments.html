@@ -101,7 +101,7 @@
     <div class="app-topbar">
       <span class="topbar-title">APPOINTMENTS</span>
       <div class="topbar-actions">
-        <button class="app-btn app-btn-ghost app-btn-sm" onclick="openBookingModal()">
+        <button class="app-btn app-btn-ghost app-btn-sm" onclick="Modal.open('bookingModal')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Book Appointment
         </button>
@@ -154,7 +154,7 @@
                 <div style="text-align:center;padding:24px;color:var(--app-muted);font-size:13px;">Click a date to see appointments</div>
               </div>
             </div>
-            <button class="app-btn app-btn-primary" style="width:100%" onclick="openBookingModal()">
+            <button class="app-btn app-btn-primary" style="width:100%" onclick="Modal.open('bookingModal')">
               + Book New Appointment
             </button>
           </div>
@@ -197,7 +197,7 @@
             <span style="font-size:12px;color:var(--app-muted)">Confirm or reschedule each request</span>
           </div>
           <table class="data-table">
-            <thead><tr><th>Customer</th><th>Service</th><th>Vehicle</th><th>Date & Time</th><th>Contact / Notes</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Customer</th><th>Service Requested</th><th>Vehicle</th><th>Preferred Date</th><th>Notes</th><th>Actions</th></tr></thead>
             <tbody id="requestsBody"></tbody>
           </table>
         </div>
@@ -225,6 +225,20 @@
           <select class="app-input" id="b-veh"></select>
         </div>
       </div>
+      <!-- VIN LOOKUP — decodes VIN and matches/selects existing vehicle -->
+      <div class="app-form-group" id="b-vin-group">
+        <label class="app-label" style="display:flex;align-items:center;gap:6px;">
+          Look Up by VIN
+          <span style="font-family:var(--ff-mono);font-size:9px;color:var(--amber);letter-spacing:0.5px;background:rgba(232,160,32,0.1);border:1px solid rgba(232,160,32,0.25);padding:1px 6px;border-radius:4px;">AUTO-FILL</span>
+          <span style="font-size:11px;color:var(--app-muted);font-family:var(--ff-body);font-weight:400;letter-spacing:0">(optional — auto-selects vehicle)</span>
+        </label>
+        <input class="app-input" id="b-vin" placeholder="Enter 17-char VIN to find or verify vehicle"
+          maxlength="17"
+          oninput="bookingVinLookup()"
+          style="text-transform:uppercase;font-family:var(--ff-mono);letter-spacing:0.5px;">
+        <div id="b-vin-status" style="margin-top:6px;min-height:16px;"></div>
+      </div>
+
       <div class="app-form-group">
         <label class="app-label">Service</label>
         <select class="app-input" id="b-service">
@@ -251,7 +265,7 @@
         <div class="app-form-group">
           <label class="app-label">Technician</label>
           <select class="app-input" id="b-tech">
-            <option value="">-- Select Technician --</option>
+            <option>Mike Torres</option><option>Sam Lee</option><option>Rita Patel</option>
           </select>
         </div>
         <div class="app-form-group">
@@ -285,94 +299,6 @@
   </div>
 </div>
 
-<!-- EDIT APPOINTMENT MODAL -->
-<div class="modal-backdrop" id="editApptModal">
-  <div class="modal modal-lg">
-    <div class="modal-header">
-      <span class="modal-title">EDIT APPOINTMENT</span>
-      <button class="modal-close" onclick="Modal.close(&quot;editApptModal&quot;)">&#x2715;</button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="editApptId">
-      <div style="background:rgba(232,160,32,0.08);border:1px solid rgba(232,160,32,0.2);border-radius:var(--r-sm);padding:10px 14px;font-size:12px;color:var(--amber);margin-bottom:20px">
-        &#x2139; Review and edit the customer details. When confirmed, a customer record will be created automatically.
-      </div>
-      <div style="font-family:var(--ff-mono);font-size:10px;color:var(--app-muted);letter-spacing:1px;margin-bottom:12px">CUSTOMER DETAILS</div>
-      <div class="app-form-row">
-        <div class="app-form-group">
-          <label class="app-label">Full Name <span style="color:var(--danger)">*</span></label>
-          <input class="app-input" type="text" id="editGuestName" placeholder="John Doe">
-        </div>
-        <div class="app-form-group">
-          <label class="app-label">Phone Number</label>
-          <input class="app-input" type="tel" id="editGuestPhone" placeholder="+234 800 000 0000">
-        </div>
-      </div>
-      <div class="app-form-row">
-        <div class="app-form-group">
-          <label class="app-label">Email Address</label>
-          <input class="app-input" type="email" id="editGuestEmail" placeholder="customer@email.com">
-        </div>
-        <div class="app-form-group">
-          <label class="app-label">Vehicle</label>
-          <input class="app-input" type="text" id="editVehicleInfo" placeholder="2020 Toyota Camry - ABC123">
-        </div>
-      </div>
-      <div style="font-family:var(--ff-mono);font-size:10px;color:var(--app-muted);letter-spacing:1px;margin:16px 0 12px">APPOINTMENT DETAILS</div>
-      <div class="app-form-group">
-        <label class="app-label">Service</label>
-        <select class="app-input" id="editService">
-          <option>Oil Change</option>
-          <option>Brake Service</option>
-          <option>Tire Rotation</option>
-          <option>Engine Diagnostic</option>
-          <option>AC Service</option>
-          <option>Battery Replacement</option>
-          <option>Transmission Service</option>
-          <option>Wheel Alignment</option>
-          <option>Annual Inspection</option>
-          <option>General Inspection</option>
-          <option>Other</option>
-        </select>
-      </div>
-      <div class="app-form-row">
-        <div class="app-form-group">
-          <label class="app-label">Date <span style="color:var(--danger)">*</span></label>
-          <input class="app-input" type="date" id="editApptDate">
-        </div>
-        <div class="app-form-group">
-          <label class="app-label">Time</label>
-          <select class="app-input" id="editApptTime">
-            <option value="08:00">08:00</option>
-            <option value="09:00">09:00</option>
-            <option value="10:00">10:00</option>
-            <option value="11:00">11:00</option>
-            <option value="12:00">12:00</option>
-            <option value="13:00">13:00</option>
-            <option value="14:00">14:00</option>
-            <option value="15:00">15:00</option>
-            <option value="16:00">16:00</option>
-          </select>
-        </div>
-      </div>
-      <div class="app-form-group">
-        <label class="app-label">Assign Technician</label>
-        <select class="app-input" id="editTechId">
-          <option value="">-- Unassigned --</option>
-        </select>
-      </div>
-      <div class="app-form-group">
-        <label class="app-label">Notes</label>
-        <textarea class="app-input" id="editNotes" rows="2" placeholder="Additional notes"></textarea>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="app-btn app-btn-ghost" onclick="Modal.close(&quot;editApptModal&quot;)">Cancel</button>
-      <button class="app-btn app-btn-primary" onclick="saveEditAppt()">Save Changes</button>
-    </div>
-  </div>
-</div>
-
 <div class="toast-container" id="toastContainer"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../js/theme.js"></script>
@@ -380,454 +306,408 @@
 <script src="../js/supabase.js"></script>
 <script src="../js/rbac.js"></script>
 <script>
-var apptData  = [];
-var custData  = [];
-var staffData = [];
-var vehCache  = {};
+let apptData   = [];
+let custList   = [];   // all customers for the booking dropdown
+let vehCache   = {};   // custId → vehicles[]
 
-var CAL_MONTH = new Date().getMonth();
-var CAL_YEAR  = new Date().getFullYear();
-var selectedDate = null;
-
-/* ---- INIT ---- */
+// ── INIT ──────────────────────────────────────────────────────────
 async function initPage() {
-  var user = await RBAC.guardPage('appointments');
-  if (!user) return;
+  const _user = await RBAC.guardPage('appointments');
+  if (!_user) return;
   await RBAC.initSidebar('appointments');
 
-  // Load all reference data in parallel
-  var results = await Promise.all([
-    GS.getAppointments().catch(function(){ return []; }),
-    GS.getCustomers().catch(function(){ return []; }),
-    GS.getStaff().catch(function(){ return []; }),
+  const [appts, staff, custs] = await Promise.all([
+    GS.getAppointments(), GS.getStaff(), GS.getCustomers()
   ]);
-  apptData  = results[0];
-  custData  = results[1];
-  staffData = results[2];
+  apptData = appts;
+  custList  = custs;
 
-  populateCustomerDropdown(custData);
-  populateTechDropdown(staffData);
+  populateCustomerSelect(custs);
+  populateTechFilter(staff);
   renderCalendar();
   renderApptList();
   renderRequests();
   updatePendingBadge();
 
   Realtime.subscribe('appointments', {
-    onInsert: function() { loadAppointments(); },
-    onUpdate: function(a) {
-      var idx = apptData.findIndex(function(x){ return x.id === a.id; });
-      if (idx >= 0) { apptData[idx] = Object.assign({}, apptData[idx], a); }
-      else apptData.push(a);
+    onInsert: () => loadAppointments(),
+    onUpdate: (a) => {
+      const idx = apptData.findIndex(x => x.id === a.id);
+      if (idx >= 0) { apptData[idx] = { ...apptData[idx], ...a }; }
+      else { apptData.unshift(a); }
       renderCalendar(); renderApptList(); renderRequests(); updatePendingBadge();
     },
-    onDelete: function(a) {
-      apptData = apptData.filter(function(x){ return x.id !== a.id; });
+    onDelete: (a) => {
+      apptData = apptData.filter(x => x.id !== a.id);
       renderCalendar(); renderApptList(); renderRequests(); updatePendingBadge();
     }
   });
 }
 
 async function loadAppointments() {
-  apptData = await GS.getAppointments().catch(function(){ return []; });
+  apptData = await GS.getAppointments();
   renderCalendar(); renderApptList(); renderRequests(); updatePendingBadge();
 }
 
-/* ---- DROPDOWNS ---- */
-function populateCustomerDropdown(custs) {
-  var sel = document.getElementById('b-cust');
-  if (!sel) return;
-  sel.innerHTML = '<option value="">-- Select Customer --</option>' +
-    custs.map(function(c) {
-      return '<option value="' + c.id + '">' + c.first_name + ' ' + c.last_name + '</option>';
-    }).join('');
-}
+// ── CALENDAR ──────────────────────────────────────────────────────
+let calYear  = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+let selectedDate = null;
 
-function populateTechDropdown(staff) {
-  var sel = document.getElementById('b-tech');
-  if (!sel) return;
-  sel.innerHTML = '<option value="">-- Select Technician --</option>' +
-    staff.map(function(s) {
-      return '<option value="' + s.id + '">' + s.full_name + (s.speciality ? ' (' + s.speciality + ')' : '') + '</option>';
-    }).join('');
-}
-
-async function populateVehicles() {
-  var custId = (document.getElementById('b-cust') || {}).value;
-  var sel    = document.getElementById('b-veh');
-  if (!sel) return;
-  if (!custId) { sel.innerHTML = '<option value="">Select customer first</option>'; return; }
-  sel.innerHTML = '<option value="">Loading...</option>';
-  try {
-    if (!vehCache[custId]) vehCache[custId] = await GS.getVehicles(custId);
-    var vehs = vehCache[custId] || [];
-    sel.innerHTML = vehs.length
-      ? '<option value="">-- Select Vehicle --</option>' + vehs.map(function(v) {
-          return '<option value="' + v.id + '">' + (v.year||'') + ' ' + v.make + ' ' + v.model + (v.plate ? ' - ' + v.plate : '') + '</option>';
-        }).join('')
-      : '<option value="">No vehicles found for this customer</option>';
-  } catch(e) {
-    sel.innerHTML = '<option value="">Could not load vehicles</option>';
-  }
-}
-
-/* ---- OPEN BOOKING MODAL ---- */
-function openBookingModal(date) {
-  document.getElementById('bookingModalTitle').textContent = 'BOOK APPOINTMENT';
-  // Reset form
-  ['b-notes'].forEach(function(id) { var el = document.getElementById(id); if(el) el.value = ''; });
-  var custSel = document.getElementById('b-cust');
-  if (custSel) custSel.value = '';
-  var vehSel = document.getElementById('b-veh');
-  if (vehSel) vehSel.innerHTML = '<option value="">Select customer first</option>';
-  var dateEl = document.getElementById('b-date');
-  if (dateEl) dateEl.value = date || '';
-  Modal.open('bookingModal');
-}
-
-/* ---- SAVE APPOINTMENT ---- */
-async function saveAppointment() {
-  var custId  = (document.getElementById('b-cust')    || {}).value;
-  var vehId   = (document.getElementById('b-veh')     || {}).value;
-  var service = (document.getElementById('b-service') || {}).value;
-  var date    = (document.getElementById('b-date')    || {}).value;
-  var time    = (document.getElementById('b-time')    || {}).value;
-  var techId  = (document.getElementById('b-tech')    || {}).value;
-  var status  = (document.getElementById('b-status')  || {}).value || 'Confirmed';
-  var notes   = (document.getElementById('b-notes')   || {}).value || '';
-
-  if (!custId)  { Toast.show('Please select a customer', 'error'); return; }
-  if (!service) { Toast.show('Please select a service', 'error'); return; }
-  if (!date)    { Toast.show('Please select a date', 'error'); return; }
-
-  var btn = document.querySelector('#bookingModal .app-btn-primary');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
-
-  try {
-    var payload = {
-      customer_id:  custId,
-      vehicle_id:   vehId   || null,
-      mechanic_id:  techId  || null,
-      service:      service,
-      appt_date:    date,
-      appt_time:    time,
-      status:       status,
-      notes:        notes || null,
-    };
-    var apt = await GS.createAppointment(payload);
-    Toast.show('Appointment booked successfully', 'success');
-    Modal.close('bookingModal');
-    await loadAppointments();
-  } catch(e) {
-    Toast.show(e.message || 'Failed to save appointment', 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Save Appointment'; }
-  }
-}
-
-/* ---- CALENDAR ---- */
 function changeMonth(delta) {
-  CAL_MONTH += delta;
-  if (CAL_MONTH > 11) { CAL_MONTH = 0;  CAL_YEAR++; }
-  if (CAL_MONTH < 0)  { CAL_MONTH = 11; CAL_YEAR--; }
+  calMonth += delta;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  if (calMonth < 0)  { calMonth = 11; calYear--; }
   renderCalendar();
 }
 
 function renderCalendar() {
-  var titleEl = document.getElementById('calMonthTitle');
-  var gridEl  = document.getElementById('calGrid');
-  if (!titleEl || !gridEl) return;
+  const titleEl = document.getElementById('calMonthTitle');
+  if (titleEl) titleEl.textContent = new Date(calYear, calMonth, 1)
+    .toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase();
 
-  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  titleEl.textContent = months[CAL_MONTH] + ' ' + CAL_YEAR;
+  const grid = document.getElementById('calGrid');
+  if (!grid) return;
 
-  var today    = new Date();
-  var firstDay = new Date(CAL_YEAR, CAL_MONTH, 1).getDay();
-  var daysInMonth = new Date(CAL_YEAR, CAL_MONTH + 1, 0).getDate();
-  var daysInPrev  = new Date(CAL_YEAR, CAL_MONTH, 0).getDate();
+  const firstDay  = new Date(calYear, calMonth, 1).getDay();
+  const daysInMon = new Date(calYear, calMonth + 1, 0).getDate();
+  const today     = new Date().toISOString().split('T')[0];
 
-  var html = '';
-  var totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
+  // Group appts by date
+  const byDate = {};
+  apptData.forEach(a => {
+    if (!byDate[a.appt_date]) byDate[a.appt_date] = [];
+    byDate[a.appt_date].push(a);
+  });
 
-  for (var i = 0; i < totalCells; i++) {
-    var day, isCurrentMonth = true, isPrev = false;
-    if (i < firstDay) {
-      day = daysInPrev - firstDay + i + 1;
-      isCurrentMonth = false; isPrev = true;
-    } else if (i >= firstDay + daysInMonth) {
-      day = i - firstDay - daysInMonth + 1;
-      isCurrentMonth = false;
-    } else {
-      day = i - firstDay + 1;
-    }
-
-    var dateStr = CAL_YEAR + '-' +
-      String(CAL_MONTH + 1).padStart(2, '0') + '-' +
-      String(day).padStart(2, '0');
-    var isToday = isCurrentMonth &&
-      day === today.getDate() && CAL_MONTH === today.getMonth() && CAL_YEAR === today.getFullYear();
-    var isSelected = selectedDate === dateStr;
-
-    var cellAppts = isCurrentMonth ? apptData.filter(function(a) { return a.appt_date === dateStr; }) : [];
-    var pills = cellAppts.slice(0, 3).map(function(a) {
-      var cls = a.status === 'Confirmed' ? 'confirmed' : a.status === 'No Show' ? 'noshow' : 'pending';
-      return '<div class="cal-pill ' + cls + '">' + (a.customer_name || a.service || '') + '</div>';
-    }).join('');
-    var more = cellAppts.length > 3 ? '<div class="cal-more">+' + (cellAppts.length - 3) + ' more</div>' : '';
-
-    var cls = 'cal-cell' +
-      (!isCurrentMonth ? ' other-month' : '') +
-      (isToday ? ' today' : '') +
-      (isSelected ? ' selected' : '');
-
-    html += '<div class="' + cls + '" ' +
-      (isCurrentMonth ? 'data-date="' + dateStr + '" onclick="selectCalDay(this.dataset.date)"' : '') + '>' +
-      '<div class="cal-date">' + day + '</div>' +
-      pills + more +
-      '</div>';
+  let html = '';
+  // Blank cells before first day
+  for (let i = 0; i < firstDay; i++) {
+    html += '<div class="cal-cell other-month"></div>';
   }
+  for (let d = 1; d <= daysInMon; d++) {
+    const dateStr  = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayAppts = byDate[dateStr] || [];
+    const isToday  = dateStr === today;
+    const isSel    = dateStr === selectedDate;
+    const cls      = [isToday?'today':'', isSel?'selected':''].filter(Boolean).join(' ');
 
-  gridEl.innerHTML = html;
+    const pills = dayAppts.slice(0,3).map(a =>
+      `<div class="cal-pill ${(a.status||'').toLowerCase().replace(' ','')} "
+        onclick="event.stopPropagation();showDayPanel('${dateStr}')"
+        title="${a.service||'Appointment'}">
+        ${(a.appt_time||'').slice(0,5)} ${a.service||'Appt'}
+      </div>`
+    ).join('');
+    const more = dayAppts.length > 3
+      ? `<div class="cal-more">+${dayAppts.length-3} more</div>` : '';
+
+    html += `
+      <div class="cal-cell ${cls}" onclick="showDayPanel('${dateStr}')">
+        <div class="cal-date">${d}</div>
+        ${pills}${more}
+      </div>`;
+  }
+  grid.innerHTML = html;
 }
 
-function selectCalDay(dateStr) {
+function showDayPanel(dateStr) {
   selectedDate = dateStr;
-  renderCalendar();
-  renderDayPanel(dateStr);
-}
+  renderCalendar(); // re-render to update selected cell
 
-function renderDayPanel(dateStr) {
-  var titleEl = document.getElementById('dayPanelTitle');
-  var slotsEl = document.getElementById('daySlots');
-  if (!titleEl || !slotsEl) return;
+  const title = document.getElementById('dayPanelTitle');
+  const slots = document.getElementById('daySlots');
+  if (!title || !slots) return;
 
-  var d = new Date(dateStr + 'T12:00:00');
-  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  var days   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  titleEl.textContent = days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate();
+  title.textContent = new Date(dateStr + 'T12:00:00')
+    .toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
 
-  var dayAppts = apptData.filter(function(a) { return a.appt_date === dateStr; })
-    .sort(function(a, b) { return (a.appt_time||'').localeCompare(b.appt_time||''); });
+  const dayAppts = apptData
+    .filter(a => a.appt_date === dateStr)
+    .sort((a,b) => (a.appt_time||'').localeCompare(b.appt_time||''));
 
   if (!dayAppts.length) {
-    slotsEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--app-muted);font-size:13px">No appointments this day</div>';
+    slots.innerHTML = '<div style="text-align:center;padding:24px;color:var(--app-muted);font-size:13px;">No appointments this day.</div>';
     return;
   }
 
-  slotsEl.innerHTML = dayAppts.map(function(a) {
-    var cls = a.status === 'Confirmed' ? 'confirmed' : a.status === 'No Show' ? 'noshow' : 'pending';
-    return '<div class="day-slot ' + cls + '">' +
-      '<div class="day-slot-time">' + (a.appt_time ? a.appt_time.slice(0,5) : '--') + '</div>' +
-      '<div class="day-slot-name">' + (a.customer_name || '--') + '</div>' +
-      '<div class="day-slot-service">' + (a.service || '--') + '</div>' +
-      '<div class="day-slot-meta">' + makeBadge(a.status) + '</div>' +
-      '</div>';
-  }).join('');
+  slots.innerHTML = dayAppts.map(a => `
+    <div class="day-slot ${(a.status||'').toLowerCase().replace(' ','')}">
+      <div class="day-slot-time">${(a.appt_time||'').slice(0,5)}</div>
+      <div class="day-slot-name">${a.service||'—'}</div>
+      <div class="day-slot-service">${a.notes||''}</div>
+      <div class="day-slot-meta">${makeBadge(a.status||'Pending')}</div>
+    </div>`).join('');
 }
 
-/* ---- ALL APPOINTMENTS LIST ---- */
+// ── ALL APPOINTMENTS LIST ─────────────────────────────────────────
 function renderApptList() {
-  var tbody = document.getElementById('apptListBody');
+  const tbody = document.getElementById('apptListBody');
   if (!tbody) return;
-  var q      = ((document.getElementById('apptSearch') || {}).value || '').toLowerCase();
-  var status = (document.getElementById('apptStatusFilter') || {}).value || '';
 
-  var filtered = apptData.filter(function(a) {
+  const q      = document.getElementById('apptSearch')?.value?.toLowerCase() || '';
+  const status = document.getElementById('apptStatusFilter')?.value || '';
+
+  const list = apptData.filter(a => {
     if (status && a.status !== status) return false;
-    if (q && !(a.customer_name||'').toLowerCase().includes(q) && !(a.service||'').toLowerCase().includes(q)) return false;
+    if (q && !`${a.service} ${a.appt_date} ${a.appt_time} ${a.status}`.toLowerCase().includes(q)) return false;
     return true;
-  }).sort(function(a,b){ return (a.appt_date||'').localeCompare(b.appt_date||''); });
+  });
 
-  if (!filtered.length) {
+  if (!list.length) {
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--app-muted)">No appointments found</td></tr>';
     return;
   }
 
-  tbody.innerHTML = filtered.map(function(a) {
-    return '<tr>' +
-      '<td class="td-mono" style="color:var(--amber)">' + (a.ref||'--') + '</td>' +
-      '<td>' + (a.customer_name||'--') + '</td>' +
-      '<td class="td-muted">' + (a.vehicle_label||a.vehicle_info||'--') + '</td>' +
-      '<td>' + (a.service||'--') + '</td>' +
-      '<td class="td-mono" style="font-size:11px">' + formatDate(a.appt_date) + ' ' + (a.appt_time?a.appt_time.slice(0,5):'') + '</td>' +
-      '<td class="td-muted">' + (a.mechanic_name||'Unassigned') + '</td>' +
-      '<td>' + makeBadge(a.status) + '</td>' +
-      '<td><button class="app-btn app-btn-ghost app-btn-xs" data-id="' + a.id + '" onclick="cancelAppt(this.dataset.id)">Cancel</button></td>' +
-      '</tr>';
-  }).join('');
+  tbody.innerHTML = list.map(a => `
+    <tr>
+      <td class="td-mono td-bold">${a.ref||'—'}</td>
+      <td>${a.customer_name||'—'}</td>
+      <td>${a.vehicle_label||'—'}</td>
+      <td>${a.service||'—'}</td>
+      <td class="td-mono">${a.appt_date||'—'} ${(a.appt_time||'').slice(0,5)}</td>
+      <td>${a.mechanic_name||'—'}</td>
+      <td>${makeBadge(a.status||'Pending')}</td>
+      <td>
+        <button class="app-btn app-btn-ghost app-btn-sm" style="color:var(--danger)"
+          onclick="cancelAppt('${a.id}')">Cancel</button>
+      </td>
+    </tr>`).join('');
 }
 
-/* ---- REQUESTS (PENDING) ---- */
+// ── BOOKING REQUESTS (Pending) ────────────────────────────────────
 function renderRequests() {
-  var tbody = document.getElementById('requestsBody');
+  const tbody = document.getElementById('requestsBody');
   if (!tbody) return;
-  var pending = apptData.filter(function(a) { return a.status === 'Pending'; });
+  const pending = apptData.filter(a => a.status === 'Pending');
   if (!pending.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--app-muted)">No pending requests</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--app-muted)">No pending requests</td></tr>';
     return;
   }
-  var html = '';
-  for (var k = 0; k < pending.length; k++) {
-    var a = pending[k];
-    var isGuest = !a.customer_id && a.guest_name;
-    var displayName = a.customer_name || a.guest_name || '--';
-    var displayVehicle = a.vehicle_label || a.vehicle_info || '--';
-    var guestBadge = isGuest
-      ? ' <span style="font-family:var(--ff-mono);font-size:9px;background:rgba(232,160,32,0.15);color:var(--amber);border:1px solid rgba(232,160,32,0.3);padding:1px 6px;border-radius:10px">ONLINE</span>'
-      : '';
-    var contact = isGuest
-      ? ((a.guest_phone||'') + (a.guest_email ? ' · ' + a.guest_email : '') || '--')
-      : (a.notes || '--');
-    html += '<tr>' +
-      '<td>' + displayName + guestBadge + '</td>' +
-      '<td>' + (a.service||'--') + '</td>' +
-      '<td class="td-muted">' + displayVehicle + '</td>' +
-      '<td class="td-mono" style="font-size:11px">' + formatDate(a.appt_date) + ' ' + (a.appt_time?a.appt_time.slice(0,5):'') + '</td>' +
-      '<td class="td-muted" style="font-size:12px">' + contact + '</td>' +
-      '<td><div style="display:flex;gap:6px">' +
-        '<button class="app-btn app-btn-ghost app-btn-xs" data-id="' + a.id + '" onclick="openEditAppt(this.dataset.id)">Edit</button>' +
-        '<button class="app-btn app-btn-success app-btn-xs" data-id="' + a.id + '" onclick="confirmAppt(this.dataset.id)">Confirm</button>' +
-        '<button class="app-btn app-btn-ghost app-btn-xs" style="color:var(--danger)" data-id="' + a.id + '" onclick="cancelAppt(this.dataset.id)">Cancel</button>' +
-      '</div></td>' +
-      '</tr>';
-  }
-  tbody.innerHTML = html;
+  tbody.innerHTML = pending.map(a => `
+    <tr class="pending-row">
+      <td>${a.customer_name||'—'}</td>
+      <td>${a.service||'—'}</td>
+      <td>${a.vehicle_label||'—'}</td>
+      <td class="td-mono">${a.appt_date||'—'}</td>
+      <td style="color:var(--app-muted);font-size:12px">${a.notes||'—'}</td>
+      <td>
+        <button class="app-btn app-btn-primary app-btn-sm"
+          onclick="confirmAppt('${a.id}')">Confirm</button>
+      </td>
+    </tr>`).join('');
 }
 
 function updatePendingBadge() {
-  var badge   = document.getElementById('pendingBadge');
-  var pending = apptData.filter(function(a) { return a.status === 'Pending'; }).length;
-  if (badge) { badge.textContent = pending || ''; badge.style.display = pending ? '' : 'none'; }
+  const badge = document.getElementById('pendingBadge');
+  if (!badge) return;
+  const count = apptData.filter(a => a.status === 'Pending').length;
+  badge.textContent = count || '';
+  badge.style.display = count ? '' : 'none';
 }
 
-/* ---- ACTIONS ---- */
 async function confirmAppt(id) {
   try {
-    var appt = apptData.find(function(a){ return a.id === id; });
     await GS.updateAppointment(id, { status: 'Confirmed' });
     Toast.show('Appointment confirmed', 'success');
-    if (appt && !appt.customer_id && appt.guest_name) {
-      await autoCreateCustomerFromBooking(appt);
-    }
     await loadAppointments();
-  } catch(e) { Toast.show(e.message || 'Failed to confirm', 'error'); }
-}
-
-async function autoCreateCustomerFromBooking(appt) {
-  try {
-    var nameParts = (appt.guest_name || '').trim().split(' ');
-    var firstName = nameParts[0] || 'Guest';
-    var lastName  = nameParts.slice(1).join(' ') || '-';
-    var phone     = appt.guest_phone || null;
-    var email     = appt.guest_email || null;
-
-    // Check for existing customer
-    var existing = null;
-    try {
-      var all = await GS.getCustomers();
-      existing = all.find(function(c) {
-        return (phone && c.phone === phone) || (email && c.email === email);
-      });
-    } catch(e) {}
-
-    var customerId;
-    if (existing) {
-      customerId = existing.id;
-      Toast.show('Linked to existing customer: ' + existing.first_name + ' ' + existing.last_name, 'info', 3000);
-    } else {
-      var customer = await GS.createCustomer({ first_name: firstName, last_name: lastName, phone: phone, email: email });
-      customerId = customer.id;
-
-      // Create vehicle from vehicle_info
-      var vInfo = appt.vehicle_info || '';
-      if (vInfo && customerId) {
-        var parts  = vInfo.split(' ');
-        var year   = parseInt(parts[0]) || null;
-        var make   = parts[1] || '';
-        var rest   = parts.slice(2).join(' ');
-        var model  = rest.split('—')[0].trim() || make;
-        var plate  = rest.includes('—') ? rest.split('—')[1].trim() : null;
-        if (make) {
-          await GS.createVehicle({ customer_id: customerId, year: year, make: make, model: model, plate: plate });
-        }
-      }
-      Toast.show('New customer created: ' + firstName + ' ' + lastName, 'success', 3000);
-    }
-    await GS.updateAppointment(appt.id, { customer_id: customerId });
-  } catch(e) { console.warn('Auto-create customer failed:', e.message); }
-}
-
-/* ---- EDIT APPOINTMENT MODAL ---- */
-function openEditAppt(id) {
-  var a = apptData.find(function(x){ return x.id === id; });
-  if (!a) return;
-  document.getElementById('editApptId').value      = id;
-  document.getElementById('editGuestName').value   = a.guest_name  || a.customer_name || '';
-  document.getElementById('editGuestPhone').value  = a.guest_phone || '';
-  document.getElementById('editGuestEmail').value  = a.guest_email || '';
-  document.getElementById('editVehicleInfo').value = a.vehicle_info || a.vehicle_label || '';
-  document.getElementById('editService').value     = a.service || '';
-  document.getElementById('editNotes').value       = a.notes   || '';
-  document.getElementById('editApptDate').value    = a.appt_date || '';
-  document.getElementById('editApptTime').value    = a.appt_time ? a.appt_time.slice(0,5) : '';
-
-  // Populate technician dropdown
-  var techSel = document.getElementById('editTechId');
-  techSel.innerHTML = '<option value="">-- Unassigned --</option>' +
-    staffData.map(function(s) {
-      return '<option value="' + s.id + '"' + (a.mechanic_id === s.id ? ' selected' : '') + '>' + s.full_name + '</option>';
-    }).join('');
-
-  Modal.open('editApptModal');
-}
-
-async function saveEditAppt() {
-  var id          = document.getElementById('editApptId').value;
-  var guestName   = document.getElementById('editGuestName').value.trim();
-  var guestPhone  = document.getElementById('editGuestPhone').value.trim();
-  var guestEmail  = document.getElementById('editGuestEmail').value.trim();
-  var vehicleInfo = document.getElementById('editVehicleInfo').value.trim();
-  var service     = document.getElementById('editService').value;
-  var notes       = document.getElementById('editNotes').value.trim();
-  var apptDate    = document.getElementById('editApptDate').value;
-  var apptTime    = document.getElementById('editApptTime').value;
-  var techId      = document.getElementById('editTechId').value;
-
-  if (!guestName) { Toast.show('Name is required', 'error'); return; }
-  if (!apptDate)  { Toast.show('Date is required', 'error'); return; }
-
-  var btn = document.querySelector('#editApptModal .app-btn-primary');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
-
-  try {
-    await GS.updateAppointment(id, {
-      guest_name:   guestName,
-      guest_phone:  guestPhone  || null,
-      guest_email:  guestEmail  || null,
-      vehicle_info: vehicleInfo || null,
-      service:      service,
-      notes:        notes       || null,
-      appt_date:    apptDate,
-      appt_time:    apptTime    ? apptTime + ':00' : null,
-      mechanic_id:  techId      || null,
-    });
-    Toast.show('Appointment updated', 'success');
-    Modal.close('editApptModal');
-    await loadAppointments();
-  } catch(e) {
-    Toast.show(e.message || 'Failed to save', 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Save Changes'; }
-  }
+  } catch(err) { Toast.show(err.message, 'error'); }
 }
 
 async function cancelAppt(id) {
-  confirmAction('Cancel this appointment?', async function() {
-    try {
-      await GS.cancelAppointment(id);
-      Toast.show('Appointment cancelled', 'info');
-      await loadAppointments();
-    } catch(e) { Toast.show(e.message || 'Failed to cancel', 'error'); }
+  try {
+    await GS.updateAppointment(id, { status: 'Cancelled' });
+    Toast.show('Appointment cancelled', 'info');
+    await loadAppointments();
+  } catch(err) { Toast.show(err.message, 'error'); }
+}
+
+// ── BOOKING FORM DROPDOWNS ────────────────────────────────────────
+function populateCustomerSelect(custs) {
+  const sel = document.getElementById('b-cust');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Select customer…</option>'
+    + custs.map(c => `<option value="${c.id}">${c.first_name} ${c.last_name}</option>`).join('');
+}
+
+function populateTechFilter(staff) {
+  const sel = document.getElementById('apptTechFilter');
+  if (!sel) return;
+  staff.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id; opt.textContent = s.full_name;
+    sel.appendChild(opt);
   });
+  // Also populate technician select in booking modal
+  const btech = document.getElementById('b-tech');
+  if (btech) {
+    btech.innerHTML = '<option value="">Unassigned</option>'
+      + staff.map(s => `<option value="${s.id}">${s.full_name}</option>`).join('');
+  }
+}
+
+async function populateVehicles() {
+  const custId = document.getElementById('b-cust')?.value;
+  const sel    = document.getElementById('b-veh');
+  const vinSt  = document.getElementById('b-vin-status');
+  if (!sel) return;
+
+  // Clear VIN field and status when customer changes
+  const vinEl = document.getElementById('b-vin');
+  if (vinEl) vinEl.value = '';
+  if (vinSt) vinSt.innerHTML = '';
+
+  if (!custId) {
+    sel.innerHTML = '<option value="">Select customer first…</option>';
+    return;
+  }
+
+  sel.innerHTML = '<option value="">Loading…</option>';
+  try {
+    if (!vehCache[custId]) {
+      vehCache[custId] = await GS.getVehicles(custId);
+    }
+    const vehs = vehCache[custId] || [];
+    sel.innerHTML = '<option value="">Select vehicle…</option>'
+      + vehs.map(v =>
+          `<option value="${v.id}" data-vin="${v.vin||''}">${v.year||''} ${v.make} ${v.model}${v.plate?' — '+v.plate:''}</option>`
+        ).join('');
+  } catch {
+    sel.innerHTML = '<option value="">Could not load vehicles</option>';
+  }
+}
+
+// ── VIN LOOKUP IN BOOKING MODAL ───────────────────────────────────
+async function bookingVinLookup() {
+  const vinEl  = document.getElementById('b-vin');
+  const statusEl = document.getElementById('b-vin-status');
+  const vehSel = document.getElementById('b-veh');
+  if (!vinEl || !statusEl) return;
+
+  const vin = vinEl.value.trim().toUpperCase();
+  vinEl.value = vin;
+
+  // Character counter
+  if (vin.length < 17) {
+    statusEl.innerHTML = vin.length > 0
+      ? `<span style="color:var(--app-muted);font-family:var(--ff-mono);font-size:11px">${vin.length}/17 characters</span>`
+      : '';
+    return;
+  }
+  if (vin.length > 17) {
+    statusEl.innerHTML = `<span style="color:#f87171;font-size:11px">⚠ VIN must be exactly 17 characters</span>`;
+    return;
+  }
+
+  // Step 1 — Check if this VIN already matches one of the customer's vehicles
+  const custId = document.getElementById('b-cust')?.value;
+  if (custId && vehSel) {
+    const options = Array.from(vehSel.options);
+    const match   = options.find(o => o.dataset.vin?.toUpperCase() === vin);
+    if (match) {
+      vehSel.value = match.value;
+      statusEl.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;
+          background:rgba(31,122,74,0.1);border:1px solid rgba(31,122,74,0.3);
+          border-radius:6px;padding:8px 12px;margin-top:4px;font-size:12px;">
+          <span>&#9989;</span>
+          <div>
+            <span style="color:#6ee7b7;font-weight:700">${match.textContent.trim()}</span>
+            <span style="color:var(--app-muted);margin-left:6px;">— matched from customer vehicles and auto-selected</span>
+          </div>
+        </div>`;
+      return;
+    }
+  }
+
+  // Step 2 — Decode via NHTSA
+  statusEl.innerHTML = `
+    <span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--app-muted)">
+      <span style="width:11px;height:11px;border:2px solid var(--app-border);border-top-color:var(--amber);
+        border-radius:50%;animation:spin 0.65s linear infinite;display:inline-block"></span>
+      Decoding VIN…
+    </span>`;
+
+  try {
+    const info = await VINDecoder.decode(vin);
+    if (!info) return;
+
+    const vehicleStr = [info.year, info.make, info.model]
+      .filter(Boolean).map(s => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()).join(' ');
+    const extras = [info.bodyClass, info.fuelType, info.cylinders ? info.cylinders+'-cyl' : null]
+      .filter(Boolean).join(' · ');
+
+    // Vehicle not on file for this customer — show decoded info + add suggestion
+    const custSelected = !!custId;
+    statusEl.innerHTML = `
+      <div style="background:rgba(232,160,32,0.08);border:1px solid rgba(232,160,32,0.25);
+        border-radius:6px;padding:10px 14px;margin-top:4px;">
+        <div style="display:flex;align-items:flex-start;gap:8px;">
+          <span style="font-size:16px;flex-shrink:0">&#128663;</span>
+          <div style="flex:1;">
+            <div style="font-size:12px;font-weight:700;color:var(--amber);line-height:1.4">${vehicleStr}</div>
+            ${extras ? `<div style="font-size:11px;color:var(--app-muted);margin-top:2px">${extras}</div>` : ''}
+            <div style="font-size:11px;color:var(--app-muted);margin-top:4px;">
+              ${custSelected
+                ? 'This vehicle is not registered to this customer yet. <a href="customers.html" style="color:var(--amber)">Add it in Customers →</a> then come back to book.'
+                : 'Select a customer first, then re-enter the VIN to auto-select their vehicle.'}
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+  } catch(err) {
+    statusEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;
+        background:rgba(181,43,30,0.1);border:1px solid rgba(181,43,30,0.3);
+        border-radius:6px;padding:8px 12px;margin-top:4px;font-size:11px;color:#f87171;">
+        &#9888; ${err.message || 'Could not decode VIN — select vehicle from dropdown'}
+      </div>`;
+  }
+}
+
+// ── SAVE APPOINTMENT ──────────────────────────────────────────────
+async function saveAppointment() {
+  const custId  = document.getElementById('b-cust')?.value;
+  const vehId   = document.getElementById('b-veh')?.value;
+  const service = document.getElementById('b-service')?.value;
+  const date    = document.getElementById('b-date')?.value;
+  const time    = document.getElementById('b-time')?.value;
+  const tech    = document.getElementById('b-tech')?.value || null;
+  const status  = document.getElementById('b-status')?.value || 'Confirmed';
+  const notes   = document.getElementById('b-notes')?.value?.trim() || null;
+
+  if (!custId)  { Toast.show('Please select a customer', 'error'); return; }
+  if (!vehId)   { Toast.show('Please select a vehicle', 'error'); return; }
+  if (!service) { Toast.show('Please select a service', 'error'); return; }
+  if (!date)    { Toast.show('Please select a date', 'error'); return; }
+
+  const saveBtn = document.querySelector('#bookingModal .modal-footer .app-btn-primary');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+
+  try {
+    const appt = await GS.createAppointment({
+      customer_id:  custId,
+      vehicle_id:   vehId,
+      service,
+      appt_date:    date,
+      appt_time:    time,
+      mechanic_id:  tech,
+      status,
+      notes,
+    });
+    Toast.show(`Appointment booked — ${service} on ${date}`, 'success');
+    Modal.close('bookingModal');
+    // Reset form
+    ['b-cust','b-veh','b-vin'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['b-notes'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const st = document.getElementById('b-vin-status'); if (st) st.innerHTML = '';
+    await loadAppointments();
+  } catch(err) {
+    Toast.show(err.message || 'Could not save appointment', 'error');
+  } finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Appointment'; }
+  }
 }
 
 document.addEventListener('DOMContentLoaded', initPage);
