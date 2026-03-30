@@ -117,7 +117,7 @@
           <div><div class="app-label">Vehicle</div><div id="gp-veh" style="color:var(--app-text)"></div></div>
           <div><div class="app-label">Labor</div><div id="gp-labor" style="color:var(--amber);font-family:var(--ff-mono)"></div></div>
           <div><div class="app-label">Parts</div><div id="gp-parts" style="color:var(--amber);font-family:var(--ff-mono)"></div></div>
-          <div><div class="app-label" id="gp-tax-label">Tax</div><div id="gp-tax" style="color:var(--amber);font-family:var(--ff-mono)"></div></div>
+          <div><div class="app-label">Tax (${(GS_TAX)}%)</div><div id="gp-tax" style="color:var(--amber);font-family:var(--ff-mono)"></div></div>
           <div><div class="app-label">TOTAL</div><div id="gp-total" style="color:var(--app-text);font-family:var(--ff-display);font-size:24px"></div></div>
         </div>
       </div>
@@ -178,311 +178,202 @@
 <script src="../js/main.js"></script>
 <script src="../js/supabase.js"></script>
 <script src="../js/rbac.js"></script>
+<script src="https://js.paystack.co/v1/inline.js"></script>
+<script src="../js/billing.js"></script>
 <script>
-var invoiceData  = [];
-var woData       = [];
-var shopSettings = { labor_rate: 90, tax_rate: 8 };
-var _payInvId    = null;
-var _user        = null;
+let invoiceData = [];
 
-/* ── INIT ── */
 async function initPage() {
-  _user = await RBAC.guardPage('invoices');
+  const _user = await RBAC.guardPage('invoices');
   if (!_user) return;
   await RBAC.initSidebar('invoices');
-  try {
-    var s = await GS.getSettings();
-    if (s) { shopSettings.labor_rate = parseFloat(s.labor_rate)||90; shopSettings.tax_rate = parseFloat(s.tax_rate)||8; }
-  } catch(e) {}
   await loadInvoices();
+
+  // Live subscription
   Realtime.subscribe('invoices', {
-    onInsert: function() { loadInvoices(); },
-    onUpdate: function(inv) {
-      var idx = invoiceData.findIndex(function(i){ return i.id === inv.id; });
-      if (idx >= 0) { invoiceData[idx] = Object.assign({}, invoiceData[idx], inv); renderInvTable(); renderStats(); }
-      else loadInvoices();
+    onInsert: () => loadInvoices(),
+    onUpdate: (inv) => {
+      const idx = invoiceData.findIndex(i => i.id === inv.id);
+      if (idx >= 0) { invoiceData[idx] = { ...invoiceData[idx], ...inv }; renderInvoiceTable(); renderInvoiceSummary(); }
     }
   });
 }
 
 async function loadInvoices() {
-  try { invoiceData = await GS.getInvoices(); } catch(e) { Toast.show('Failed to load invoices','error'); return; }
-  renderInvTable();
-  renderStats();
+  invoiceData = await GS.getInvoices();
+  renderInvoiceTable('all');
+  renderInvoiceSummary();
 }
 
-/* ── STATS ── */
-function renderStats() {
-  var paid    = invoiceData.filter(function(i){ return i.status==='Paid'; }).reduce(function(s,i){ return s+(i.total||0); },0);
-  var unpaid  = invoiceData.filter(function(i){ return i.status==='Unpaid'; }).reduce(function(s,i){ return s+(i.total||0); },0);
-  var overdue = invoiceData.filter(function(i){ return i.status==='Overdue'; }).reduce(function(s,i){ return s+(i.total||0); },0);
-  var unpaidCnt = invoiceData.filter(function(i){ return i.status==='Unpaid'||i.status==='Overdue'; }).length;
-  document.getElementById('invStats').innerHTML =
-    '<div class="stat-card rust"><div class="stat-label">Total Revenue</div><div class="stat-value">'+formatCurrency(paid)+'</div><div class="stat-delta up">Paid invoices</div></div>'+
-    '<div class="stat-card amber"><div class="stat-label">Outstanding</div><div class="stat-value">'+formatCurrency(unpaid)+'</div><div class="stat-delta">Awaiting payment</div></div>'+
-    '<div class="stat-card blue"><div class="stat-label">Overdue</div><div class="stat-value">'+formatCurrency(overdue)+'</div><div class="stat-delta '+(overdue>0?'down':'')+'"> '+(overdue>0?'Needs attention':'All clear')+'</div></div>'+
-    '<div class="stat-card green"><div class="stat-label">Total Invoices</div><div class="stat-value">'+invoiceData.length+'</div><div class="stat-delta">'+unpaidCnt+' unpaid</div></div>';
-  var badge = document.getElementById('unpaidBadge');
-  if (badge) { badge.textContent = unpaidCnt||''; badge.style.display = unpaidCnt?'':'none'; }
-}
-
-/* ── RENDER TABLES ── */
-function renderInvTable() {
-  var q      = ((document.getElementById('invSearch')||{}).value||'').toLowerCase().trim();
-  var status = ((document.getElementById('invStatusFilter')||{}).value||'');
-  var all    = invoiceData.filter(function(i){
-    if (status && i.status!==status) return false;
-    if (q && !(i.ref||'').toLowerCase().includes(q) && !(i.customer_name||'').toLowerCase().includes(q)) return false;
-    return true;
-  });
-  var unpaid = invoiceData.filter(function(i){ return i.status==='Unpaid'||i.status==='Overdue'; });
-  var paid   = invoiceData.filter(function(i){ return i.status==='Paid'; });
-  fillTbody('invTableAll',    all,    'all');
-  fillTbody('invTableUnpaid', unpaid, 'unpaid');
-  fillTbody('invTablePaid',   paid,   'paid');
-}
-
-function fillTbody(id, rows, mode) {
-  var tbody = document.getElementById(id);
-  if (!tbody) return;
-  if (!rows.length) { tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--app-muted)">No invoices found</td></tr>'; return; }
-  var html = '';
-  for (var k=0; k<rows.length; k++) {
-    var inv = rows[k];
-    var total = inv.total||((inv.labor_amount||0)+(inv.parts_amount||0)+(inv.tax_amount||0));
-    var days  = inv.invoice_date&&inv.status!=='Paid' ? Math.floor((Date.now()-new Date(inv.invoice_date).getTime())/86400000)+'d' : '';
-    if (mode==='all') {
-      html += '<tr>'+
-        '<td class="td-mono td-bold" style="color:var(--amber);cursor:pointer" data-id="'+inv.id+'" onclick="openInvoiceView(this.dataset.id)">'+(inv.ref||'--')+'</td>'+
-        '<td>'+(inv.customer_name||'--')+'</td>'+
-        '<td class="td-mono" style="font-size:11px">'+(inv.wo_ref||'--')+'</td>'+
-        '<td class="td-mono">'+formatCurrency(inv.labor_amount||0)+'</td>'+
-        '<td class="td-mono">'+formatCurrency(inv.parts_amount||0)+'</td>'+
-        '<td class="td-mono">'+formatCurrency(inv.tax_amount||0)+'</td>'+
-        '<td class="td-mono td-bold">'+formatCurrency(total)+'</td>'+
-        '<td>'+makeBadge(inv.status)+'</td>'+
-        '<td class="td-muted td-mono" style="font-size:11px">'+formatDate(inv.invoice_date||inv.created_at)+'</td>'+
-        '<td><div style="display:flex;gap:6px">'+
-          '<button class="app-btn app-btn-ghost app-btn-xs" data-id="'+inv.id+'" onclick="openInvoiceView(this.dataset.id)">View</button>'+
-          (inv.status!=='Paid'?'<button class="app-btn app-btn-success app-btn-xs" data-id="'+inv.id+'" onclick="openPaymentModal(this.dataset.id)">Mark Paid</button>':'')+
-        '</div></td>'+
-        '</tr>';
-    } else if (mode==='unpaid') {
-      html += '<tr>'+
-        '<td class="td-mono td-bold" style="color:var(--amber);cursor:pointer" data-id="'+inv.id+'" onclick="openInvoiceView(this.dataset.id)">'+(inv.ref||'--')+'</td>'+
-        '<td>'+(inv.customer_name||'--')+'</td>'+
-        '<td class="td-mono td-bold">'+formatCurrency(total)+'</td>'+
-        '<td>'+makeBadge(inv.status)+'</td>'+
-        '<td class="td-muted td-mono" style="font-size:11px">'+formatDate(inv.invoice_date||inv.created_at)+'</td>'+
-        '<td class="td-mono" style="color:'+(parseInt(days)>30?'var(--danger)':'var(--app-muted)')+'">'+days+'</td>'+
-        '<td><button class="app-btn app-btn-success app-btn-xs" data-id="'+inv.id+'" onclick="openPaymentModal(this.dataset.id)">Mark Paid</button></td>'+
-        '</tr>';
-    } else {
-      html += '<tr>'+
-        '<td class="td-mono td-bold" style="color:var(--amber);cursor:pointer" data-id="'+inv.id+'" onclick="openInvoiceView(this.dataset.id)">'+(inv.ref||'--')+'</td>'+
-        '<td>'+(inv.customer_name||'--')+'</td>'+
-        '<td class="td-mono td-bold">'+formatCurrency(total)+'</td>'+
-        '<td class="td-muted">'+(inv.payment_method||'--')+'</td>'+
-        '<td class="td-muted td-mono" style="font-size:11px">'+formatDate(inv.paid_at)+'</td>'+
-        '<td><button class="app-btn app-btn-ghost app-btn-xs" data-id="'+inv.id+'" onclick="openInvoiceView(this.dataset.id)">View</button></td>'+
-        '</tr>';
-    }
-  }
-  tbody.innerHTML = html;
-}
-
-/* ── GENERATE INVOICE MODAL ── */
-async function openGenerateModal() {
-  var sel = document.getElementById('gen-wo');
-  sel.innerHTML = '<option value="">Loading completed work orders...</option>';
-  document.getElementById('gen-preview').style.display = 'none';
-  Modal.open('generateModal');
-  try {
-    var wos = await GS.getWorkOrders({ status:'Completed' });
-    var existingWOIds = invoiceData.map(function(i){ return i.work_order_id; }).filter(Boolean);
-    woData = wos.filter(function(w){ return !existingWOIds.includes(w.id); });
-    if (!woData.length) {
-      sel.innerHTML = '<option value="">No completed work orders without invoices</option>';
-      return;
-    }
-    sel.innerHTML = '<option value="">-- Select a completed work order --</option>' +
-      woData.map(function(w){
-        return '<option value="'+w.id+'">'+(w.ref||w.id.slice(0,8))+' — '+(w.customer_name||'')+(w.vehicle_label?' ('+w.vehicle_label+')':'')+'</option>';
-      }).join('');
-  } catch(e) { Toast.show('Failed to load work orders: '+e.message,'error'); Modal.close('generateModal'); }
-}
-
-async function previewInvoiceCalc() {
-  var woId = document.getElementById('gen-wo').value;
-  var prev = document.getElementById('gen-preview');
-  if (!woId) { prev.style.display='none'; return; }
-  try {
-    var wo = await GS.getWorkOrder(woId);
-    var laborAmt = (wo.labor_hours||0) * shopSettings.labor_rate;
-    var partsAmt = (wo.parts||[]).reduce(function(s,p){ return s+(p.qty||0)*((p.unit_cost||(p.inventory&&p.inventory.cost))||0); },0);
-    var taxAmt   = (laborAmt+partsAmt)*shopSettings.tax_rate/100;
-    var total    = laborAmt+partsAmt+taxAmt;
-    document.getElementById('gp-cust').textContent  = wo.customer_name||'--';
-    document.getElementById('gp-veh').textContent   = wo.vehicle_label||'--';
-    document.getElementById('gp-labor').textContent = formatCurrency(laborAmt)+' ('+(wo.labor_hours||0)+' hrs x '+formatCurrency(shopSettings.labor_rate)+')';
-    document.getElementById('gp-parts').textContent = formatCurrency(partsAmt)+' ('+(wo.parts||[]).length+' part(s))';
-    document.getElementById('gp-tax').textContent   = formatCurrency(taxAmt)+' ('+shopSettings.tax_rate+'%)';
-    document.getElementById('gp-total').textContent = formatCurrency(total);
-    prev.style.display = 'block';
-  } catch(e) { Toast.show('Could not load work order details','error'); }
-}
-
-async function generateInvoice() {
-  var woId = document.getElementById('gen-wo').value;
-  if (!woId) { Toast.show('Please select a work order','error'); return; }
-  var btn = document.querySelector('#generateModal .app-btn-primary');
-  btn.disabled=true; btn.textContent='Generating...';
-  try {
-    var wo = await GS.getWorkOrder(woId);
-    var laborAmt = (wo.labor_hours||0)*shopSettings.labor_rate;
-    var partsAmt = (wo.parts||[]).reduce(function(s,p){ return s+(p.qty||0)*((p.unit_cost||(p.inventory&&p.inventory.cost))||0); },0);
-    var taxAmt   = (laborAmt+partsAmt)*shopSettings.tax_rate/100;
-    var inv = await GS.createInvoice({
-      work_order_id: woId,
-      customer_id:   wo.customer_id,
-      labor_amount:  laborAmt,
-      parts_amount:  partsAmt,
-      tax_amount:    taxAmt,
-      status:        'Unpaid',
-      invoice_date:  new Date().toISOString().substring(0,10),
-    });
-    Toast.show('Invoice '+(inv.ref||'')+' generated','success');
-    Modal.close('generateModal');
-    await loadInvoices();
-    setTimeout(function(){ openInvoiceView(inv.id); }, 400);
-  } catch(e) { Toast.show(e.message||'Failed to generate invoice','error'); }
-  finally { btn.disabled=false; btn.textContent='Generate Invoice'; }
-}
-
-/* ── INVOICE VIEW ── */
-async function openInvoiceView(id) {
-  var inv = invoiceData.find(function(i){ return i.id===id; });
-  if (!inv) { Toast.show('Invoice not found','error'); return; }
-  var total = inv.total||((inv.labor_amount||0)+(inv.parts_amount||0)+(inv.tax_amount||0));
-  var shopName='GearShift Auto', shopAddr='', shopPhone='';
-  try { var sh=await RBAC.getShop(); if(sh){shopName=sh.name||shopName;shopAddr=sh.address||'';shopPhone=sh.phone||'';} } catch(e){}
-  document.getElementById('invModalTitle').textContent='INVOICE '+(inv.ref||'');
-  document.getElementById('invPreviewBody').innerHTML=
-    '<div class="inv-preview-header">'+
-      '<div><div class="inv-preview-logo">GEAR<span>SHIFT</span></div>'+
-      '<div style="font-size:12px;color:#666;margin-top:6px">'+shopAddr+(shopPhone?' | '+shopPhone:'')+'</div></div>'+
-      '<div class="inv-preview-meta"><strong>INVOICE</strong>'+
-        '<div>'+(inv.ref||'--')+'</div>'+
-        '<div>Date: '+formatDate(inv.invoice_date||inv.created_at)+'</div>'+
-        '<div>Status: '+(inv.status||'Unpaid')+'</div>'+
-      '</div>'+
-    '</div>'+
-    '<div class="inv-bill-row">'+
-      '<div><div class="inv-bill-label">Bill To</div>'+
-        '<div style="font-weight:600">'+(inv.customer_name||'--')+'</div>'+
-        '<div style="color:#666">'+(inv.customer_email||'')+'</div></div>'+
-      '<div><div class="inv-bill-label">Work Order</div>'+
-        '<div style="font-weight:600">'+(inv.wo_ref||'--')+'</div></div>'+
-    '</div>'+
-    '<table class="inv-table">'+
-      '<thead><tr><th>Description</th><th style="text-align:right">Amount</th></tr></thead>'+
-      '<tbody>'+
-        '<tr><td>Labor</td><td style="text-align:right;font-family:monospace">'+formatCurrency(inv.labor_amount||0)+'</td></tr>'+
-        '<tr><td>Parts &amp; Materials</td><td style="text-align:right;font-family:monospace">'+formatCurrency(inv.parts_amount||0)+'</td></tr>'+
-        '<tr><td>Tax ('+shopSettings.tax_rate+'%)</td><td style="text-align:right;font-family:monospace">'+formatCurrency(inv.tax_amount||0)+'</td></tr>'+
-      '</tbody>'+
-    '</table>'+
-    '<div class="inv-totals">'+
-      '<div class="inv-totals-row"><span>Subtotal</span><span>'+formatCurrency((inv.labor_amount||0)+(inv.parts_amount||0))+'</span></div>'+
-      '<div class="inv-totals-row"><span>Tax</span><span>'+formatCurrency(inv.tax_amount||0)+'</span></div>'+
-      '<div class="inv-totals-row total"><span>TOTAL</span><span>'+formatCurrency(total)+'</span></div>'+
-    '</div>'+
-    (inv.status==='Paid'?'<div class="inv-footer-note" style="color:#27ae60;font-weight:700;font-size:16px">PAID — '+formatDate(inv.paid_at)+' via '+(inv.payment_method||'')+'</div>':'')+
-    '<div class="inv-footer-note">Thank you for your business. Payment due within 30 days.</div>';
-  document.getElementById('invModalFooter').innerHTML=
-    '<button class="app-btn app-btn-ghost" onclick="Modal.close(&quot;invoiceModal&quot;)">Close</button>'+
-    '<button class="app-btn app-btn-ghost" data-id="'+id+'" onclick="printInvoice(this.dataset.id)">Print / PDF</button>'+
-    (inv.status!=='Paid'?'<button class="app-btn app-btn-success" data-id="'+id+'" onclick="Modal.close(&quot;invoiceModal&quot;);openPaymentModal(this.dataset.id)">Mark as Paid</button>':'');
-  Modal.open('invoiceModal');
-}
-
-function printInvoice(id) {
-  var inv = invoiceData.find(function(i){ return i.id===id; });
+// ── INVOICE PAYMENT ──────────────────────────────────────────────
+async function markPaid(id) {
+  const inv = invoiceData.find(i => i.id === id);
   if (!inv) return;
-  var total = inv.total||((inv.labor_amount||0)+(inv.parts_amount||0)+(inv.tax_amount||0));
-  var lines = [];
-  lines.push('<!DOCTYPE html><html><head><meta charset="UTF-8">');
-  lines.push('<title>Invoice '+(inv.ref||'')+'<' + '/title>');
-  lines.push('<style>');
-  lines.push('body{font-family:Arial,sans-serif;padding:40px;color:#111;}');
-  lines.push('.hdr{display:flex;justify-content:space-between;border-bottom:3px solid #c94b1e;padding-bottom:20px;margin-bottom:28px;}');
-  lines.push('.logo{font-size:36px;font-weight:900;letter-spacing:3px;}.logo span{color:#c94b1e;}');
-  lines.push('.meta{text-align:right;font-size:13px;color:#555;}.meta h2{font-size:22px;color:#111;margin:0 0 4px;}');
-  lines.push('.bill{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px;font-size:13px;}');
-  lines.push('.lbl{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#999;margin-bottom:6px;}');
-  lines.push('table{width:100%;border-collapse:collapse;margin-bottom:24px;font-size:13px;}');
-  lines.push('th{text-align:left;padding:8px 12px;background:#f4f1eb;border-bottom:2px solid #ddd;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#666;}');
-  lines.push('td{padding:10px 12px;border-bottom:1px solid #eee;}');
-  lines.push('.tots{margin-left:auto;width:240px;font-size:13px;}');
-  lines.push('.tot-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #eee;}');
-  lines.push('.tot-row.grand{border-top:2px solid #111;border-bottom:none;padding-top:12px;font-size:18px;font-weight:700;}');
-  lines.push('.foot{margin-top:28px;padding-top:20px;border-top:1px solid #ddd;font-size:12px;color:#888;text-align:center;}');
-  lines.push('@media print{button{display:none!important;}}');
-  lines.push('<' + '/style><' + '/head><body>');
-  lines.push('<div class="hdr"><div><div class="logo">GEAR<span>SHIFT</span><' + '/div><' + '/div>');
-  lines.push('<div class="meta"><h2>INVOICE<' + '/h2><div>'+(inv.ref||'--')+'<' + '/div>');
-  lines.push('<div>Date: '+formatDate(inv.invoice_date||inv.created_at)+'<' + '/div>');
-  lines.push('<div>Status: '+(inv.status||'Unpaid')+'<' + '/div><' + '/div><' + '/div>');
-  lines.push('<div class="bill"><div><div class="lbl">Bill To<' + '/div>');
-  lines.push('<div style="font-weight:600">'+(inv.customer_name||'--')+'<' + '/div><' + '/div>');
-  lines.push('<div><div class="lbl">Work Order<' + '/div>');
-  lines.push('<div style="font-weight:600">'+(inv.wo_ref||'--')+'<' + '/div><' + '/div><' + '/div>');
-  lines.push('<table><thead><tr><th>Description<' + '/th><th style="text-align:right">Amount<' + '/th><' + '/tr><' + '/thead><tbody>');
-  lines.push('<tr><td>Labor<' + '/td><td style="text-align:right">'+formatCurrency(inv.labor_amount||0)+'<' + '/td><' + '/tr>');
-  lines.push('<tr><td>Parts &amp; Materials<' + '/td><td style="text-align:right">'+formatCurrency(inv.parts_amount||0)+'<' + '/td><' + '/tr>');
-  lines.push('<tr><td>Tax ('+shopSettings.tax_rate+'%)<' + '/td><td style="text-align:right">'+formatCurrency(inv.tax_amount||0)+'<' + '/td><' + '/tr>');
-  lines.push('<' + '/tbody><' + '/table>');
-  lines.push('<div class="tots">');
-  lines.push('<div class="tot-row"><span>Subtotal<' + '/span><span>'+formatCurrency((inv.labor_amount||0)+(inv.parts_amount||0))+'<' + '/span><' + '/div>');
-  lines.push('<div class="tot-row"><span>Tax<' + '/span><span>'+formatCurrency(inv.tax_amount||0)+'<' + '/span><' + '/div>');
-  lines.push('<div class="tot-row grand"><span>TOTAL<' + '/span><span>'+formatCurrency(total)+'<' + '/span><' + '/div><' + '/div>');
-  if (inv.status==='Paid') lines.push('<div class="foot" style="color:#27ae60;font-weight:700">PAID on '+formatDate(inv.paid_at)+' via '+(inv.payment_method||'')+'<' + '/div>');
-  lines.push('<div class="foot">Thank you for your business. Payment due within 30 days.<' + '/div>');
-  lines.push('<div style="margin-top:20px;text-align:center"><button onclick="window.print()" style="padding:10px 24px;background:#c94b1e;color:#fff;border:none;border-radius:4px;font-size:14px;cursor:pointer;font-weight:600">Print / Save as PDF<' + '/button><' + '/div>');
-  lines.push('<' + '/body><' + '/html>');
-  var win = window.open('','_blank');
-  if (!win) { Toast.show('Allow popups to print','error'); return; }
-  win.document.write(lines.join(''));
-  win.document.close();
-  win.focus();
-  setTimeout(function(){ win.print(); }, 500);
-}
 
-/* ── PAYMENT MODAL ── */
-function openPaymentModal(id) {
-  _payInvId = id;
-  var inv = invoiceData.find(function(i){ return i.id===id; });
-  if (!inv) return;
-  var total = inv.total||((inv.labor_amount||0)+(inv.parts_amount||0)+(inv.tax_amount||0));
-  document.getElementById('payModalTitle').textContent = 'RECORD PAYMENT — '+(inv.ref||'');
-  document.getElementById('payInfo').textContent = (inv.customer_name||'')+' | Total: '+formatCurrency(total);
-  document.getElementById('pay-amount').value = total.toFixed(2);
-  document.getElementById('pay-date').value   = new Date().toISOString().substring(0,10);
+  // Open the record payment modal (already in the HTML)
+  document.getElementById('payModalTitle').textContent = 'RECORD PAYMENT — ' + (inv.ref || '');
+  document.getElementById('payInfo').textContent = 'Amount due: ' + formatCurrency(inv.total_amount || 0);
+  document.getElementById('pay-amount').value = inv.total_amount || '';
+  document.getElementById('pay-date').value   = new Date().toISOString().split('T')[0];
+  document.getElementById('pay-method').value = 'Card';
+  _payingInvoiceId = id;
   Modal.open('paymentModal');
 }
 
+let _payingInvoiceId = null;
+
 async function recordPayment() {
-  if (!_payInvId) return;
-  var method = document.getElementById('pay-method').value;
-  var btn = document.querySelector('#paymentModal .app-btn-primary');
-  btn.disabled=true; btn.textContent='Saving...';
+  const method = document.getElementById('pay-method')?.value || 'Cash';
+  const amount = parseFloat(document.getElementById('pay-amount')?.value) || 0;
+  if (!amount) { Toast.show('Please enter the payment amount', 'error'); return; }
+
+  const btn = document.querySelector('#paymentModal .modal-footer .app-btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
   try {
-    await GS.markInvoicePaid(_payInvId, method);
-    Toast.show('Payment recorded','success');
+    await GS.markInvoicePaid(_payingInvoiceId, method);
     Modal.close('paymentModal');
+    Toast.show('Invoice marked as paid ✓', 'success');
+    _payingInvoiceId = null;
     await loadInvoices();
-  } catch(e) { Toast.show(e.message||'Failed','error'); }
-  finally { btn.disabled=false; btn.textContent='Record Payment'; }
+  } catch(err) {
+    Toast.show(err.message || 'Could not record payment', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Record Payment'; }
+  }
+}
+
+async function payViaPaystack(id) {
+  const inv = invoiceData.find(i => i.id === id);
+  if (!inv) return;
+
+  // Get shop subaccount code
+  const billing = await BillingStatus.get();
+
+  // Get customer email if available
+  let customerEmail = '';
+  if (inv.customer_id) {
+    try {
+      const { data } = await sb.from('customers').select('email').eq('id', inv.customer_id).limit(1);
+      customerEmail = data?.[0]?.email || '';
+    } catch(e) {}
+  }
+
+  try {
+    Toast.show('Opening Paystack payment…', 'info', 2000);
+    await PaystackInvoice.pay(
+      inv.id,
+      inv.total_amount || 0,
+      customerEmail,
+      billing.subaccountCode || null
+    );
+    Toast.show('Payment successful! Invoice marked as paid ✓', 'success', 5000);
+    await loadInvoices();
+  } catch(err) {
+    if (!err.message?.includes('cancelled')) {
+      Toast.show(err.message || 'Payment failed', 'error');
+    }
+  }
+}
+
+function renderInvoiceTable(filter) {
+  const all    = filter === 'all'    || !filter;
+  const unpaid = filter === 'unpaid' || !filter;
+  const paid   = filter === 'paid'   || !filter;
+
+  const q      = document.getElementById('invSearch')?.value?.toLowerCase() || '';
+  const status = document.getElementById('invStatusFilter')?.value || '';
+
+  let filtered = [...invoiceData];
+  if (q)      filtered = filtered.filter(i => `${i.ref||''} ${i.customer_name||''}`.toLowerCase().includes(q));
+  if (status) filtered = filtered.filter(i => i.status === status);
+
+  const emptyRow = '<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--app-muted)">No invoices found</td></tr>';
+
+  // All invoices table
+  const allBody = document.getElementById('invTableAll');
+  if (allBody) {
+    allBody.innerHTML = filtered.length ? filtered.map(inv => `
+      <tr>
+        <td class="td-mono td-bold" style="color:var(--amber)">${inv.ref||'—'}</td>
+        <td>${inv.customer_name||'—'}</td>
+        <td class="td-mono">${inv.wo_ref||'—'}</td>
+        <td class="td-mono">${formatCurrency(inv.labor_amount||0)}</td>
+        <td class="td-mono">${formatCurrency(inv.parts_amount||0)}</td>
+        <td class="td-mono">${formatCurrency(inv.tax_amount||0)}</td>
+        <td class="td-mono td-bold">${formatCurrency(inv.total_amount||0)}</td>
+        <td>${makeBadge(inv.status||'Unpaid')}</td>
+        <td class="td-mono" style="font-size:11px">${formatDate(inv.created_at)}</td>
+        <td>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            ${inv.status !== 'Paid' ? `
+              <button class="app-btn app-btn-ghost app-btn-sm"
+                onclick="markPaid('${inv.id}')">Record</button>
+              <button class="app-btn app-btn-sm" onclick="payViaPaystack('${inv.id}')"
+                style="background:#25D366;color:white;border:none;font-size:10px;padding:4px 8px;border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:4px">
+                💳 Pay Online
+              </button>` : `<span style="color:var(--success);font-size:11px;font-family:var(--ff-mono)">✓ Paid</span>`}
+          </div>
+        </td>
+      </tr>`).join('') : emptyRow;
+  }
+
+  // Unpaid table
+  const unpaidBody = document.getElementById('invTableUnpaid');
+  if (unpaidBody) {
+    const unpaidList = invoiceData.filter(i => ['Unpaid','Overdue'].includes(i.status));
+    const badge = document.getElementById('unpaidBadge');
+    if (badge) badge.textContent = unpaidList.length || '';
+    unpaidBody.innerHTML = unpaidList.length ? unpaidList.map(inv => {
+      const daysOut = inv.created_at
+        ? Math.floor((Date.now() - new Date(inv.created_at)) / 86400000) : 0;
+      return `
+        <tr>
+          <td class="td-mono td-bold" style="color:var(--amber)">${inv.ref||'—'}</td>
+          <td>${inv.customer_name||'—'}</td>
+          <td class="td-mono td-bold">${formatCurrency(inv.total_amount||0)}</td>
+          <td>${makeBadge(inv.status||'Unpaid')}</td>
+          <td class="td-mono" style="font-size:11px">${formatDate(inv.created_at)}</td>
+          <td class="td-mono" style="color:${daysOut > 30 ? 'var(--danger)' : 'var(--app-muted)'}">${daysOut}d</td>
+          <td>
+            <div style="display:flex;gap:4px">
+              <button class="app-btn app-btn-ghost app-btn-sm" onclick="markPaid('${inv.id}')">Record</button>
+              <button class="app-btn app-btn-sm" onclick="payViaPaystack('${inv.id}')"
+                style="background:#25D366;color:white;border:none;font-size:10px;padding:4px 8px;border-radius:4px;cursor:pointer">
+                💳 Pay Online
+              </button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('') : '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--app-muted)">No outstanding invoices</td></tr>';
+  }
+
+  // Paid table
+  const paidBody = document.getElementById('invTablePaid');
+  if (paidBody) {
+    const paidList = invoiceData.filter(i => i.status === 'Paid');
+    paidBody.innerHTML = paidList.length ? paidList.map(inv => `
+      <tr>
+        <td class="td-mono td-bold" style="color:var(--amber)">${inv.ref||'—'}</td>
+        <td>${inv.customer_name||'—'}</td>
+        <td class="td-mono td-bold">${formatCurrency(inv.total_amount||0)}</td>
+        <td>${inv.payment_method||'—'}</td>
+        <td class="td-mono" style="font-size:11px">${formatDate(inv.paid_at)}</td>
+        <td><span style="font-size:10px;color:var(--success);font-family:var(--ff-mono)">✓ PAID</span></td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--app-muted)">No paid invoices yet</td></tr>';
+  }
+}
+
+function renderInvoiceSummary() {
+  const paid    = invoiceData.filter(i => i.status === 'Paid').reduce((s, i) => s + i.total, 0);
+  const unpaid  = invoiceData.filter(i => i.status === 'Unpaid').reduce((s, i) => s + i.total, 0);
+  const overdue = invoiceData.filter(i => i.status === 'Overdue').reduce((s, i) => s + i.total, 0);
+
+  const el = id => { const e = document.getElementById(id); return e; };
+  if (el('inv-paid'))    el('inv-paid').textContent    = formatCurrency(paid);
+  if (el('inv-unpaid'))  el('inv-unpaid').textContent  = formatCurrency(unpaid);
+  if (el('inv-overdue')) el('inv-overdue').textContent = formatCurrency(overdue);
 }
 
 document.addEventListener('DOMContentLoaded', initPage);

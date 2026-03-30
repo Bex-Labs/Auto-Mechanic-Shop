@@ -116,10 +116,6 @@
             <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             Security
           </div>
-          <div class="settings-nav-item" id="nav-booking" onclick="showSettingsPane('booking',this)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            Booking QR
-          </div>
           <div class="settings-nav-item" onclick="showSettingsPane('danger',this)">
             <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             Danger Zone
@@ -174,7 +170,7 @@
                   </div>
                   <div class="settings-field">
                     <div class="settings-field-left"><div class="settings-field-label">Phone Number</div><div class="settings-field-desc">Customer-facing contact number.</div></div>
-                    <div class="settings-field-right"><input class="app-input" id="set-phone" placeholder="e.g. +234 (080) 123-0000"></div>
+                    <div class="settings-field-right"><input class="app-input" id="set-phone" placeholder="e.g. +1 (555) 000-0000"></div>
                   </div>
                   <div class="settings-field">
                     <div class="settings-field-left"><div class="settings-field-label">Email Address</div><div class="settings-field-desc">Used for outgoing emails and reply-to address.</div></div>
@@ -229,7 +225,7 @@
                   <div class="settings-section-title">Labor & Tax</div>
                   <div class="settings-section-sub">These rates apply to all invoices and estimates.</div>
                   <div class="settings-field">
-                    <div class="settings-field-left"><div class="settings-field-label">Labor Rate (₦/hr)</div><div class="settings-field-desc">Applied automatically when generating invoices from work orders.</div></div>
+                    <div class="settings-field-left"><div class="settings-field-label">Labor Rate ($/hr)</div><div class="settings-field-desc">Applied automatically when generating invoices from work orders.</div></div>
                     <div class="settings-field-right"><input class="app-input" type="number" id="set-labor" type="number" min="0" step="1" placeholder="e.g. 90" style="max-width:120px"></div>
                   </div>
                   <div class="settings-field">
@@ -273,11 +269,11 @@
                   <div class="settings-section-title">Accepted Payment Methods</div>
                   <div class="settings-section-sub">Enable the methods you accept from customers.</div>
                   <div class="settings-field">
-                    <div class="settings-field-left"><div class="settings-field-label">Credit / Debit Card </div></div>
+                    <div class="settings-field-left"><div class="settings-field-label">Credit / Debit Card (Stripe)</div></div>
                     <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div>
                   </div>
                   <div class="settings-field">
-                    <div class="settings-field-left"><div class="settings-field-label">Bank Transfer </div></div>
+                    <div class="settings-field-left"><div class="settings-field-label">Bank Transfer (ACH)</div></div>
                     <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div>
                   </div>
                   <div class="settings-field">
@@ -360,39 +356,136 @@
             </div>
           </div>
 
-          <!-- PLAN -->
+          <!-- PLAN & BILLING — live from Paystack -->
           <div class="settings-pane" id="sp-plan">
-            <div class="panel">
-              <div class="panel-header"><span class="panel-title">PLAN & BILLING</span></div>
+
+            <!-- ── CURRENT PLAN STATUS ── -->
+            <div class="panel" style="margin-bottom:16px">
+              <div class="panel-header">
+                <span class="panel-title">PLAN & BILLING</span>
+                <span id="planBadgeWrap"></span>
+              </div>
               <div class="panel-body">
-                <div class="alert alert-info" style="margin-bottom:20px">You are on the <strong>Pro Plan</strong> — billed annually. Your next renewal is <strong>March 1, 2027</strong>.</div>
-                <div class="plan-card current">
-                  <div><div class="plan-name">Pro</div><div style="font-size:12px;color:var(--app-muted);margin-top:4px">Current plan · Billed annually</div></div>
-                  <div style="text-align:right"><div class="plan-price">₦8,000<span style="font-size:14px;color:var(--app-muted)">/mo</span></div><div class="plan-period">= ₦7,560 / year</div></div>
-                </div>
-                <div class="plan-card" style="opacity:.6">
-                  <div><div class="plan-name">Starter</div><div style="font-size:12px;color:var(--app-muted);margin-top:4px">Free — 2 users, 50 WOs/month</div></div>
-                  <div><button class="app-btn app-btn-ghost app-btn-sm" onclick="Toast.show('Contact support to downgrade','info')">Downgrade</button></div>
-                </div>
-                <div class="plan-card">
-                  <div><div class="plan-name">Enterprise</div><div style="font-size:12px;color:var(--app-muted);margin-top:4px">Custom pricing — unlimited everything</div></div>
-                  <div><a href="../contact.html" class="app-btn app-btn-primary app-btn-sm">Contact Sales</a></div>
-                </div>
-                <div class="divider-dark"></div>
-                <div class="settings-section-title" style="margin-bottom:12px">PAYMENT METHOD</div>
-                <div style="background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-                  <div style="display:flex;align-items:center;gap:12px">
-                    <div style="background:#1a56db;color:white;padding:4px 10px;border-radius:4px;font-weight:700;font-size:12px">VISA</div>
-                    <div><div style="font-size:13px;color:var(--app-text)">•••• •••• •••• 4242</div><div style="font-size:11px;color:var(--app-muted)">Expires 09/2027</div></div>
+
+                <!-- Status bar -->
+                <div id="planStatusBar" style="margin-bottom:20px"></div>
+
+                <!-- Billing cycle toggle -->
+                <div id="upgradeSection">
+                  <div style="font-family:var(--ff-mono);font-size:10px;letter-spacing:1.5px;color:var(--app-muted);text-transform:uppercase;margin-bottom:12px">CHOOSE PLAN</div>
+
+                  <!-- Cycle toggle -->
+                  <div style="display:flex;gap:0;background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);overflow:hidden;margin-bottom:16px;width:fit-content">
+                    <button id="cycleMonthly" onclick="selectCycle('monthly')"
+                      style="padding:8px 20px;font-family:var(--ff-mono);font-size:11px;letter-spacing:1px;border:none;cursor:pointer;transition:all .15s;background:var(--rust);color:var(--white)">
+                      MONTHLY
+                    </button>
+                    <button id="cycleAnnual" onclick="selectCycle('annual')"
+                      style="padding:8px 20px;font-family:var(--ff-mono);font-size:11px;letter-spacing:1px;border:none;cursor:pointer;transition:all .15s;background:transparent;color:var(--app-muted)">
+                      ANNUAL
+                    </button>
                   </div>
-                  <button class="app-btn app-btn-ghost app-btn-sm" onclick="Toast.show('Card management coming soon','info')">Update</button>
+
+                  <!-- Free card -->
+                  <div class="plan-card" id="freeCard">
+                    <div>
+                      <div class="plan-name" style="font-size:16px">Free</div>
+                      <div style="font-size:12px;color:var(--app-muted);margin-top:4px;line-height:1.6">
+                        Up to 3 staff · Up to 50 customers · Core features
+                      </div>
+                    </div>
+                    <div style="text-align:right">
+                      <div class="plan-price" style="font-size:22px">₦0</div>
+                      <div class="plan-period">Forever free</div>
+                    </div>
+                  </div>
+
+                  <!-- Pro card -->
+                  <div class="plan-card current" id="proCard">
+                    <div style="flex:1">
+                      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                        <div class="plan-name" style="font-size:16px">Pro</div>
+                        <span style="background:var(--amber);color:var(--ink);font-family:var(--ff-mono);font-size:9px;letter-spacing:1px;padding:2px 8px;border-radius:3px;font-weight:700">RECOMMENDED</span>
+                      </div>
+                      <div id="proFeatures" style="font-size:12px;color:var(--app-muted);line-height:1.7">
+                        Unlimited staff & customers · WhatsApp notifications<br>
+                        Reports & analytics · Invoice payments · Priority support
+                      </div>
+                      <div id="proSavings" style="font-size:11px;color:#6ee7b7;margin-top:6px;font-family:var(--ff-mono);display:none"></div>
+                    </div>
+                    <div style="text-align:right;flex-shrink:0;margin-left:16px">
+                      <div class="plan-price" id="proPrice">₦10,500<span style="font-size:13px;color:var(--app-muted)">/mo</span></div>
+                      <div class="plan-period" id="proPeriod">Billed monthly</div>
+                      <button class="app-btn app-btn-primary app-btn-sm" id="upgradeBtn"
+                        style="margin-top:10px;background:var(--amber);border-color:var(--amber);color:var(--ink);font-weight:700"
+                        onclick="startUpgrade()">
+                        ⚡ Upgrade to Pro
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div class="settings-section-title" style="margin-bottom:12px;margin-top:20px">BILLING HISTORY</div>
+
+                <!-- Pro active state — shown when already pro -->
+                <div id="proActiveSection" style="display:none">
+                  <div style="background:rgba(31,122,74,0.1);border:1px solid rgba(31,122,74,0.3);border-radius:var(--r-sm);padding:16px 20px;display:flex;align-items:center;gap:14px;margin-bottom:16px">
+                    <div style="font-size:28px">✅</div>
+                    <div>
+                      <div style="font-size:13px;font-weight:700;color:#6ee7b7">Pro Plan Active</div>
+                      <div style="font-size:12px;color:var(--app-muted);margin-top:3px" id="proExpiry"></div>
+                    </div>
+                    <div style="margin-left:auto">
+                      <button class="app-btn app-btn-ghost app-btn-sm" onclick="startUpgrade()" title="Renew or switch cycle">↺ Renew</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── COMMISSION BANK SETUP ── -->
+            <div class="panel" style="margin-bottom:16px">
+              <div class="panel-header">
+                <span class="panel-title">PAYOUT ACCOUNT</span>
+                <span style="font-size:12px;color:var(--app-muted)">For invoice payments via the app</span>
+              </div>
+              <div class="panel-body">
+                <div style="font-size:13px;color:var(--app-muted);line-height:1.65;margin-bottom:16px">
+                  When customers pay invoices online through GearShift, <strong style="color:var(--app-text)">95%</strong> goes directly to your bank account and <strong style="color:var(--app-text)">5%</strong> is GearShift's commission — handled automatically by Paystack.
+                </div>
+
+                <!-- Existing subaccount status -->
+                <div id="subaccountStatus" style="margin-bottom:16px"></div>
+
+                <!-- Bank setup form -->
+                <div id="bankSetupForm">
+                  <div class="app-form-row">
+                    <div class="app-form-group">
+                      <label class="app-label">Bank</label>
+                      <select class="app-input" id="bank-code" onchange="resolveAccount()">
+                        <option value="">Select bank…</option>
+                      </select>
+                    </div>
+                    <div class="app-form-group">
+                      <label class="app-label">Account Number</label>
+                      <input class="app-input" id="bank-account" placeholder="10-digit account number"
+                        maxlength="10" oninput="resolveAccount()" style="font-family:var(--ff-mono);letter-spacing:1px">
+                    </div>
+                  </div>
+                  <div id="accountNameDisplay" style="min-height:32px;margin-top:-8px;margin-bottom:12px"></div>
+                  <button class="app-btn app-btn-primary app-btn-sm" id="saveBankBtn" onclick="savePayoutAccount()" disabled>
+                    Save Payout Account
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── BILLING HISTORY ── -->
+            <div class="panel">
+              <div class="panel-header"><span class="panel-title">BILLING HISTORY</span></div>
+              <div class="panel-body" style="padding:0">
                 <table class="data-table">
-                  <thead><tr><th>Date</th><th>Description</th><th>Amount</th><th>Status</th><th>Receipt</th></tr></thead>
-                  <tbody>
-                    <tr><td class="td-mono">Mar 1, 2026</td><td>Pro Plan — Annual</td><td class="td-mono">₦7,560.00</td><td>${makeBadge('Paid')}</td><td><button class="app-btn app-btn-ghost app-btn-xs" onclick="Toast.show('Receipt downloaded','success')">PDF</button></td></tr>
-                    <tr><td class="td-mono">Mar 1, 2025</td><td>Pro Plan — Annual</td><td class="td-mono">₦7,560.00</td><td>${makeBadge('Paid')}</td><td><button class="app-btn app-btn-ghost app-btn-xs" onclick="Toast.show('Receipt downloaded','success')">PDF</button></td></tr>
+                  <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Commission</th><th>Status</th></tr></thead>
+                  <tbody id="billingHistoryBody">
+                    <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--app-muted)">Loading…</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -466,69 +559,6 @@
             </div>
           </div>
 
-          <!-- BOOKING QR PANE -->
-          <div class="settings-pane" id="sp-booking">
-            <div class="panel">
-              <div class="panel-header"><span class="panel-title">BOOKING LINK &amp; QR CODE</span></div>
-              <div class="panel-body">
-                <p style="font-size:13px;color:var(--app-muted);margin-bottom:20px">Share this link or QR code with customers so they can book appointments online.</p>
-
-                <div class="app-form-group">
-                  <label class="app-label">Your Booking URL</label>
-                  <div style="display:flex;gap:8px">
-                    <input class="app-input" id="bk-url" readonly style="font-family:var(--ff-mono);font-size:11px;flex:1;cursor:pointer" onclick="this.select()" value="Loading...">
-                    <button class="app-btn app-btn-ghost app-btn-sm" onclick="copyBkUrl()">Copy</button>
-                    <a id="bk-url-open" href="#" target="_blank" class="app-btn app-btn-ghost app-btn-sm">Open ↗</a>
-                  </div>
-                </div>
-
-                <div style="display:grid;grid-template-columns:200px 1fr;gap:32px;align-items:start;margin-top:24px">
-                  <div>
-                    <div class="app-label" style="margin-bottom:12px">QR CODE PREVIEW</div>
-                    <!-- Branded QR card -->
-                    <div id="bk-qr-card" style="background:#fff;border:1px solid #d5d0c8;border-radius:6px;overflow:hidden;width:220px;box-shadow:0 4px 16px rgba(0,0,0,0.12)">
-                      <!-- Header band -->
-                      <div style="background:#0e0f0f;padding:12px 16px;text-align:center">
-                        <div style="font-family:var(--ff-display);font-size:20px;letter-spacing:3px;color:#fff" id="bk-card-shopname">GEARSHIFT</div>
-                        <div style="font-size:9px;letter-spacing:2px;color:#c94b1e;margin-top:2px;font-family:var(--ff-mono)">BOOK A SERVICE</div>
-                      </div>
-                      <!-- QR canvas -->
-                      <div style="padding:14px;text-align:center;background:#fff">
-                        <canvas id="bk-qr" width="176" height="176" style="display:block;margin:0 auto"></canvas>
-                      </div>
-                      <!-- Footer -->
-                      <div style="background:#f4f1eb;padding:10px 16px;text-align:center;border-top:1px solid #d5d0c8">
-                        <div style="font-size:11px;font-weight:700;color:#0e0f0f;font-family:Arial,sans-serif">Scan to Book an Appointment</div>
-                        <div style="font-size:9px;color:#6b6b6b;margin-top:2px;font-family:Arial,sans-serif">Point your phone camera at this code</div>
-                      </div>
-                    </div>
-                    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-                      <button class="app-btn app-btn-primary app-btn-sm" onclick="downloadBkQR()">Download PNG</button>
-                      <button class="app-btn app-btn-ghost app-btn-sm" onclick="printBkQR()">Print</button>
-                    </div>
-                  </div>
-                  <div>
-                    <div class="app-label" style="margin-bottom:12px">HOW TO USE</div>
-                    <div style="display:flex;flex-direction:column;gap:14px">
-                      <div style="display:flex;gap:12px;align-items:flex-start">
-                        <div style="font-size:20px">📱</div>
-                        <div><div style="font-size:13px;font-weight:600;color:var(--app-text);margin-bottom:2px">WhatsApp / SMS</div><div style="font-size:12px;color:var(--app-muted)">Copy the link and send directly to customers</div></div>
-                      </div>
-                      <div style="display:flex;gap:12px;align-items:flex-start">
-                        <div style="font-size:20px">🖨️</div>
-                        <div><div style="font-size:13px;font-weight:600;color:var(--app-text);margin-bottom:2px">Print &amp; Display</div><div style="font-size:12px;color:var(--app-muted)">Print and stick on your reception desk or workshop entrance</div></div>
-                      </div>
-                      <div style="display:flex;gap:12px;align-items:flex-start">
-                        <div style="font-size:20px">🌐</div>
-                        <div><div style="font-size:13px;font-weight:600;color:var(--app-text);margin-bottom:2px">Website Button</div><div style="font-size:12px;color:var(--app-muted)">Add a Book a Service button to your website using this URL</div></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
         </div>
       </div>
     </div>
@@ -563,7 +593,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../js/supabase.js"></script>
 <script src="../js/rbac.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://js.paystack.co/v1/inline.js"></script>
+<script src="../js/billing.js"></script>
 <script>
 let _currentShop = null;
 
@@ -581,7 +612,6 @@ function showSettingsPane(pane, el) {
   document.querySelectorAll('.settings-nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('sp-' + pane)?.classList.add('active');
   if (el) el.classList.add('active');
-  if (pane === 'booking') initBookingPane();
 }
 
 async function initPage() {
@@ -778,165 +808,211 @@ async function updatePassword() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', initPage);
+/* ─────────────────────────────────────────────────────────────────
+   BILLING — PLAN & PAYSTACK
+───────────────────────────────────────────────────────────────── */
+let _selectedCycle = 'monthly';
+let _billingStatus = null;
+let _resolveTimer  = null;
 
-/* ================================================================
-   BOOKING QR CODE
-   ================================================================ */
-var _bkUrl = '';
-var _bkLoaded = false;
+async function loadBillingSection() {
+  _billingStatus = await BillingStatus.get();
 
-function initBookingPane() {
-  if (_bkLoaded) return;
-  var shop = _currentShop;
-  if (!shop || !shop.id) {
-    // Try again after short delay in case shop not loaded yet
-    setTimeout(initBookingPane, 500);
-    return;
+  // Plan status bar
+  const statusBar = document.getElementById('planStatusBar');
+  if (statusBar) {
+    if (_billingStatus.isProActive) {
+      const exp = _billingStatus.expiresAt
+        ? ' · Renews ' + new Date(_billingStatus.expiresAt).toLocaleDateString('en-NG',{day:'numeric',month:'short',year:'numeric'})
+        : '';
+      statusBar.innerHTML = `
+        <div style="background:rgba(31,122,74,0.1);border:1px solid rgba(31,122,74,0.25);border-radius:var(--r-sm);padding:10px 14px;font-size:13px;color:#6ee7b7;display:flex;align-items:center;gap:8px">
+          ✅ <strong>Pro Plan Active</strong>
+          <span style="color:var(--app-muted);font-size:12px">${_billingStatus.billingCycle === 'annual' ? '· Annual billing' : '· Monthly billing'}${exp}</span>
+        </div>`;
+      document.getElementById('upgradeSection').style.display = 'none';
+      document.getElementById('proActiveSection').style.display = 'block';
+      const expiryEl = document.getElementById('proExpiry');
+      if (expiryEl && _billingStatus.expiresAt) {
+        expiryEl.textContent = (_billingStatus.billingCycle === 'annual' ? 'Annual plan · ' : 'Monthly plan · ')
+          + 'Renews ' + new Date(_billingStatus.expiresAt).toLocaleDateString('en-NG',{day:'numeric',month:'long',year:'numeric'});
+      }
+    } else {
+      statusBar.innerHTML = `
+        <div style="background:rgba(232,160,32,0.08);border:1px solid rgba(232,160,32,0.2);border-radius:var(--r-sm);padding:10px 14px;font-size:13px;color:var(--amber);display:flex;align-items:center;gap:8px">
+          ⭐ You are on the <strong>Free Plan</strong>
+          <span style="color:var(--app-muted);font-size:12px">· Up to 3 staff, 50 customers</span>
+        </div>`;
+    }
   }
-  _bkLoaded = true;
 
-  // Build URL from current window location
-  var base = window.location.href;
-  base = base.substring(0, base.lastIndexOf('/') + 1);
-  _bkUrl = base + 'booking.html?shop=' + shop.id;
-
-  var urlInput = document.getElementById('bk-url');
-  var urlOpen  = document.getElementById('bk-url-open');
-  if (urlInput) urlInput.value = _bkUrl;
-  if (urlOpen)  urlOpen.href   = _bkUrl;
-
-  // Generate QR
-  var canvas = document.getElementById('bk-qr');
-  // Update shop name in card header
-  var cardName = document.getElementById('bk-card-shopname');
-  if (cardName && shop.name) cardName.textContent = shop.name.toUpperCase();
-
-  if (canvas && typeof QRCode !== 'undefined') {
-    QRCode.toCanvas(canvas, _bkUrl, {
-      width: 176, margin: 1,
-      color: { dark: '#0e0f0f', light: '#ffffff' }
-    }, function(err) { if (err) console.warn('QR err:', err); });
-  } else {
-    // QRCode lib not loaded yet — retry
-    setTimeout(function() {
-      _bkLoaded = false;
-      initBookingPane();
-    }, 800);
+  // Subaccount status
+  const subEl = document.getElementById('subaccountStatus');
+  if (subEl) {
+    if (_billingStatus.subaccountCode) {
+      subEl.innerHTML = `
+        <div style="background:rgba(31,122,74,0.1);border:1px solid rgba(31,122,74,0.25);border-radius:var(--r-sm);padding:12px 16px;display:flex;align-items:center;gap:10px">
+          <span style="font-size:18px">🏦</span>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--app-text)">${_billingStatus.bankAccountName || 'Account Verified'}</div>
+            <div style="font-size:11px;color:var(--app-muted);margin-top:2px">${_billingStatus.bankName || ''} · ****${(_billingStatus.bankAccountNumber||'').slice(-4)} · Code: ${_billingStatus.subaccountCode}</div>
+          </div>
+          <span style="margin-left:auto;font-size:11px;color:#6ee7b7;font-family:var(--ff-mono)">✓ ACTIVE</span>
+        </div>`;
+    } else {
+      subEl.innerHTML = `
+        <div style="font-size:12px;color:var(--amber);background:rgba(232,160,32,0.08);border:1px solid rgba(232,160,32,0.2);border-radius:var(--r-sm);padding:10px 14px">
+          ⚠ No payout account set up yet — invoice online payments will not include automatic splits until you add your bank below.
+        </div>`;
+    }
   }
-}
 
-function copyBkUrl() {
-  if (!_bkUrl) { Toast.show('URL not ready yet', 'error'); return; }
-  navigator.clipboard.writeText(_bkUrl)
-    .then(function() { Toast.show('Booking link copied!', 'success'); })
-    .catch(function() {
-      var el = document.getElementById('bk-url');
-      if (el) { el.select(); document.execCommand('copy'); }
-      Toast.show('Link copied', 'success');
+  // Populate bank dropdown
+  const bankSel = document.getElementById('bank-code');
+  if (bankSel && bankSel.options.length <= 1) {
+    NG_BANKS.sort((a,b) => a.name.localeCompare(b.name)).forEach(b => {
+      const opt = document.createElement('option');
+      opt.value = b.code; opt.textContent = b.name;
+      bankSel.appendChild(opt);
     });
+  }
+
+  // Load billing history
+  await loadBillingHistory();
 }
 
-function downloadBkQR() {
-  var src = document.getElementById('bk-qr');
-  if (!src) return;
-
-  var out  = document.createElement('canvas');
-  out.width  = 320;
-  out.height = 380;
-  var ctx = out.getContext('2d');
-
-  // White background
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, 320, 380);
-
-  // Dark header band
-  ctx.fillStyle = '#0e0f0f';
-  ctx.fillRect(0, 0, 320, 64);
-
-  // Shop name in header
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 17px Arial';
-  ctx.textAlign = 'center';
-  var shopName = (_currentShop && _currentShop.name) ? _currentShop.name.toUpperCase() : 'GEARSHIFT';
-  ctx.fillText(shopName, 160, 30);
-
-  // Subtitle in rust colour
-  ctx.fillStyle = '#c94b1e';
-  ctx.font = '11px Arial';
-  ctx.fillText('BOOK A SERVICE APPOINTMENT', 160, 50);
-
-  // QR code centred
-  ctx.drawImage(src, 72, 76, 176, 176);
-
-  // Instruction text
-  ctx.fillStyle = '#0e0f0f';
-  ctx.font = 'bold 13px Arial';
-  ctx.fillText('Scan to Book Your Next Service', 160, 278);
-  ctx.fillStyle = '#6b6b6b';
-  ctx.font = '11px Arial';
-  ctx.fillText('Point your phone camera at this code', 160, 296);
-
-  // Thin border
-  ctx.strokeStyle = '#d5d0c8';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(0.5, 0.5, 319, 379);
-
-  var link = document.createElement('a');
-  var slug = shopName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  link.download = 'booking-qr-' + slug + '.png';
-  link.href = out.toDataURL('image/png');
-  link.click();
-  Toast.show('QR code downloaded', 'success');
+async function loadBillingHistory() {
+  const tbody = document.getElementById('billingHistoryBody');
+  if (!tbody) return;
+  try {
+    const shop = await RBAC.getShop();
+    if (!shop) return;
+    const { data } = await sb.from('billing_transactions')
+      .select('*').eq('shop_id', shop.id)
+      .order('created_at', { ascending: false }).limit(20);
+    const txns = data || [];
+    if (!txns.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--app-muted)">No transactions yet</td></tr>';
+      return;
+    }
+    tbody.innerHTML = txns.map(t => `
+      <tr>
+        <td class="td-mono" style="font-size:11px">${new Date(t.created_at).toLocaleDateString('en-NG',{day:'numeric',month:'short',year:'numeric'})}</td>
+        <td>${t.type === 'subscription' ? '⭐ Pro Plan — ' + (t.plan_cycle||'') : '💰 Invoice Commission'}</td>
+        <td class="td-mono">${formatCurrency(t.gross_amount)}</td>
+        <td class="td-mono" style="color:var(--amber)">${t.commission_amount > 0 ? formatCurrency(t.commission_amount) : '—'}</td>
+        <td>${makeBadge(t.status === 'success' ? 'Paid' : 'Unpaid')}</td>
+      </tr>`).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--danger)">Could not load history</td></tr>';
+  }
 }
 
-function printBkQR() {
-  var src = document.getElementById('bk-qr');
-  if (!src) return;
-  var imgData  = src.toDataURL('image/png');
-  var shopName = (_currentShop && _currentShop.name) ? _currentShop.name : 'GearShift Auto';
+function selectCycle(cycle) {
+  _selectedCycle = cycle;
+  const mBtn = document.getElementById('cycleMonthly');
+  const aBtn = document.getElementById('cycleAnnual');
+  const price = document.getElementById('proPrice');
+  const period = document.getElementById('proPeriod');
+  const savings = document.getElementById('proSavings');
 
-  // Build print page using array join — safe from parser tag issues
-  var lines = [];
-  lines.push('<!DOCTYPE html>');
-  lines.push('<html lang="en">');
-  lines.push('<head>');
-  lines.push('<meta charset="UTF-8">');
-  lines.push('<title>Booking QR — ' + shopName + '<' + '/title>');
-  lines.push('<style>');
-  lines.push('body{font-family:Arial,sans-serif;text-align:center;padding:48px;background:#fff;color:#0e0f0f;}');
-  lines.push('.logo{font-size:34px;font-weight:900;letter-spacing:3px;margin-bottom:4px;}');
-  lines.push('.logo em{color:#c94b1e;font-style:normal;}');
-  lines.push('.shopname{font-size:15px;font-weight:700;letter-spacing:1px;margin-bottom:4px;}');
-  lines.push('.sub{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#999;margin-bottom:28px;}');
-  lines.push('img{width:220px;height:220px;border:1px solid #eee;padding:8px;border-radius:4px;}');
-  lines.push('.cta{font-size:17px;font-weight:700;margin-top:20px;}');
-  lines.push('.hint{font-size:12px;color:#666;margin-top:6px;}');
-  lines.push('.url{font-size:9px;color:#aaa;margin-top:18px;word-break:break-all;max-width:280px;display:block;margin-left:auto;margin-right:auto;}');
-  lines.push('@media print{.no-print{display:none!important;}}');
-  lines.push('<' + '/style>');
-  lines.push('<' + '/head>');
-  lines.push('<body>');
-  lines.push('<div class="logo">GEAR<em>SHIFT</em><' + '/div>');
-  lines.push('<div class="shopname">' + shopName + '<' + '/div>');
-  lines.push('<div class="sub">Online Service Booking<' + '/div>');
-  lines.push('<img src="' + imgData + '" alt="QR Code">');
-  lines.push('<div class="cta">Scan to Book a Service<' + '/div>');
-  lines.push('<div class="hint">Point your phone camera at this QR code<' + '/div>');
-  lines.push('<span class="url">' + _bkUrl + '<' + '/span>');
-  lines.push('<div class="no-print" style="margin-top:28px">');
-  lines.push('<button onclick="window.print()" style="padding:10px 28px;background:#c94b1e;color:#fff;border:none;border-radius:4px;font-size:14px;cursor:pointer;font-weight:600">Print</button>');
-  lines.push('<' + '/div>');
-  lines.push('<' + '/body>');
-  lines.push('<' + '/html>');
-
-  var win = window.open('', '_blank');
-  if (!win) { Toast.show('Allow popups to print', 'error'); return; }
-  win.document.write(lines.join(''));
-  win.document.close();
-  win.focus();
-  setTimeout(function() { win.print(); }, 500);
+  if (cycle === 'monthly') {
+    mBtn.style.background = 'var(--rust)'; mBtn.style.color = 'var(--white)';
+    aBtn.style.background = 'transparent'; aBtn.style.color = 'var(--app-muted)';
+    price.innerHTML = '₦10,500<span style="font-size:13px;color:var(--app-muted)">/mo</span>';
+    period.textContent = 'Billed monthly';
+    savings.style.display = 'none';
+  } else {
+    aBtn.style.background = 'var(--rust)'; aBtn.style.color = 'var(--white)';
+    mBtn.style.background = 'transparent'; mBtn.style.color = 'var(--app-muted)';
+    price.innerHTML = '₦90,000<span style="font-size:13px;color:var(--app-muted)">/yr</span>';
+    period.textContent = 'Billed annually · ₦7,500/mo';
+    savings.textContent = '💚 Save ₦36,000 vs monthly';
+    savings.style.display = 'block';
+  }
 }
+
+async function startUpgrade() {
+  const btn = document.getElementById('upgradeBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Opening payment…'; }
+  try {
+    await PaystackSubscription.start(_selectedCycle);
+    Toast.show('🎉 Pro plan activated! Welcome to GearShift Pro.', 'success', 6000);
+    await loadBillingSection();
+  } catch(err) {
+    if (!err.message?.includes('cancelled')) {
+      Toast.show(err.message || 'Payment failed. Please try again.', 'error');
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⚡ Upgrade to Pro'; }
+  }
+}
+
+async function resolveAccount() {
+  const bankCode  = document.getElementById('bank-code')?.value;
+  const accountNo = document.getElementById('bank-account')?.value?.trim();
+  const display   = document.getElementById('accountNameDisplay');
+  const saveBtn   = document.getElementById('saveBankBtn');
+
+  if (saveBtn) saveBtn.disabled = true;
+  if (display) display.innerHTML = '';
+
+  if (!bankCode || accountNo?.length !== 10) return;
+
+  if (_resolveTimer) clearTimeout(_resolveTimer);
+
+  display.innerHTML = '<span style="font-size:12px;color:var(--app-muted)">Verifying account…</span>';
+
+  _resolveTimer = setTimeout(async () => {
+    try {
+      const { data, error } = await sb.functions.invoke('resolve-bank-account', {
+        body: { bank_code: bankCode, account_number: accountNo }
+      });
+      if (error || !data?.account_name) throw new Error('Could not verify account');
+      display.innerHTML = `
+        <div style="background:rgba(31,122,74,0.1);border:1px solid rgba(31,122,74,0.25);border-radius:var(--r-sm);padding:8px 12px;font-size:12px;color:#6ee7b7;display:flex;align-items:center;gap:6px">
+          ✓ <strong>${data.account_name}</strong>
+        </div>`;
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.dataset.accountName = data.account_name; }
+    } catch(err) {
+      display.innerHTML = `<div style="font-size:12px;color:#f87171">⚠ ${err.message}</div>`;
+    }
+  }, 600);
+}
+
+async function savePayoutAccount() {
+  const bankCode   = document.getElementById('bank-code')?.value;
+  const accountNo  = document.getElementById('bank-account')?.value?.trim();
+  const saveBtn    = document.getElementById('saveBankBtn');
+  const accountName = saveBtn?.dataset.accountName;
+  const bankName   = document.getElementById('bank-code')?.selectedOptions?.[0]?.textContent;
+
+  if (!bankCode || !accountNo || !accountName) { Toast.show('Please verify your account number first', 'error'); return; }
+
+  saveBtn.disabled = true; saveBtn.textContent = 'Setting up…';
+  try {
+    await PaystackSubaccount.create(bankCode, accountNo, accountName);
+    Toast.show('Payout account saved — commission splits are now active ✓', 'success', 5000);
+    await loadBillingSection();
+  } catch(err) {
+    Toast.show(err.message || 'Could not save payout account', 'error');
+    saveBtn.disabled = false; saveBtn.textContent = 'Save Payout Account';
+  }
+}
+
+// Hook into existing loadSettings to also load billing when plan pane is active
+const _origShowPane = window.showSettingsPane;
+document.addEventListener('DOMContentLoaded', () => {
+  // Load billing when Plan & Billing pane is clicked
+  document.querySelectorAll('.settings-nav-item').forEach(item => {
+    if (item.textContent.trim().includes('Plan')) {
+      const orig = item.getAttribute('onclick');
+      item.setAttribute('onclick', orig + '; loadBillingSection();');
+    }
+  });
+});
+
+document.addEventListener('DOMContentLoaded', initPage);
 </script>
 </body>
 </html>
