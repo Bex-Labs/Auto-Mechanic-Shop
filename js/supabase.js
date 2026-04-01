@@ -463,6 +463,18 @@ const GS = (() => {
           });
         }
       } catch(e) { console.warn('Status notification failed:', e); }
+
+      // After the existing notification try/catch block, add:
+if (payload.status === 'Completed') {
+  try {
+    await generateInvoiceFromWO(id);
+  } catch(e) {
+    // Silently ignore if invoice already exists
+    if (!e.message?.includes('already exists')) {
+      console.warn('Auto-invoice generation failed:', e.message);
+    }
+  }
+}
     }
     return wo;
   }
@@ -649,6 +661,40 @@ const GS = (() => {
     if (error) throw error;
     return data;
   }
+
+  async function getInvoiceFull(invoiceId) {
+  const sid = await _shopId();
+  const { data, error } = await sb.from('invoices')
+    .select('*').eq('id', invoiceId).eq('shop_id', sid).single();
+  if (error) throw error;
+
+  // Load work order parts if linked to a WO
+  let parts = [];
+  if (data.work_order_id) {
+    const { data: woParts } = await sb.from('work_order_parts')
+      .select('qty, unit_cost, part_id').eq('work_order_id', data.work_order_id);
+    if (woParts?.length) {
+      const partIds = woParts.map(p => p.part_id).filter(Boolean);
+      let invMap = {};
+      if (partIds.length) {
+        const { data: inv } = await sb.from('inventory').select('id,name,sku').in('id', partIds);
+        (inv || []).forEach(i => { invMap[i.id] = i; });
+      }
+      parts = woParts.map(p => ({ ...p, name: invMap[p.part_id]?.name || '—', sku: invMap[p.part_id]?.sku || '' }));
+    }
+  }
+
+  // Load shop info
+  const shop = await getSettings();
+  const shopInfo = await (async () => {
+    try {
+      const { data: s } = await sb.from('shops').select('name,phone,email,address').eq('id', sid).single();
+      return s;
+    } catch(e) { return null; }
+  })();
+
+  return { ...data, parts, shop: shopInfo, settings: shop };
+}
 
 
   async function generateInvoiceFromWO(workOrderId) {
@@ -1067,7 +1113,7 @@ const GS = (() => {
     adjustStock, getLowStockItems,
     getSuppliers, createSupplier, updateSupplier,
     getPurchaseOrders, createPurchaseOrder, updatePOStatus, receivePOItem,
-    getInvoices, createInvoice, generateInvoiceFromWO, markInvoicePaid, updateInvoiceStatus,
+    getInvoices, getInvoiceFull, createInvoice, markInvoicePaid, updateInvoiceStatus,
     getAppointments, createAppointment, updateAppointment, cancelAppointment,
     createNotification, getNotifications, getUnreadCount, markNotificationRead,
     markAllNotificationsRead, deleteNotification, clearReadNotifications,

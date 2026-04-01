@@ -376,6 +376,167 @@ function renderInvoiceSummary() {
   if (el('inv-overdue')) el('inv-overdue').textContent = formatCurrency(overdue);
 }
 
+async function openInvoice(invoiceId) {
+  document.getElementById('invModalTitle').textContent = 'Loading…';
+  document.getElementById('invPreviewBody').innerHTML  = '<div style="text-align:center;padding:40px;color:var(--app-muted)">Loading invoice…</div>';
+  document.getElementById('invModalFooter').innerHTML  = '';
+  Modal.open('invoiceModal');
+
+  try {
+    const inv = await GS.getInvoiceFull(invoiceId);
+    renderInvoicePreview(inv);
+  } catch(err) {
+    document.getElementById('invPreviewBody').innerHTML = `<div style="color:var(--danger);padding:20px">${err.message}</div>`;
+  }
+}
+
+function renderInvoicePreview(inv) {
+  document.getElementById('invModalTitle').textContent = `Invoice ${inv.ref || ''}`;
+
+  const fmtC = n => '₦' + Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtD = iso => iso ? new Date(iso).toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+
+  const partsRows = (inv.parts || []).map(p => `
+    <tr>
+      <td>${p.name}</td>
+      <td style="color:#888;font-size:11px">${p.sku || '—'}</td>
+      <td style="text-align:center">${p.qty}</td>
+      <td style="text-align:right">${fmtC(p.unit_cost)}</td>
+      <td style="text-align:right;font-weight:600">${fmtC((p.unit_cost || 0) * p.qty)}</td>
+    </tr>`).join('');
+
+  const laborRow = inv.labor_amount > 0 ? `
+    <tr>
+      <td>Labour</td>
+      <td style="color:#888;font-size:11px">—</td>
+      <td style="text-align:center">1</td>
+      <td style="text-align:right">${fmtC(inv.labor_amount)}</td>
+      <td style="text-align:right;font-weight:600">${fmtC(inv.labor_amount)}</td>
+    </tr>` : '';
+
+  document.getElementById('invPreviewBody').innerHTML = `
+    <div class="inv-preview" id="inv-print-area">
+      <div class="inv-preview-header">
+        <div>
+          <div class="inv-preview-logo">GEAR<span>SHIFT</span></div>
+          <div style="font-size:12px;color:#666;margin-top:6px;line-height:1.8">
+            ${inv.shop?.name || ''}<br>
+            ${inv.shop?.phone || ''}<br>
+            ${inv.shop?.email || ''}<br>
+            ${inv.shop?.address || ''}
+          </div>
+        </div>
+        <div class="inv-preview-meta">
+          <strong>INVOICE</strong>
+          <div><b>Invoice #:</b> ${inv.ref || '—'}</div>
+          <div><b>Work Order:</b> ${inv.wo_ref || '—'}</div>
+          <div><b>Date:</b> ${fmtD(inv.created_at)}</div>
+          <div><b>Status:</b> ${inv.status || 'Unpaid'}</div>
+          ${inv.paid_at ? `<div><b>Paid:</b> ${fmtD(inv.paid_at)}</div>` : ''}
+        </div>
+      </div>
+
+      <div class="inv-bill-row">
+        <div>
+          <div class="inv-bill-label">Bill To</div>
+          <div style="font-weight:600;font-size:14px">${inv.customer_name || '—'}</div>
+        </div>
+        <div>
+          <div class="inv-bill-label">Payment Method</div>
+          <div>${inv.payment_method || 'Pending'}</div>
+        </div>
+      </div>
+
+      <table class="inv-table">
+        <thead>
+          <tr>
+            <th>Description</th><th>SKU</th><th style="text-align:center">Qty</th>
+            <th style="text-align:right">Unit Price</th><th style="text-align:right">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${laborRow}
+          ${partsRows || '<tr><td colspan="5" style="color:#aaa;text-align:center;padding:16px">No line items</td></tr>'}
+        </tbody>
+      </table>
+
+      <div style="display:flex;justify-content:flex-end">
+        <div class="inv-totals">
+          <div class="inv-totals-row"><span>Labour</span><span>${fmtC(inv.labor_amount)}</span></div>
+          <div class="inv-totals-row"><span>Parts</span><span>${fmtC(inv.parts_amount)}</span></div>
+          <div class="inv-totals-row"><span>Tax</span><span>${fmtC(inv.tax_amount)}</span></div>
+          <div class="inv-totals-row total"><span>TOTAL</span><span>${fmtC(inv.total_amount)}</span></div>
+        </div>
+      </div>
+
+      <div class="inv-footer-note">
+        Thank you for choosing ${inv.shop?.name || 'GearShift'}. Please make payment within 7 days of invoice date.
+      </div>
+    </div>
+  `;
+
+  // Footer action buttons
+  document.getElementById('invModalFooter').innerHTML = `
+    <button class="app-btn app-btn-ghost" onclick="Modal.close('invoiceModal')">Close</button>
+    <button class="app-btn app-btn-ghost" onclick="emailInvoice('${inv.id}','${(inv.customer_name||'').replace(/'/g,'')}')" style="display:flex;align-items:center;gap:6px">
+      ✉ Email
+    </button>
+    <button class="app-btn app-btn-primary" onclick="printInvoice()" style="display:flex;align-items:center;gap:6px">
+      🖨 Print / Save PDF
+    </button>
+  `;
+}
+
+function printInvoice() {
+  const printArea = document.getElementById('inv-print-area');
+  if (!printArea) return;
+
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Invoice — GearShift</title>
+      <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+      <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'DM Sans',sans-serif; background:#fff; color:#0e0f0f; padding:40px; }
+        .inv-preview-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:32px; border-bottom:3px solid #c94b1e; padding-bottom:20px; }
+        .inv-preview-logo { font-family:'Bebas Neue',sans-serif; font-size:38px; letter-spacing:3px; color:#0e0f0f; line-height:1; }
+        .inv-preview-logo span { color:#c94b1e; }
+        .inv-preview-meta { text-align:right; font-size:13px; color:#555; }
+        .inv-preview-meta strong { display:block; font-size:20px; color:#0e0f0f; font-family:'Bebas Neue',sans-serif; letter-spacing:2px; margin-bottom:4px; }
+        .inv-bill-row { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:28px; font-size:13px; }
+        .inv-bill-label { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#999; margin-bottom:6px; }
+        .inv-table { width:100%; border-collapse:collapse; margin-bottom:24px; font-size:13px; }
+        .inv-table th { text-align:left; padding:8px 12px; background:#f4f1eb; border-bottom:2px solid #ddd; font-family:'DM Mono',monospace; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:#666; }
+        .inv-table td { padding:10px 12px; border-bottom:1px solid #eee; }
+        .inv-totals { margin-left:auto; width:240px; font-size:13px; }
+        .inv-totals-row { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #eee; }
+        .inv-totals-row.total { border-top:2px solid #0e0f0f; border-bottom:none; padding-top:12px; font-size:18px; font-weight:700; }
+        .inv-footer-note { margin-top:28px; padding-top:20px; border-top:1px solid #ddd; font-size:12px; color:#888; text-align:center; }
+        @media print { body { padding:20px; } }
+      </style>
+    </head>
+    <body>${printArea.innerHTML}</body>
+    </html>
+  `);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); }, 500);
+}
+
+function emailInvoice(invoiceId, customerName) {
+  // Opens the user's default email client with invoice details pre-filled
+  // For full email sending you'd need a backend/edge function
+  const subject = encodeURIComponent(`Your Invoice from GearShift`);
+  const body = encodeURIComponent(
+    `Dear ${customerName || 'Customer'},\n\nPlease find your invoice attached.\n\nThank you for choosing GearShift.\n\nBest regards,\nGearShift Team`
+  );
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+}
+
 document.addEventListener('DOMContentLoaded', initPage);
 </script>
 </body>
