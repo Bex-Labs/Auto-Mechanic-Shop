@@ -471,28 +471,57 @@ function renderPOTable() {
   }
 
   tbody.innerHTML = list.map(p => {
-    const suppName = p.suppliers?.name || '—';
-    const items    = p.purchase_order_items || [];
-    const total    = items.reduce((s,i) => s + (i.unit_cost||0)*(i.qty||0), 0);
-    const col      = SC[p.status] || 'var(--app-muted)';
-    const sent     = p.sent_at ? fmtDate(p.sent_at) : '—';
-    const delivery = p.expected_at ? fmtDate(p.expected_at) : '—';
-    return `<tr>
-      <td style="font-family:var(--ff-mono);font-size:12px;color:var(--amber)">${p.ref || 'PO-'+p.id?.slice(0,6)}</td>
-      <td>${suppName}</td>
-      <td style="text-align:center;font-family:var(--ff-mono)">${items.length}</td>
-      <td style="font-family:var(--ff-mono)">${formatCurrency(total)}</td>
-      <td><span style="font-family:var(--ff-mono);font-size:11px;color:${col};border:1px solid ${col}55;padding:2px 8px;border-radius:20px">${p.status}</span></td>
-      <td style="font-size:12px;color:var(--app-muted)">${sent}</td>
-      <td style="font-size:12px;color:${p.expected_at && new Date(p.expected_at)<new Date() && p.status!=='Received'?'var(--danger)':'var(--app-muted)'}">${delivery}</td>
-      <td>
-        <div style="display:flex;gap:6px">
-          <button class="app-btn app-btn-ghost app-btn-sm" onclick="viewPO('${p.id}')">View</button>
-          ${p.status==='Draft' ? `<button class="app-btn app-btn-ghost app-btn-sm" onclick="sendPO('${p.id}')">Send</button>` : ''}
-          ${['Sent','Partially Received'].includes(p.status) ? `<button class="app-btn app-btn-primary app-btn-sm" onclick="openReceiveModal('${p.id}')">Receive</button>` : ''}
-        </div>
-      </td>
-    </tr>`;
+    const suppName   = p.suppliers?.name || '—';
+    const items      = p.purchase_order_items || [];
+    const total      = items.reduce((s,i) => s + (i.unit_cost||0)*(i.qty||0), 0);
+    const col        = SC[p.status] || 'var(--app-muted)';
+    const sent       = p.sent_at ? fmtDate(p.sent_at) : '—';
+    const delivery   = p.expected_at ? fmtDate(p.expected_at) : '—';
+
+    // Receipt progress
+    const totalQty    = items.reduce((s,i) => s + (i.qty||0), 0);
+    const receivedQty = items.reduce((s,i) => s + (i.qty_received||0), 0);
+    const pct         = totalQty > 0 ? Math.round((receivedQty / totalQty) * 100) : 0;
+    const isReceived  = p.status === 'Received';
+    const isPartial   = p.status === 'Partially Received';
+    const barColor    = isReceived ? '#34d399' : isPartial ? '#60a5fa' : 'var(--app-border)';
+
+    let receiptIndicator = '';
+    if (isReceived) {
+      receiptIndicator = '<div style="display:flex;align-items:center;gap:6px;margin-top:4px">' +
+        '<span style="color:#34d399;font-size:14px">✓</span>' +
+        '<span style="font-family:var(--ff-mono);font-size:10px;color:#34d399">ALL RECEIVED</span>' +
+        '</div>';
+    } else if (isPartial) {
+      receiptIndicator = '<div style="margin-top:5px">' +
+        '<div style="display:flex;justify-content:space-between;font-family:var(--ff-mono);font-size:10px;color:var(--app-muted);margin-bottom:3px">' +
+          '<span style="color:#60a5fa">PARTIAL</span>' +
+          '<span>' + receivedQty + ' / ' + totalQty + ' units</span>' +
+        '</div>' +
+        '<div style="height:4px;background:var(--app-border);border-radius:2px;overflow:hidden">' +
+          '<div style="height:100%;width:' + pct + '%;background:#60a5fa;border-radius:2px;transition:width 0.4s"></div>' +
+        '</div>' +
+        '</div>';
+    }
+
+    return '<tr>' +
+      '<td style="font-family:var(--ff-mono);font-size:12px;color:var(--amber)">' + (p.ref || 'PO-'+p.id?.slice(0,6)) + '</td>' +
+      '<td>' + suppName + '</td>' +
+      '<td style="text-align:center;font-family:var(--ff-mono)">' + items.length + '</td>' +
+      '<td style="font-family:var(--ff-mono)">' + formatCurrency(total) + '</td>' +
+      '<td>' +
+        '<span style="font-family:var(--ff-mono);font-size:11px;color:' + col + ';border:1px solid ' + col + '55;padding:2px 8px;border-radius:20px">' + p.status + '</span>' +
+        receiptIndicator +
+      '</td>' +
+      '<td style="font-size:12px;color:var(--app-muted)">' + sent + '</td>' +
+      '<td style="font-size:12px;color:' + (p.expected_at && new Date(p.expected_at)<new Date() && p.status!=='Received'?'var(--danger)':'var(--app-muted)') + '">' + delivery + '</td>' +
+      '<td><div style="display:flex;gap:6px">' +
+        '<button class="app-btn app-btn-ghost app-btn-sm" data-poid="' + p.id + '" onclick="viewPO(this.dataset.poid)">View</button>' +
+        (p.status==='Draft' ? '<button class="app-btn app-btn-ghost app-btn-sm" data-poid="' + p.id + '" onclick="sendPO(this.dataset.poid)">Send</button>' : '') +
+        (['Sent','Partially Received'].includes(p.status) ? '<button class="app-btn app-btn-primary app-btn-sm" data-poid="' + p.id + '" onclick="openReceiveModal(this.dataset.poid)">Receive</button>' : '') +
+        (p.status==='Received' ? '<span style="font-family:var(--ff-mono);font-size:10px;color:#34d399;padding:4px 8px">✓ Complete</span>' : '') +
+      '</div></td>' +
+      '</tr>';
   }).join('');
 }
 

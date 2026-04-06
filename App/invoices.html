@@ -37,7 +37,6 @@
         <span class="theme-toggle-label">☾ Dark</span>
         <button class="theme-toggle-switch" onclick="Theme.toggle()" aria-label="Switch to light mode"></button>
       </div>
-      
       <div class="sidebar-user"><div class="user-avatar" id="userAvatar">?</div><div><div class="user-name" id="userName">Loading…</div><div class="user-role" id="userRole">—</div></div></div>
       <button class="btn-logout" onclick="Auth.signOut().then(()=>window.location='dashboard.html')">Sign Out</button>
     </div>
@@ -51,9 +50,9 @@
       </div>
     </div>
     <div class="app-sub-nav">
-      <button class="app-sub-link active" data-pane="pane-all"     onclick="switchPane(this)">All Invoices</button>
-      <button class="app-sub-link"        data-pane="pane-unpaid"  onclick="switchPane(this)">Outstanding <span id="unpaidBadge" style="margin-left:4px;background:var(--rust);color:var(--white);font-family:var(--ff-mono);font-size:9px;padding:1px 6px;border-radius:10px"></span></button>
-      <button class="app-sub-link"        data-pane="pane-paid"    onclick="switchPane(this)">Paid</button>
+      <button class="app-sub-link active" data-pane="pane-all"    onclick="switchPane(this)">All Invoices</button>
+      <button class="app-sub-link"        data-pane="pane-unpaid" onclick="switchPane(this)">Outstanding <span id="unpaidBadge" style="margin-left:4px;background:var(--rust);color:var(--white);font-family:var(--ff-mono);font-size:9px;padding:1px 6px;border-radius:10px"></span></button>
+      <button class="app-sub-link"        data-pane="pane-paid"   onclick="switchPane(this)">Paid</button>
     </div>
 
     <div class="app-content">
@@ -117,7 +116,7 @@
           <div><div class="app-label">Vehicle</div><div id="gp-veh" style="color:var(--app-text)"></div></div>
           <div><div class="app-label">Labor</div><div id="gp-labor" style="color:var(--amber);font-family:var(--ff-mono)"></div></div>
           <div><div class="app-label">Parts</div><div id="gp-parts" style="color:var(--amber);font-family:var(--ff-mono)"></div></div>
-          <div><div class="app-label">Tax (${(GS_TAX)}%)</div><div id="gp-tax" style="color:var(--amber);font-family:var(--ff-mono)"></div></div>
+          <div><div class="app-label">Tax</div><div id="gp-tax" style="color:var(--amber);font-family:var(--ff-mono)"></div></div>
           <div><div class="app-label">TOTAL</div><div id="gp-total" style="color:var(--app-text);font-family:var(--ff-display);font-size:24px"></div></div>
         </div>
       </div>
@@ -136,7 +135,7 @@
       <span class="modal-title" id="invModalTitle">Invoice</span>
       <button class="modal-close" onclick="Modal.close('invoiceModal')">✕</button>
     </div>
-    <div class="modal-body"><div class="inv-preview" id="invPreviewBody"></div></div>
+    <div class="modal-body"><div id="invPreviewBody"></div></div>
     <div class="modal-footer" id="invModalFooter"></div>
   </div>
 </div>
@@ -162,7 +161,7 @@
       </div>
       <div class="app-form-group">
         <label class="app-label">Payment Date</label>
-        <input class="app-input" type="date" id="pay-date" value="2026-03-01">
+        <input class="app-input" type="date" id="pay-date">
       </div>
     </div>
     <div class="modal-footer">
@@ -181,20 +180,23 @@
 <script src="https://js.paystack.co/v1/inline.js"></script>
 <script src="../js/billing.js"></script>
 <script>
-let invoiceData = [];
+let invoiceData    = [];
+let _payingInvoiceId = null;
+let _completedWOs  = [];
+let _shopSettings  = null;
 
+// ── INIT ─────────────────────────────────────────────────────────
 async function initPage() {
   const _user = await RBAC.guardPage('invoices');
   if (!_user) return;
   await RBAC.initSidebar('invoices');
   await loadInvoices();
 
-  // Live subscription
   Realtime.subscribe('invoices', {
     onInsert: () => loadInvoices(),
     onUpdate: (inv) => {
       const idx = invoiceData.findIndex(i => i.id === inv.id);
-      if (idx >= 0) { invoiceData[idx] = { ...invoiceData[idx], ...inv }; renderInvoiceTable(); renderInvoiceSummary(); }
+      if (idx >= 0) { invoiceData[idx] = { ...invoiceData[idx], ...inv }; renderInvoiceTable('all'); renderInvoiceSummary(); }
     }
   });
 }
@@ -205,12 +207,22 @@ async function loadInvoices() {
   renderInvoiceSummary();
 }
 
-// ── INVOICE PAYMENT ──────────────────────────────────────────────
+// ── PANE SWITCHER ─────────────────────────────────────────────────
+function switchPane(btn) {
+  document.querySelectorAll('.app-sub-link').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.view-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  const pane = document.getElementById(btn.dataset.pane);
+  if (pane) pane.classList.add('active');
+}
+
+// ── ALIAS for oninput calls in HTML ──────────────────────────────
+function renderInvTable(filter) { renderInvoiceTable(filter); }
+
+// ── RECORD PAYMENT ────────────────────────────────────────────────
 async function markPaid(id) {
   const inv = invoiceData.find(i => i.id === id);
   if (!inv) return;
-
-  // Open the record payment modal (already in the HTML)
   document.getElementById('payModalTitle').textContent = 'RECORD PAYMENT — ' + (inv.ref || '');
   document.getElementById('payInfo').textContent = 'Amount due: ' + formatCurrency(inv.total_amount || 0);
   document.getElementById('pay-amount').value = inv.total_amount || '';
@@ -220,16 +232,12 @@ async function markPaid(id) {
   Modal.open('paymentModal');
 }
 
-let _payingInvoiceId = null;
-
 async function recordPayment() {
   const method = document.getElementById('pay-method')?.value || 'Cash';
   const amount = parseFloat(document.getElementById('pay-amount')?.value) || 0;
   if (!amount) { Toast.show('Please enter the payment amount', 'error'); return; }
-
   const btn = document.querySelector('#paymentModal .modal-footer .app-btn-primary');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-
   try {
     await GS.markInvoicePaid(_payingInvoiceId, method);
     Modal.close('paymentModal');
@@ -243,14 +251,11 @@ async function recordPayment() {
   }
 }
 
+// ── PAYSTACK ONLINE PAYMENT ───────────────────────────────────────
 async function payViaPaystack(id) {
   const inv = invoiceData.find(i => i.id === id);
   if (!inv) return;
-
-  // Get shop subaccount code
   const billing = await BillingStatus.get();
-
-  // Get customer email if available
   let customerEmail = '';
   if (inv.customer_id) {
     try {
@@ -258,15 +263,9 @@ async function payViaPaystack(id) {
       customerEmail = data?.[0]?.email || '';
     } catch(e) {}
   }
-
   try {
     Toast.show('Opening Paystack payment…', 'info', 2000);
-    await PaystackInvoice.pay(
-      inv.id,
-      inv.total_amount || 0,
-      customerEmail,
-      billing.subaccountCode || null
-    );
+    await PaystackInvoice.pay(inv.id, inv.total_amount || 0, customerEmail, billing.subaccountCode || null);
     Toast.show('Payment successful! Invoice marked as paid ✓', 'success', 5000);
     await loadInvoices();
   } catch(err) {
@@ -276,21 +275,17 @@ async function payViaPaystack(id) {
   }
 }
 
+// ── RENDER TABLES ─────────────────────────────────────────────────
 function renderInvoiceTable(filter) {
-  const all    = filter === 'all'    || !filter;
-  const unpaid = filter === 'unpaid' || !filter;
-  const paid   = filter === 'paid'   || !filter;
-
   const q      = document.getElementById('invSearch')?.value?.toLowerCase() || '';
   const status = document.getElementById('invStatusFilter')?.value || '';
-
   let filtered = [...invoiceData];
   if (q)      filtered = filtered.filter(i => `${i.ref||''} ${i.customer_name||''}`.toLowerCase().includes(q));
   if (status) filtered = filtered.filter(i => i.status === status);
 
   const emptyRow = '<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--app-muted)">No invoices found</td></tr>';
 
-  // All invoices table
+  // All invoices
   const allBody = document.getElementById('invTableAll');
   if (allBody) {
     allBody.innerHTML = filtered.length ? filtered.map(inv => `
@@ -305,29 +300,27 @@ function renderInvoiceTable(filter) {
         <td>${makeBadge(inv.status||'Unpaid')}</td>
         <td class="td-mono" style="font-size:11px">${formatDate(inv.created_at)}</td>
         <td>
-        <div style="display:flex;gap:4px;flex-wrap:wrap">
-  <button class="app-btn app-btn-ghost app-btn-sm" onclick="openInvoice('${inv.id}')">👁 View</button>
-  ${inv.status !== 'Paid' ? `
-      <button class="app-btn app-btn-ghost app-btn-sm"
-        onclick="markPaid('${inv.id}')">Record</button>
-      <button class="app-btn app-btn-sm" onclick="payViaPaystack('${inv.id}')"
-        style="background:#25D366;color:white;border:none;font-size:10px;padding:4px 8px;border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:4px">
-        💳 Pay Online
-      </button>` : `<span style="color:var(--success);font-size:11px;font-family:var(--ff-mono)">✓ Paid</span>`}
-      </div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            <button class="app-btn app-btn-ghost app-btn-sm" onclick="openInvoice('${inv.id}')">👁 View</button>
+            ${inv.status !== 'Paid' ? `
+              <button class="app-btn app-btn-ghost app-btn-sm" onclick="markPaid('${inv.id}')">Record</button>
+              <button class="app-btn app-btn-sm" onclick="payViaPaystack('${inv.id}')"
+                style="background:#25D366;color:white;border:none;font-size:10px;padding:4px 8px;border-radius:4px;cursor:pointer">
+                💳 Pay Online
+              </button>` : `<span style="color:var(--success);font-size:11px;font-family:var(--ff-mono)">✓ Paid</span>`}
+          </div>
         </td>
       </tr>`).join('') : emptyRow;
   }
 
-  // Unpaid table
+  // Unpaid
   const unpaidBody = document.getElementById('invTableUnpaid');
   if (unpaidBody) {
     const unpaidList = invoiceData.filter(i => ['Unpaid','Overdue'].includes(i.status));
     const badge = document.getElementById('unpaidBadge');
     if (badge) badge.textContent = unpaidList.length || '';
     unpaidBody.innerHTML = unpaidList.length ? unpaidList.map(inv => {
-      const daysOut = inv.created_at
-        ? Math.floor((Date.now() - new Date(inv.created_at)) / 86400000) : 0;
+      const daysOut = inv.created_at ? Math.floor((Date.now() - new Date(inv.created_at)) / 86400000) : 0;
       return `
         <tr>
           <td class="td-mono td-bold" style="color:var(--amber)">${inv.ref||'—'}</td>
@@ -337,20 +330,20 @@ function renderInvoiceTable(filter) {
           <td class="td-mono" style="font-size:11px">${formatDate(inv.created_at)}</td>
           <td class="td-mono" style="color:${daysOut > 30 ? 'var(--danger)' : 'var(--app-muted)'}">${daysOut}d</td>
           <td>
-        <div style="display:flex;gap:4px">
-          <button class="app-btn app-btn-ghost app-btn-sm" onclick="openInvoice('${inv.id}')">👁 View</button>
-          <button class="app-btn app-btn-ghost app-btn-sm" onclick="markPaid('${inv.id}')">Record</button>
-          <button class="app-btn app-btn-sm" onclick="payViaPaystack('${inv.id}')"
-          style="background:#25D366;color:white;border:none;font-size:10px;padding:4px 8px;border-radius:4px;cursor:pointer">
-          💳 Pay Online
-          </button>
-        </div>
+            <div style="display:flex;gap:4px">
+              <button class="app-btn app-btn-ghost app-btn-sm" onclick="openInvoice('${inv.id}')">👁 View</button>
+              <button class="app-btn app-btn-ghost app-btn-sm" onclick="markPaid('${inv.id}')">Record</button>
+              <button class="app-btn app-btn-sm" onclick="payViaPaystack('${inv.id}')"
+                style="background:#25D366;color:white;border:none;font-size:10px;padding:4px 8px;border-radius:4px;cursor:pointer">
+                💳 Pay Online
+              </button>
+            </div>
           </td>
         </tr>`;
     }).join('') : '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--app-muted)">No outstanding invoices</td></tr>';
   }
 
-  // Paid table
+  // Paid
   const paidBody = document.getElementById('invTablePaid');
   if (paidBody) {
     const paidList = invoiceData.filter(i => i.status === 'Paid');
@@ -362,33 +355,108 @@ function renderInvoiceTable(filter) {
         <td>${inv.payment_method||'—'}</td>
         <td class="td-mono" style="font-size:11px">${formatDate(inv.paid_at)}</td>
         <td>
-        <div style="display:flex;gap:4px;align-items:center">
-          <button class="app-btn app-btn-ghost app-btn-sm" onclick="openInvoice('${inv.id}')">👁 View</button>
-          <span style="font-size:10px;color:var(--success);font-family:var(--ff-mono)">✓ PAID</span>
-        </div>
-      </td>
+          <div style="display:flex;gap:4px;align-items:center">
+            <button class="app-btn app-btn-ghost app-btn-sm" onclick="openInvoice('${inv.id}')">👁 View</button>
+            <span style="font-size:10px;color:var(--success);font-family:var(--ff-mono)">✓ PAID</span>
+          </div>
+        </td>
       </tr>`).join('')
     : '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--app-muted)">No paid invoices yet</td></tr>';
   }
 }
 
 function renderInvoiceSummary() {
-  const paid    = invoiceData.filter(i => i.status === 'Paid').reduce((s, i) => s + i.total, 0);
-  const unpaid  = invoiceData.filter(i => i.status === 'Unpaid').reduce((s, i) => s + i.total, 0);
-  const overdue = invoiceData.filter(i => i.status === 'Overdue').reduce((s, i) => s + i.total, 0);
-
-  const el = id => { const e = document.getElementById(id); return e; };
+  const paid    = invoiceData.filter(i => i.status === 'Paid').reduce((s, i) => s + (i.total_amount||0), 0);
+  const unpaid  = invoiceData.filter(i => i.status === 'Unpaid').reduce((s, i) => s + (i.total_amount||0), 0);
+  const overdue = invoiceData.filter(i => i.status === 'Overdue').reduce((s, i) => s + (i.total_amount||0), 0);
+  const el = id => document.getElementById(id);
   if (el('inv-paid'))    el('inv-paid').textContent    = formatCurrency(paid);
   if (el('inv-unpaid'))  el('inv-unpaid').textContent  = formatCurrency(unpaid);
   if (el('inv-overdue')) el('inv-overdue').textContent = formatCurrency(overdue);
 }
 
+// ── GENERATE INVOICE MODAL ────────────────────────────────────────
+async function openGenerateModal() {
+  const sel     = document.getElementById('gen-wo');
+  const preview = document.getElementById('gen-preview');
+  sel.innerHTML = '<option value="">Loading…</option>';
+  if (preview) preview.style.display = 'none';
+  Modal.open('generateModal');
+
+  try {
+    const [allWOs, allInvoices, settings] = await Promise.all([
+      GS.getWorkOrders(),
+      GS.getInvoices(),
+      GS.getSettings(),
+    ]);
+    _shopSettings = settings;
+    const invoicedWOIds = new Set(allInvoices.map(i => i.work_order_id).filter(Boolean));
+    _completedWOs = allWOs.filter(w => w.status === 'Completed' && !invoicedWOIds.has(w.id));
+
+    if (!_completedWOs.length) {
+      sel.innerHTML = '<option value="">No completed work orders without invoices</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">— Select a work order —</option>' +
+      _completedWOs.map(w =>
+        `<option value="${w.id}">${w.ref || w.id} · ${w.customer_name || ''} · ${w.vehicle_label || ''}</option>`
+      ).join('');
+  } catch(err) {
+    sel.innerHTML = '<option value="">Could not load work orders</option>';
+    Toast.show(err.message || 'Failed to load work orders', 'error');
+  }
+}
+
+function previewInvoiceCalc() {
+  const woId    = document.getElementById('gen-wo')?.value;
+  const preview = document.getElementById('gen-preview');
+  if (!woId || !preview) { if (preview) preview.style.display = 'none'; return; }
+
+  const wo = _completedWOs.find(w => w.id === woId);
+  if (!wo) { preview.style.display = 'none'; return; }
+
+  const laborRate   = parseFloat(_shopSettings?.labor_rate || 0);
+  const taxRate     = parseFloat(_shopSettings?.tax_rate   || 0) / 100;
+  const laborAmount = Math.round((wo.labor_hours || 0) * laborRate * 100) / 100;
+  const partsAmount = Math.round(
+    (wo.parts || []).reduce((s, p) => s + ((p.unit_cost || p.inventory?.unit_cost || 0) * p.qty), 0) * 100
+  ) / 100;
+  const taxAmount   = Math.round((laborAmount + partsAmount) * taxRate * 100) / 100;
+  const totalAmount = laborAmount + partsAmount + taxAmount;
+
+  document.getElementById('gp-cust').textContent  = wo.customer_name  || '—';
+  document.getElementById('gp-veh').textContent   = wo.vehicle_label  || '—';
+  document.getElementById('gp-labor').textContent = formatCurrency(laborAmount);
+  document.getElementById('gp-parts').textContent = formatCurrency(partsAmount);
+  document.getElementById('gp-tax').textContent   = formatCurrency(taxAmount);
+  document.getElementById('gp-total').textContent = formatCurrency(totalAmount);
+  preview.style.display = 'block';
+}
+
+async function generateInvoice() {
+  const woId = document.getElementById('gen-wo')?.value;
+  if (!woId) { Toast.show('Please select a work order', 'error'); return; }
+  const btn = document.querySelector('#generateModal .app-btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+  try {
+    const invoice = await GS.generateInvoiceFromWO(woId);
+    Toast.show(`Invoice ${invoice.ref || ''} created ✓`.trim(), 'success', 4000);
+    Modal.close('generateModal');
+    await loadInvoices();
+    if (invoice?.id) openInvoice(invoice.id);
+  } catch(err) {
+    Toast.show(err.message || 'Could not generate invoice', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Generate Invoice'; }
+  }
+}
+
+// ── VIEW INVOICE ──────────────────────────────────────────────────
 async function openInvoice(invoiceId) {
   document.getElementById('invModalTitle').textContent = 'Loading…';
   document.getElementById('invPreviewBody').innerHTML  = '<div style="text-align:center;padding:40px;color:var(--app-muted)">Loading invoice…</div>';
   document.getElementById('invModalFooter').innerHTML  = '';
   Modal.open('invoiceModal');
-
   try {
     const inv = await GS.getInvoiceFull(invoiceId);
     renderInvoicePreview(inv);
@@ -400,8 +468,8 @@ async function openInvoice(invoiceId) {
 function renderInvoicePreview(inv) {
   document.getElementById('invModalTitle').textContent = `Invoice ${inv.ref || ''}`;
 
-  const fmtC = n => '₦' + Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtD = iso => iso ? new Date(iso).toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+  const fmtC = n => '₦' + Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  const fmtD = iso => iso ? new Date(iso).toLocaleDateString('en-NG', { day:'numeric', month:'long', year:'numeric' }) : '—';
 
   const partsRows = (inv.parts || []).map(p => `
     <tr>
@@ -457,8 +525,10 @@ function renderInvoicePreview(inv) {
       <table class="inv-table">
         <thead>
           <tr>
-            <th>Description</th><th>SKU</th><th style="text-align:center">Qty</th>
-            <th style="text-align:right">Unit Price</th><th style="text-align:right">Total</th>
+            <th>Description</th><th>SKU</th>
+            <th style="text-align:center">Qty</th>
+            <th style="text-align:right">Unit Price</th>
+            <th style="text-align:right">Total</th>
           </tr>
         </thead>
         <tbody>
@@ -482,10 +552,10 @@ function renderInvoicePreview(inv) {
     </div>
   `;
 
-  // Footer action buttons
+  const safeName = (inv.customer_name || '').replace(/'/g, '');
   document.getElementById('invModalFooter').innerHTML = `
     <button class="app-btn app-btn-ghost" onclick="Modal.close('invoiceModal')">Close</button>
-    <button class="app-btn app-btn-ghost" onclick="emailInvoice('${inv.id}','${(inv.customer_name||'').replace(/'/g,'')}')" style="display:flex;align-items:center;gap:6px">
+    <button class="app-btn app-btn-ghost" onclick="emailInvoice('${inv.id}','${safeName}')" style="display:flex;align-items:center;gap:6px">
       ✉ Email
     </button>
     <button class="app-btn app-btn-primary" onclick="printInvoice()" style="display:flex;align-items:center;gap:6px">
@@ -494,54 +564,53 @@ function renderInvoicePreview(inv) {
   `;
 }
 
+// ── PRINT ─────────────────────────────────────────────────────────
 function printInvoice() {
   const printArea = document.getElementById('inv-print-area');
   if (!printArea) return;
-
   const win = window.open('', '_blank');
-  win.document.write(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <title>Invoice — GearShift</title>
-      <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-      <style>
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family:'DM Sans',sans-serif; background:#fff; color:#0e0f0f; padding:40px; }
-        .inv-preview-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:32px; border-bottom:3px solid #c94b1e; padding-bottom:20px; }
-        .inv-preview-logo { font-family:'Bebas Neue',sans-serif; font-size:38px; letter-spacing:3px; color:#0e0f0f; line-height:1; }
-        .inv-preview-logo span { color:#c94b1e; }
-        .inv-preview-meta { text-align:right; font-size:13px; color:#555; }
-        .inv-preview-meta strong { display:block; font-size:20px; color:#0e0f0f; font-family:'Bebas Neue',sans-serif; letter-spacing:2px; margin-bottom:4px; }
-        .inv-bill-row { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:28px; font-size:13px; }
-        .inv-bill-label { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#999; margin-bottom:6px; }
-        .inv-table { width:100%; border-collapse:collapse; margin-bottom:24px; font-size:13px; }
-        .inv-table th { text-align:left; padding:8px 12px; background:#f4f1eb; border-bottom:2px solid #ddd; font-family:'DM Mono',monospace; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:#666; }
-        .inv-table td { padding:10px 12px; border-bottom:1px solid #eee; }
-        .inv-totals { margin-left:auto; width:240px; font-size:13px; }
-        .inv-totals-row { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #eee; }
-        .inv-totals-row.total { border-top:2px solid #0e0f0f; border-bottom:none; padding-top:12px; font-size:18px; font-weight:700; }
-        .inv-footer-note { margin-top:28px; padding-top:20px; border-top:1px solid #ddd; font-size:12px; color:#888; text-align:center; }
-        @media print { body { padding:20px; } }
-      </style>
-    </head>
-    <body>${printArea.innerHTML}</body>
-    </html>
-  `);
+  win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Invoice — GearShift</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'DM Sans',sans-serif; background:#fff; color:#0e0f0f; padding:40px; }
+    .inv-preview-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:32px; border-bottom:3px solid #c94b1e; padding-bottom:20px; }
+    .inv-preview-logo { font-family:'Bebas Neue',sans-serif; font-size:38px; letter-spacing:3px; color:#0e0f0f; line-height:1; }
+    .inv-preview-logo span { color:#c94b1e; }
+    .inv-preview-meta { text-align:right; font-size:13px; color:#555; }
+    .inv-preview-meta strong { display:block; font-size:20px; color:#0e0f0f; font-family:'Bebas Neue',sans-serif; letter-spacing:2px; margin-bottom:4px; }
+    .inv-bill-row { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:28px; font-size:13px; }
+    .inv-bill-label { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#999; margin-bottom:6px; }
+    .inv-table { width:100%; border-collapse:collapse; margin-bottom:24px; font-size:13px; }
+    .inv-table th { text-align:left; padding:8px 12px; background:#f4f1eb; border-bottom:2px solid #ddd; font-family:'DM Mono',monospace; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:#666; }
+    .inv-table td { padding:10px 12px; border-bottom:1px solid #eee; }
+    .inv-totals { margin-left:auto; width:240px; font-size:13px; }
+    .inv-totals-row { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #eee; }
+    .inv-totals-row.total { border-top:2px solid #0e0f0f; border-bottom:none; padding-top:12px; font-size:18px; font-weight:700; }
+    .inv-footer-note { margin-top:28px; padding-top:20px; border-top:1px solid #ddd; font-size:12px; color:#888; text-align:center; }
+    @media print { body { padding:20px; } }
+  </style>
+</head>
+  <body>
+  ${printArea.innerHTML}
+  </body>
+</html>`);
   win.document.close();
   win.focus();
   setTimeout(() => { win.print(); }, 500);
 }
 
+// ── EMAIL ─────────────────────────────────────────────────────────
 function emailInvoice(invoiceId, customerName) {
-  // Opens the user's default email client with invoice details pre-filled
-  // For full email sending you'd need a backend/edge function
-  const subject = encodeURIComponent(`Your Invoice from GearShift`);
-  const body = encodeURIComponent(
-    `Dear ${customerName || 'Customer'},\n\nPlease find your invoice attached.\n\nThank you for choosing GearShift.\n\nBest regards,\nGearShift Team`
+  const subject = encodeURIComponent('Your Invoice from GearShift');
+  const body    = encodeURIComponent(
+    'Dear ' + (customerName || 'Customer') + ',\n\nPlease find your invoice attached.\n\nThank you for choosing GearShift.\n\nBest regards,\nGearShift Team'
   );
-  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  window.location.href = 'mailto:?subject=' + subject + '&body=' + body;
 }
 
 document.addEventListener('DOMContentLoaded', initPage);
