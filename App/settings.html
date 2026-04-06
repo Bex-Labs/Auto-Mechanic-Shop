@@ -348,10 +348,70 @@
 
           <!-- INTEGRATIONS -->
           <div class="settings-pane" id="sp-integrations">
+
+            <!-- ── ONLINE BOOKING LINK ── -->
+            <div class="panel" style="margin-bottom:16px">
+              <div class="panel-header">
+                <span class="panel-title">ONLINE BOOKING LINK</span>
+              </div>
+              <div class="panel-body">
+                <div style="font-size:13px;color:var(--app-muted);line-height:1.65;margin-bottom:20px">
+                  Share this link with your customers so they can book a service appointment directly from their phone or browser — no login required. The link is unique to your shop.
+                </div>
+
+                <!-- Link display box -->
+                <div style="background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:12px">
+                  <div style="flex:1;min-width:0">
+                    <div style="font-family:var(--ff-mono);font-size:10px;color:var(--app-muted);letter-spacing:1px;margin-bottom:4px">YOUR BOOKING URL</div>
+                    <div id="bookingLinkDisplay" style="font-family:var(--ff-mono);font-size:12px;color:var(--amber);word-break:break-all;line-height:1.5">
+                      Loading…
+                    </div>
+                  </div>
+                  <button class="app-btn app-btn-ghost app-btn-sm" id="copyBookingBtn" onclick="copyBookingLink()" style="flex-shrink:0;white-space:nowrap">
+                    📋 Copy Link
+                  </button>
+                </div>
+
+                <!-- Action buttons -->
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                  <a id="openBookingBtn" href="#" target="_blank" class="app-btn app-btn-ghost app-btn-sm">
+                    🔗 Open in Browser
+                  </a>
+                  <button class="app-btn app-btn-ghost app-btn-sm" onclick="shareBookingLink()">
+                    📤 Share via WhatsApp
+                  </button>
+                  <button class="app-btn app-btn-ghost app-btn-sm" onclick="shareBookingQR()">
+                    📱 Show QR Code
+                  </button>
+                </div>
+
+                <!-- QR Code display -->
+                <div id="qrWrap" style="display:none;margin-top:20px;text-align:center">
+                  <div style="font-family:var(--ff-mono);font-size:10px;color:var(--app-muted);letter-spacing:1px;margin-bottom:12px">SCAN TO BOOK — share this with customers</div>
+                  <div id="qrCode" style="display:inline-block;background:white;padding:16px;border-radius:var(--r-sm);border:1px solid var(--app-border)"></div>
+                  <div style="font-size:12px;color:var(--app-muted);margin-top:10px">Print this and display it at your reception desk</div>
+                  <button class="app-btn app-btn-ghost app-btn-sm" style="margin-top:10px" onclick="window.print()">🖨 Print QR Code</button>
+                </div>
+
+                <!-- Tips -->
+                <div style="margin-top:20px;background:rgba(232,160,32,0.06);border:1px solid rgba(232,160,32,0.15);border-radius:var(--r-sm);padding:14px 16px">
+                  <div style="font-family:var(--ff-mono);font-size:10px;color:var(--amber);letter-spacing:1px;margin-bottom:8px">💡 HOW TO SHARE</div>
+                  <div style="font-size:12px;color:var(--app-muted);line-height:2">
+                    • Add the link to your <strong style="color:var(--app-text)">Instagram / Facebook bio</strong><br>
+                    • Send it in your <strong style="color:var(--app-text)">WhatsApp Business</strong> auto-reply<br>
+                    • Print the QR code and stick it at your <strong style="color:var(--app-text)">reception desk</strong><br>
+                    • Add it to your <strong style="color:var(--app-text)">Google Business Profile</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── OTHER INTEGRATIONS ── -->
             <div class="panel">
-              <div class="panel-header"><span class="panel-title">INTEGRATIONS</span></div>
+              <div class="panel-header"><span class="panel-title">OTHER INTEGRATIONS</span></div>
               <div class="panel-body">
                 <div id="integrationsList"></div>
+                <div style="color:var(--app-muted);font-size:13px">More integrations coming soon.</div>
               </div>
             </div>
           </div>
@@ -1011,6 +1071,95 @@ async function savePayoutAccount() {
 
 // Hook into existing loadSettings to also load billing when plan pane is active
 const _origShowPane = window.showSettingsPane;
+/* ─────────────────────────────────────────────────────────────────
+   BOOKING LINK
+───────────────────────────────────────────────────────────────── */
+let _bookingUrl = '';
+
+async function initBookingLink() {
+  try {
+    const shop = await RBAC.getShop();
+    if (!shop?.id) return;
+
+    // Build the booking URL — absolute URL using current origin
+    const base = window.location.origin;
+    _bookingUrl = `${base}/app/booking.html?shop=${shop.id}`;
+
+    // Display it
+    const display = document.getElementById('bookingLinkDisplay');
+    if (display) display.textContent = _bookingUrl;
+
+    // Set the open link href
+    const openBtn = document.getElementById('openBookingBtn');
+    if (openBtn) openBtn.href = _bookingUrl;
+
+  } catch(e) {
+    console.warn('Could not load booking link:', e.message);
+  }
+}
+
+async function copyBookingLink() {
+  if (!_bookingUrl) return;
+  try {
+    await navigator.clipboard.writeText(_bookingUrl);
+    const btn = document.getElementById('copyBookingBtn');
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    btn.style.color = 'var(--success)';
+    setTimeout(() => {
+      btn.textContent = orig;
+      btn.style.color = '';
+    }, 2000);
+  } catch(e) {
+    // Fallback for browsers without clipboard API
+    const el = document.createElement('textarea');
+    el.value = _bookingUrl;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    Toast.show('Booking link copied!', 'success');
+  }
+}
+
+function shareBookingLink() {
+  if (!_bookingUrl) return;
+  const msg = encodeURIComponent(
+    `Book a service appointment with us online:
+${_bookingUrl}
+
+Fast, easy, no waiting — select your service, pick a time, and we'll confirm your booking!`
+  );
+  window.open(`https://wa.me/?text=${msg}`, '_blank');
+}
+
+async function shareBookingQR() {
+  const wrap = document.getElementById('qrWrap');
+  const qrEl = document.getElementById('qrCode');
+  if (!wrap || !qrEl) return;
+
+  if (wrap.style.display === 'block') {
+    wrap.style.display = 'none';
+    return;
+  }
+
+  // Use QR Server API — free, no key needed
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(_bookingUrl)}&bgcolor=ffffff&color=0e0f0f&margin=1`;
+  qrEl.innerHTML = `<img src="${qrUrl}" width="200" height="200" alt="Booking QR Code" style="display:block">`;
+  wrap.style.display = 'block';
+  wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// Hook into settings pane navigation to load booking link when Integrations pane is opened
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.settings-nav-item').forEach(item => {
+    if (item.textContent.trim().includes('Integrations')) {
+      const orig = item.getAttribute('onclick') || '';
+      item.setAttribute('onclick', orig + '; initBookingLink();');
+    }
+  });
+});
+
 document.addEventListener('DOMContentLoaded', () => {
   // Load billing when Plan & Billing pane is clicked
   document.querySelectorAll('.settings-nav-item').forEach(item => {
