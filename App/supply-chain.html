@@ -331,7 +331,7 @@
   </div>
 </div>
 
-<!-- EMAIL PREVIEW MODAL -->
+<!-- SEND PO MODAL (WhatsApp + Email) -->
 <div class="modal-backdrop" id="emailPreviewModal">
   <div class="modal modal-lg">
     <div class="modal-header">
@@ -339,39 +339,90 @@
       <button class="modal-close" onclick="Modal.close('emailPreviewModal')">&#x2715;</button>
     </div>
     <div class="modal-body">
-      <div id="emailNoEmailWarn" style="display:none;background:rgba(181,43,30,.1);border:1px solid rgba(181,43,30,.3);color:#fca5a5;padding:12px 16px;border-radius:var(--r-sm);font-size:13px;margin-bottom:16px">
-        &#x26A0; This supplier has no email on file. Please enter one below or add it in the supplier profile.
-      </div>
-      <div class="app-form-group">
-        <label class="app-label">To (Supplier Email)</label>
-        <input class="app-input" type="email" id="emailPreviewTo" placeholder="orders@supplier.com" style="font-family:var(--ff-mono)">
-        <div style="font-size:11px;color:var(--app-muted);margin-top:4px">On file: <span id="emailPreviewSupplier" style="color:var(--amber)"></span></div>
-      </div>
-      <div class="app-form-group">
-        <label class="app-label">Subject</label>
-        <div id="emailPreviewSubject" style="font-family:var(--ff-mono);font-size:12px;color:var(--app-text);background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:10px 14px"></div>
-      </div>
-      <div class="app-form-group">
-        <label class="app-label">Email Body Preview</label>
-        <div style="background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:16px;max-height:320px;overflow-y:auto">
-          <pre id="emailPreviewBody" style="font-family:var(--ff-mono);font-size:11px;color:var(--app-text);white-space:pre-wrap;line-height:1.7;margin:0"></pre>
+
+      <!-- WhatsApp Section (PRIMARY) -->
+      <div style="background:rgba(37,211,102,0.06);border:1px solid rgba(37,211,102,0.25);border-radius:var(--r-sm);padding:18px;margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <svg viewBox="0 0 24 24" fill="#25D366" width="20" height="20"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          <div>
+            <div style="font-family:var(--ff-display);font-size:15px;letter-spacing:1px;color:var(--app-text)">WHATSAPP MESSAGE</div>
+            <div style="font-size:11px;color:var(--app-muted);margin-top:1px">Recommended — instant delivery, no email client needed</div>
+          </div>
         </div>
-        <div style="font-size:11px;color:var(--app-muted);margin-top:6px">&#x2139; This will open your email app (Gmail, Outlook etc.) with everything pre-filled. Just click Send.</div>
+        <div id="waNoPhoneWarn" style="display:none;background:rgba(181,43,30,.1);border:1px solid rgba(181,43,30,.3);color:#fca5a5;padding:10px 14px;border-radius:var(--r-sm);font-size:12px;margin-bottom:12px">
+          ⚠ This supplier has no phone number on file. Enter one below (with country code, e.g. 2348012345678).
+        </div>
+        <div class="app-form-row" style="margin-bottom:12px">
+          <div class="app-form-group" style="margin-bottom:0">
+            <label class="app-label">Supplier WhatsApp Number</label>
+            <input class="app-input" type="tel" id="waPhone" placeholder="e.g. 2348012345678" style="font-family:var(--ff-mono)">
+            <div style="font-size:11px;color:var(--app-muted);margin-top:4px">Include country code, no + or spaces. Nigeria = 234...</div>
+          </div>
+          <div class="app-form-group" style="margin-bottom:0">
+            <label class="app-label">On File</label>
+            <div style="font-family:var(--ff-mono);font-size:12px;color:var(--amber);padding-top:10px" id="waPhoneOnFile">—</div>
+          </div>
+        </div>
+        <div class="app-form-group" style="margin-bottom:0">
+          <label class="app-label">WhatsApp Message Preview</label>
+          <textarea id="waMessageBody" class="app-input" rows="7" style="font-family:var(--ff-mono);font-size:11px;line-height:1.7;resize:vertical"></textarea>
+          <div style="font-size:11px;color:var(--app-muted);margin-top:5px">✏ You can edit the message before sending. Opens WhatsApp with message pre-filled.</div>
+        </div>
+        <button class="app-btn app-btn-primary" onclick="sendViaWhatsApp()" style="margin-top:14px;width:100%;justify-content:center;background:#25D366;font-size:13px;padding:11px">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          Send via WhatsApp & Mark Sent
+        </button>
       </div>
+
+      <!-- Divider -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <div style="flex:1;height:1px;background:var(--app-border)"></div>
+        <span style="font-family:var(--ff-mono);font-size:10px;letter-spacing:2px;color:var(--app-muted)">OR SEND BY EMAIL</span>
+        <div style="flex:1;height:1px;background:var(--app-border)"></div>
+      </div>
+
+      <!-- Email Section (SECONDARY) -->
+      <div>
+        <div id="emailNoEmailWarn" style="display:none;background:rgba(181,43,30,.1);border:1px solid rgba(181,43,30,.3);color:#fca5a5;padding:10px 14px;border-radius:var(--r-sm);font-size:12px;margin-bottom:12px">
+          ⚠ This supplier has no email on file. Enter one below.
+        </div>
+        <div class="app-form-row" style="margin-bottom:12px">
+          <div class="app-form-group" style="margin-bottom:0">
+            <label class="app-label">To (Supplier Email)</label>
+            <input class="app-input" type="email" id="emailPreviewTo" placeholder="orders@supplier.com" style="font-family:var(--ff-mono)">
+          </div>
+          <div class="app-form-group" style="margin-bottom:0">
+            <label class="app-label">On File</label>
+            <div style="font-family:var(--ff-mono);font-size:12px;color:var(--amber);padding-top:10px" id="emailPreviewSupplier">—</div>
+          </div>
+        </div>
+        <div class="app-form-group" style="margin-bottom:12px">
+          <label class="app-label">Subject</label>
+          <div id="emailPreviewSubject" style="font-family:var(--ff-mono);font-size:12px;color:var(--app-text);background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:10px 14px"></div>
+        </div>
+        <div class="app-form-group" style="margin-bottom:0">
+          <label class="app-label">Email Body Preview</label>
+          <div style="background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:14px;max-height:200px;overflow-y:auto">
+            <pre id="emailPreviewBody" style="font-family:var(--ff-mono);font-size:11px;color:var(--app-text);white-space:pre-wrap;line-height:1.7;margin:0"></pre>
+          </div>
+          <div style="font-size:11px;color:var(--app-muted);margin-top:5px">ℹ Opens your email app (Gmail, Outlook etc.) with everything pre-filled.</div>
+        </div>
+        <button class="app-btn app-btn-ghost" onclick="confirmSendPO()" style="margin-top:14px;width:100%;justify-content:center;font-size:13px;padding:10px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Open Email App & Mark Sent
+        </button>
+      </div>
+
     </div>
     <div class="modal-footer">
-      <button class="app-btn app-btn-ghost" onclick="Modal.close('emailPreviewModal')">Cancel</button>
-      <button class="app-btn app-btn-primary" onclick="confirmSendPO()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-        Open Email App &amp; Mark Sent
-      </button>
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('emailPreviewModal')">Close</button>
     </div>
   </div>
 </div>
 
 <div class="toast-container" id="toastContainer"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../js/theme.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../js/main.js"></script>
 <script src="../js/supabase.js"></script>
 <script src="../js/rbac.js"></script>
@@ -614,16 +665,34 @@ async function sendPO(id) {
   var po = poData.find(function(p){ return p.id === id; });
   if (!po) { Toast.show('PO not found', 'error'); return; }
 
-  var supplier = po.suppliers || {};
+  var supplier      = po.suppliers || {};
   var supplierEmail = supplier.email || '';
+  var supplierPhone = (supplier.phone || '').replace(/[\s\-\+\(\)]/g, ''); // strip spaces/symbols
   var supplierName  = supplier.name  || 'Supplier';
-  var items = po.purchase_order_items || [];
-  var total = items.reduce(function(s,i){ return s + (i.unit_cost||0)*(i.qty||0); }, 0);
+  var items         = po.purchase_order_items || [];
+  var total         = items.reduce(function(s,i){ return s + (i.unit_cost||0)*(i.qty||0); }, 0);
 
-  // Build email subject
+  // ── BUILD WHATSAPP MESSAGE ──────────────────────────────────────
+  var waMsg = '';
+  waMsg += 'Hello ' + supplierName + ',\n\n';
+  waMsg += '📋 *PURCHASE ORDER: ' + (po.ref||'') + '*\n';
+  waMsg += '📅 Date: ' + new Date().toLocaleDateString('en-NG', {day:'numeric',month:'long',year:'numeric'}) + '\n';
+  if (po.expected_at) waMsg += '🚚 Expected Delivery: ' + new Date(po.expected_at).toLocaleDateString('en-NG', {day:'numeric',month:'long',year:'numeric'}) + '\n';
+  waMsg += '\n*ORDER ITEMS:*\n';
+  for (var i = 0; i < items.length; i++) {
+    var item     = items[i];
+    var partName = (item.inventory && item.inventory.name) || 'Part';
+    var sku      = (item.inventory && item.inventory.sku)  || '';
+    var lineAmt  = (item.unit_cost||0) * (item.qty||0);
+    waMsg += '\n' + (i+1) + '. *' + partName + '*' + (sku ? ' [' + sku + ']' : '') + '\n';
+    waMsg += '   Qty: ' + (item.qty||0) + ' × ' + formatCurrency(item.unit_cost||0) + ' = *' + formatCurrency(lineAmt) + '*\n';
+  }
+  waMsg += '\n💰 *ORDER TOTAL: ' + formatCurrency(total) + '*\n';
+  if (po.notes) waMsg += '\n📝 Notes: ' + po.notes + '\n';
+  waMsg += '\nPlease confirm receipt and expected delivery date. Thank you! 🙏\n\n— GearShift Auto Shop';
+
+  // ── BUILD EMAIL BODY ───────────────────────────────────────────
   var subject = 'Purchase Order ' + (po.ref||'') + ' — GearShift Auto Shop';
-
-  // Build plain text email body with full PO details
   var body = '';
   body += 'Dear ' + supplierName + ',\n\n';
   body += 'Please find below our purchase order details. Kindly confirm receipt and expected delivery date.\n\n';
@@ -631,48 +700,68 @@ async function sendPO(id) {
   body += 'PURCHASE ORDER: ' + (po.ref||'') + '\n';
   body += 'Date: ' + new Date().toLocaleDateString('en-NG', {day:'numeric',month:'long',year:'numeric'}) + '\n';
   if (po.expected_at) body += 'Expected Delivery: ' + new Date(po.expected_at).toLocaleDateString('en-NG', {day:'numeric',month:'long',year:'numeric'}) + '\n';
-  body += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
-  body += 'ORDER ITEMS:\n\n';
-
-  for (var i = 0; i < items.length; i++) {
-    var item = items[i];
-    var name = (item.inventory && item.inventory.name) || 'Part';
-    var sku  = (item.inventory && item.inventory.sku)  || '';
-    var lineTotal = (item.unit_cost||0) * (item.qty||0);
-    body += (i+1) + '. ' + name + (sku ? ' [' + sku + ']' : '') + '\n';
-    body += '   Quantity: ' + (item.qty||0) + '\n';
-    body += '   Unit Cost: ' + formatCurrency(item.unit_cost||0) + '\n';
-    body += '   Line Total: ' + formatCurrency(lineTotal) + '\n\n';
+  body += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nORDER ITEMS:\n\n';
+  for (var j = 0; j < items.length; j++) {
+    var jitem    = items[j];
+    var jname    = (jitem.inventory && jitem.inventory.name) || 'Part';
+    var jsku     = (jitem.inventory && jitem.inventory.sku)  || '';
+    var jTotal   = (jitem.unit_cost||0) * (jitem.qty||0);
+    body += (j+1) + '. ' + jname + (jsku ? ' [' + jsku + ']' : '') + '\n';
+    body += '   Quantity: ' + (jitem.qty||0) + '\n';
+    body += '   Unit Cost: ' + formatCurrency(jitem.unit_cost||0) + '\n';
+    body += '   Line Total: ' + formatCurrency(jTotal) + '\n\n';
   }
-
   body += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
   body += 'ORDER TOTAL: ' + formatCurrency(total) + '\n';
   body += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
   if (po.notes) body += 'Notes: ' + po.notes + '\n\n';
-  body += 'Please reply to this email to confirm the order or contact us for any queries.\n\n';
-  body += 'Thank you for your continued partnership.\n\n';
-  body += 'Best regards,\n';
-  body += 'GearShift Auto Shop\n';
+  body += 'Please reply to confirm the order or contact us for any queries.\n\nThank you for your continued partnership.\n\nBest regards,\nGearShift Auto Shop\n';
 
-  // Show preview modal first
-  document.getElementById('emailPreviewSupplier').textContent = supplierEmail || '(no email on file)';
-  document.getElementById('emailPreviewSubject').textContent  = subject;
-  document.getElementById('emailPreviewBody').textContent     = body;
-  document.getElementById('emailPreviewTo').value            = supplierEmail;
+  // ── POPULATE MODAL ─────────────────────────────────────────────
+  var modal = document.getElementById('emailPreviewModal');
+  modal.dataset.poId    = id;
+  modal.dataset.subject = subject;
+  modal.dataset.body    = body;
+  modal.dataset.waMsg   = waMsg;
 
-  // Store for use in confirmSendPO
-  document.getElementById('emailPreviewModal').dataset.poId      = id;
-  document.getElementById('emailPreviewModal').dataset.subject   = subject;
-  document.getElementById('emailPreviewModal').dataset.body      = body;
-  document.getElementById('emailPreviewModal').dataset.toEmail   = supplierEmail;
+  // WhatsApp fields
+  document.getElementById('waPhone').value        = supplierPhone;
+  document.getElementById('waPhoneOnFile').textContent = supplierPhone || '(none on file)';
+  document.getElementById('waMessageBody').value  = waMsg;
+  document.getElementById('waNoPhoneWarn').style.display = supplierPhone ? 'none' : 'block';
 
-  if (!supplierEmail) {
-    document.getElementById('emailNoEmailWarn').style.display = 'block';
-  } else {
-    document.getElementById('emailNoEmailWarn').style.display = 'none';
-  }
+  // Email fields
+  document.getElementById('emailPreviewTo').value           = supplierEmail;
+  document.getElementById('emailPreviewSupplier').textContent = supplierEmail || '(none on file)';
+  document.getElementById('emailPreviewSubject').textContent = subject;
+  document.getElementById('emailPreviewBody').textContent   = body;
+  document.getElementById('emailNoEmailWarn').style.display = supplierEmail ? 'none' : 'block';
 
   Modal.open('emailPreviewModal');
+}
+
+async function sendViaWhatsApp() {
+  var modal  = document.getElementById('emailPreviewModal');
+  var id     = modal.dataset.poId;
+  var phone  = document.getElementById('waPhone').value.trim().replace(/[\s\-\+\(\)]/g, '');
+  var msg    = document.getElementById('waMessageBody').value.trim();
+
+  if (!phone) { Toast.show('Please enter the supplier WhatsApp number', 'error'); return; }
+  if (!/^\d{7,15}$/.test(phone)) { Toast.show('Enter a valid number with country code, e.g. 2348012345678', 'error'); return; }
+
+  // Open WhatsApp Web / app with pre-filled message
+  var waUrl = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(msg);
+  window.open(waUrl, '_blank');
+
+  // Mark PO as Sent
+  setTimeout(async function() {
+    try {
+      await GS.updatePOStatus(id, 'Sent');
+      Toast.show('PO sent via WhatsApp & marked as Sent ✓', 'success', 4000);
+      Modal.close('emailPreviewModal');
+      await loadAll();
+    } catch(e) { Toast.show(e.message || 'Failed to update PO status', 'error'); }
+  }, 1000);
 }
 
 async function confirmSendPO() {
@@ -682,16 +771,13 @@ async function confirmSendPO() {
   var body    = modal.dataset.body;
   var toEmail = document.getElementById('emailPreviewTo').value.trim();
 
-  if (!toEmail) { Toast.show('Please enter supplier email address', 'error'); return; }
+  if (!toEmail) { Toast.show('Please enter the supplier email address', 'error'); return; }
 
-  // Open mailto in user email client
   var mailto = 'mailto:' + encodeURIComponent(toEmail)
     + '?subject=' + encodeURIComponent(subject)
     + '&body='    + encodeURIComponent(body);
-
   window.location.href = mailto;
 
-  // Mark PO as Sent after short delay (give email client time to open)
   setTimeout(async function() {
     try {
       await GS.updatePOStatus(id, 'Sent');

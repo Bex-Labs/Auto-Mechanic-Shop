@@ -302,12 +302,45 @@ function switchPane(btn) {
   btn.classList.add('active');
 }
 
+var _reloadTimer = null;
+
+function scheduleReload() {
+  // Debounce — wait 2s after last change before reloading
+  // Prevents hammering the DB when multiple changes fire at once
+  clearTimeout(_reloadTimer);
+  _reloadTimer = setTimeout(async function() {
+    await loadData();
+    renderAll();
+    updateLastUpdated();
+  }, 2000);
+}
+
+function updateLastUpdated() {
+  var el = document.getElementById('reportsLastUpdated');
+  if (el) el.textContent = 'Updated ' + new Date().toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
 async function initPage() {
   var user = await RBAC.guardPage('reports');
   if (!user) return;
   await RBAC.initSidebar('reports');
   await loadData();
   renderAll();
+  updateLastUpdated();
+
+  // Realtime subscriptions — reload reports when data changes
+  Realtime.subscribe('invoices', {
+    onInsert: scheduleReload, onUpdate: scheduleReload, onDelete: scheduleReload
+  });
+  Realtime.subscribe('work_orders', {
+    onInsert: scheduleReload, onUpdate: scheduleReload, onDelete: scheduleReload
+  });
+  Realtime.subscribe('inventory', {
+    onInsert: scheduleReload, onUpdate: scheduleReload, onDelete: scheduleReload
+  });
+  Realtime.subscribe('appointments', {
+    onInsert: scheduleReload, onUpdate: scheduleReload, onDelete: scheduleReload
+  });
 }
 
 async function loadData() {
