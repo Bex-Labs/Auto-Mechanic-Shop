@@ -15,7 +15,7 @@
    ----------------------------------------------------------------- */
 const BILLING = {
   // ── Replace with your live key when going live ────────────────
-  PAYSTACK_PUBLIC_KEY: 'pk_test_fae466db766719cea7b73682f7a0d8a2f86a7b2b',
+  PAYSTACK_PUBLIC_KEY: 'pk_live_be4f4d74116e85025bd14090699f3fd3979cd821',
 
   // ── Plan prices in kobo (Paystack uses the smallest currency unit)
   PLANS: {

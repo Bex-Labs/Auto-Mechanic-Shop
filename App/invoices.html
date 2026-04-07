@@ -56,7 +56,24 @@
     </div>
 
     <div class="app-content">
-      <div class="stats-grid" id="invStats"></div>
+      <div class="stats-grid" id="invStats">
+        <div class="stat-card green">
+          <div class="stat-label">TOTAL COLLECTED</div>
+          <div class="stat-value" id="inv-paid">₦0.00</div>
+        </div>
+        <div class="stat-card amber">
+          <div class="stat-label">OUTSTANDING</div>
+          <div class="stat-value" id="inv-unpaid">₦0.00</div>
+        </div>
+        <div class="stat-card rust">
+          <div class="stat-label">OVERDUE</div>
+          <div class="stat-value" id="inv-overdue">₦0.00</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-label">TOTAL INVOICES</div>
+          <div class="stat-value" id="inv-count">0</div>
+        </div>
+      </div>
 
       <!-- ALL INVOICES -->
       <div class="view-pane active" id="pane-all">
@@ -172,12 +189,12 @@
 </div>
 
 <div class="toast-container" id="toastContainer"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../js/theme.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://js.paystack.co/v1/inline.js"></script>
 <script src="../js/main.js"></script>
 <script src="../js/supabase.js"></script>
 <script src="../js/rbac.js"></script>
-<script src="https://js.paystack.co/v1/inline.js"></script>
 <script src="../js/billing.js"></script>
 <script>
 let invoiceData    = [];
@@ -367,12 +384,19 @@ function renderInvoiceTable(filter) {
 
 function renderInvoiceSummary() {
   const paid    = invoiceData.filter(i => i.status === 'Paid').reduce((s, i) => s + (i.total_amount||0), 0);
-  const unpaid  = invoiceData.filter(i => i.status === 'Unpaid').reduce((s, i) => s + (i.total_amount||0), 0);
+  const unpaid  = invoiceData.filter(i => ['Unpaid','Partial'].includes(i.status)).reduce((s, i) => s + (i.total_amount||0), 0);
   const overdue = invoiceData.filter(i => i.status === 'Overdue').reduce((s, i) => s + (i.total_amount||0), 0);
-  const el = id => document.getElementById(id);
-  if (el('inv-paid'))    el('inv-paid').textContent    = formatCurrency(paid);
-  if (el('inv-unpaid'))  el('inv-unpaid').textContent  = formatCurrency(unpaid);
-  if (el('inv-overdue')) el('inv-overdue').textContent = formatCurrency(overdue);
+  const paidEl    = document.getElementById('inv-paid');
+  const unpaidEl  = document.getElementById('inv-unpaid');
+  const overdueEl = document.getElementById('inv-overdue');
+  const countEl   = document.getElementById('inv-count');
+  if (paidEl)    paidEl.textContent    = formatCurrency(paid);
+  if (unpaidEl)  unpaidEl.textContent  = formatCurrency(unpaid);
+  if (overdueEl) {
+    overdueEl.textContent  = formatCurrency(overdue);
+    overdueEl.style.color  = overdue > 0 ? 'var(--danger)' : '';
+  }
+  if (countEl)   countEl.textContent   = invoiceData.length;
 }
 
 // ── GENERATE INVOICE MODAL ────────────────────────────────────────
@@ -573,7 +597,7 @@ function printInvoice() {
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Invoice — GearShift</title>
+  <title>Invoice \u2014 GearShift<\/title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -593,12 +617,12 @@ function printInvoice() {
     .inv-totals-row.total { border-top:2px solid #0e0f0f; border-bottom:none; padding-top:12px; font-size:18px; font-weight:700; }
     .inv-footer-note { margin-top:28px; padding-top:20px; border-top:1px solid #ddd; font-size:12px; color:#888; text-align:center; }
     @media print { body { padding:20px; } }
-  </style>
-</head>
+  <\/style>
+<\/head>
   <body>
   ${printArea.innerHTML}
-  </body>
-</html>`);
+  <\/body>
+<\/html>`);
   win.document.close();
   win.focus();
   setTimeout(() => { win.print(); }, 500);
