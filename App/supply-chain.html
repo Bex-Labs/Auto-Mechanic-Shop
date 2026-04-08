@@ -33,18 +33,8 @@
 .stars { display:inline-flex; gap:2px; font-size:14px; }
 .star  { cursor:pointer; color:var(--app-muted); transition:color var(--t-fast); }
 .star.filled  { color:var(--amber); }
-.star:hover,
-.star:hover ~ .star { color:var(--app-muted) !important; }
 #ratingStars:hover .star { color:var(--amber); }
 #ratingStars .star:hover ~ .star { color:var(--app-muted) !important; }
-
-/* ── EMAIL PREVIEW ── */
-.email-preview {
-  background:var(--app-bg); border:1px solid var(--app-border);
-  border-radius:var(--r-sm); padding:20px; font-family:var(--ff-body);
-  font-size:13px; color:var(--app-text); line-height:1.8;
-  white-space:pre-wrap; max-height:300px; overflow-y:auto;
-}
 
 /* ── LEAD TIME BADGE ── */
 .lead-badge {
@@ -58,12 +48,60 @@
 /* ── PERFORMANCE BAR ── */
 .perf-bar-wrap { height:5px; background:var(--app-surface2); border-radius:3px; overflow:hidden; margin-top:5px; }
 .perf-bar      { height:100%; border-radius:3px; transition:width .4s; }
+
+/* ── WHATSAPP SEND MODAL ── */
+.wa-section {
+  border:1px solid rgba(37,211,102,0.3); border-radius:var(--r-sm);
+  padding:18px 20px; margin-bottom:16px; background:rgba(37,211,102,0.04);
+}
+.wa-section-header {
+  display:flex; align-items:center; gap:10px; margin-bottom:14px;
+}
+.wa-section-title { font-weight:600; color:#25D366; font-size:13px; }
+.wa-msg-preview {
+  background:var(--app-surface2); border:1px solid var(--app-border);
+  border-radius:var(--r-sm); padding:12px 14px; max-height:180px;
+  overflow-y:auto; margin-bottom:12px;
+}
+.wa-msg-preview pre {
+  font-family:var(--ff-mono); font-size:11px; color:var(--app-text);
+  white-space:pre-wrap; line-height:1.6; margin:0;
+}
+.email-section {
+  border:1px solid var(--app-border); border-radius:var(--r-sm);
+  padding:18px 20px; background:var(--app-surface2);
+}
+.send-warn {
+  display:none; background:rgba(181,43,30,.1); border:1px solid rgba(181,43,30,.3);
+  color:#fca5a5; padding:10px 14px; border-radius:var(--r-sm);
+  font-size:12px; margin-bottom:10px;
+}
+/* ── PDF progress indicator ── */
+.pdf-generating {
+  display:none; align-items:center; gap:10px;
+  padding:10px 14px; background:rgba(232,160,32,0.08);
+  border:1px solid rgba(232,160,32,0.3); border-radius:var(--r-sm);
+  font-size:12px; color:var(--amber); margin-bottom:12px;
+}
+.pdf-generating.show { display:flex; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.spinner {
+  width:14px; height:14px; border:2px solid rgba(232,160,32,0.3);
+  border-top-color:var(--amber); border-radius:50%;
+  animation:spin .7s linear infinite; flex-shrink:0;
+}
+
+/* ── WA ICON SVG ── */
+.wa-icon path { fill:#25D366; }
 </style>
 </head>
 <body>
 <div class="app-layout">
   <aside class="app-sidebar">
-    <div class="sidebar-logo"><span class="sidebar-logo-text">GEAR<span>SHIFT</span></span><a href="../index.html" class="sidebar-back">← Site</a></div>
+    <div class="sidebar-logo">
+      <span class="sidebar-logo-text">GEAR<span>SHIFT</span></span>
+      <a href="../index.html" class="sidebar-back">← Site</a>
+    </div>
     <nav class="sidebar-nav"><!-- populated by RBAC.initSidebar --></nav>
     <div class="sidebar-footer">
       <div class="theme-toggle">
@@ -88,9 +126,9 @@
     </div>
 
     <div class="app-sub-nav">
-      <button class="app-sub-link active" data-pane="pane-pos"       onclick="switchPane(this)">Purchase Orders</button>
-      <button class="app-sub-link"        data-pane="pane-suppliers"  onclick="switchPane(this)">Suppliers <span id="suppCount" style="margin-left:4px;background:var(--app-surface2);color:var(--app-muted);font-family:var(--ff-mono);font-size:9px;padding:1px 6px;border-radius:10px"></span></button>
-      <button class="app-sub-link"        data-pane="pane-reorder"   onclick="switchPane(this)">Reorder Suggestions <span id="reorderBadge" style="margin-left:4px;background:var(--rust);color:var(--white);font-family:var(--ff-mono);font-size:9px;padding:1px 6px;border-radius:10px;display:none"></span></button>
+      <button class="app-sub-link active" data-pane="pane-pos"      onclick="switchPane(this)">Purchase Orders</button>
+      <button class="app-sub-link"        data-pane="pane-suppliers" onclick="switchPane(this)">Suppliers <span id="suppCount" style="margin-left:4px;background:var(--app-surface2);color:var(--app-muted);font-family:var(--ff-mono);font-size:9px;padding:1px 6px;border-radius:10px"></span></button>
+      <button class="app-sub-link"        data-pane="pane-reorder"  onclick="switchPane(this)">Reorder Suggestions <span id="reorderBadge" style="margin-left:4px;background:var(--rust);color:var(--white);font-family:var(--ff-mono);font-size:9px;padding:1px 6px;border-radius:10px;display:none"></span></button>
     </div>
 
     <div class="app-content">
@@ -117,8 +155,6 @@
       <!-- ══ SUPPLIERS ══ -->
       <div class="view-pane" id="pane-suppliers">
         <div class="stats-grid" id="suppStats"></div>
-
-        <!-- Search + filters -->
         <div class="filter-bar" style="margin-bottom:var(--space-4)">
           <input class="search-box" id="suppSearch" placeholder="Search name, contact, category…" oninput="renderSupplierList()">
           <select class="filter-select" id="suppLeadFilter" onchange="renderSupplierList()">
@@ -141,13 +177,10 @@
             <option value="3">★★★ 3+ stars</option>
           </select>
         </div>
-
         <div style="display:grid;grid-template-columns:300px 1fr;gap:var(--space-4);align-items:start;">
-          <!-- Left: supplier list -->
           <div>
             <div id="supplierList" style="display:flex;flex-direction:column;gap:8px;"></div>
           </div>
-          <!-- Right: supplier profile -->
           <div class="panel" id="supplierProfile">
             <div class="empty-state" style="padding:64px">
               <div class="empty-icon">🏭</div>
@@ -183,7 +216,10 @@
   </div><!-- /app-main -->
 </div><!-- /app-layout -->
 
-<!-- ══ MODAL: NEW / EDIT SUPPLIER ══ -->
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: ADD / EDIT SUPPLIER
+══════════════════════════════════════════════════════════ -->
 <div class="modal-backdrop" id="supplierModal">
   <div class="modal modal-lg">
     <div class="modal-header">
@@ -207,7 +243,7 @@
       </div>
       <div class="app-form-row">
         <div class="app-form-group">
-          <label class="app-label">Phone</label>
+          <label class="app-label">WhatsApp / Phone <span style="font-size:11px;color:var(--app-muted)">(used for PO sending)</span></label>
           <input class="app-input" id="s-phone" placeholder="e.g. 0801 234 5678">
         </div>
         <div class="app-form-group">
@@ -262,7 +298,10 @@
   </div>
 </div>
 
-<!-- ══ MODAL: NEW PO ══ -->
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: NEW PO
+══════════════════════════════════════════════════════════ -->
 <div class="modal-backdrop" id="poModal">
   <div class="modal modal-lg">
     <div class="modal-header">
@@ -301,7 +340,10 @@
   </div>
 </div>
 
-<!-- ══ MODAL: PO DETAIL ══ -->
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: PO DETAIL VIEW
+══════════════════════════════════════════════════════════ -->
 <div class="modal-backdrop" id="poDetailModal">
   <div class="modal modal-lg">
     <div class="modal-header">
@@ -313,7 +355,10 @@
   </div>
 </div>
 
-<!-- ══ MODAL: RECEIVE DELIVERY ══ -->
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: RECEIVE DELIVERY
+══════════════════════════════════════════════════════════ -->
 <div class="modal-backdrop" id="receiveModal">
   <div class="modal modal-lg">
     <div class="modal-header">
@@ -321,58 +366,80 @@
       <button class="modal-close" onclick="Modal.close('receiveModal')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="alert alert-info" style="margin-bottom:16px">Enter received quantities. Inventory will update automatically. Partial deliveries are supported.</div>
+      <div class="alert alert-info" style="margin-bottom:16px">
+        Enter received quantities. Inventory will update automatically. Partial deliveries are supported.
+      </div>
       <div id="rcvLines" style="display:flex;flex-direction:column;gap:0;"></div>
     </div>
     <div class="modal-footer">
       <button class="app-btn app-btn-ghost" onclick="Modal.close('receiveModal')">Cancel</button>
-      <button class="app-btn app-btn-primary" onclick="confirmDelivery()">Confirm Delivery & Update Inventory</button>
+      <button class="app-btn app-btn-primary" onclick="confirmDelivery()">Confirm Delivery &amp; Update Inventory</button>
     </div>
   </div>
 </div>
 
-<!-- EMAIL PREVIEW MODAL -->
-<div class="modal-backdrop" id="emailPreviewModal">
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: SEND PURCHASE ORDER (WhatsApp + Email)
+══════════════════════════════════════════════════════════ -->
+<div class="modal-backdrop" id="sendPOModal">
   <div class="modal modal-lg">
     <div class="modal-header">
       <span class="modal-title">SEND PURCHASE ORDER</span>
-      <button class="modal-close" onclick="Modal.close('emailPreviewModal')">&#x2715;</button>
+      <button class="modal-close" onclick="Modal.close('sendPOModal')">✕</button>
     </div>
     <div class="modal-body">
 
-      <!-- PO SUMMARY -->
+      <!-- PO SUMMARY STRIP -->
       <div id="poSendSummary" style="background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:14px 18px;margin-bottom:20px;font-size:13px"></div>
 
       <!-- WARNINGS -->
-      <div id="warnNoPhone" style="display:none;background:rgba(181,43,30,.1);border:1px solid rgba(181,43,30,.3);color:#fca5a5;padding:10px 14px;border-radius:var(--r-sm);font-size:12px;margin-bottom:10px">
-        &#x26A0; No WhatsApp number on file for this supplier. Add it in the supplier profile to enable WhatsApp.
-      </div>
-      <div id="warnNoEmail" style="display:none;background:rgba(181,43,30,.1);border:1px solid rgba(181,43,30,.3);color:#fca5a5;padding:10px 14px;border-radius:var(--r-sm);font-size:12px;margin-bottom:10px">
-        &#x26A0; No email address on file for this supplier.
+      <div id="warnNoPhone" class="send-warn">⚠ No WhatsApp number on file for this supplier. Add it below or update the supplier profile.</div>
+      <div id="warnNoEmail" class="send-warn">⚠ No email address on file for this supplier.</div>
+
+      <!-- PDF GENERATING INDICATOR -->
+      <div class="pdf-generating" id="pdfProgress">
+        <div class="spinner"></div>
+        <span>Generating PDF…</span>
       </div>
 
-      <!-- WHATSAPP SECTION -->
-      <div style="border:1px solid rgba(37,211,102,0.3);border-radius:var(--r-sm);padding:16px 18px;margin-bottom:16px;background:rgba(37,211,102,0.04)">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-          <svg viewBox="0 0 24 24" fill="#25D366" width="20" height="20"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-          <span style="font-weight:600;color:#25D366;font-size:13px">WhatsApp — Recommended</span>
+      <!-- ── WHATSAPP SECTION ── -->
+      <div class="wa-section">
+        <div class="wa-section-header">
+          <svg viewBox="0 0 24 24" width="20" height="20" class="wa-icon"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          <span class="wa-section-title">WhatsApp — Recommended</span>
+          <span style="margin-left:auto;font-family:var(--ff-mono);font-size:10px;color:#25D366;background:rgba(37,211,102,0.1);padding:2px 8px;border-radius:10px;border:1px solid rgba(37,211,102,0.25)">PDF AUTO-DOWNLOADED</span>
         </div>
-        <div class="app-form-group" style="margin-bottom:8px">
+
+        <div class="app-form-group" style="margin-bottom:10px">
           <label class="app-label">Supplier WhatsApp Number</label>
           <input class="app-input" type="tel" id="waPhone" placeholder="+234 801 234 5678" style="font-family:var(--ff-mono)">
-          <div style="font-size:11px;color:var(--app-muted);margin-top:4px">Include country code e.g. +234 for Nigeria</div>
+          <div style="font-size:11px;color:var(--app-muted);margin-top:4px">
+            Include country code — Nigerian numbers (08xx) are auto-converted to +234
+          </div>
         </div>
-        <div style="background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:12px 14px;max-height:180px;overflow-y:auto;margin-bottom:10px">
-          <pre id="waMessagePreview" style="font-family:var(--ff-mono);font-size:11px;color:var(--app-text);white-space:pre-wrap;line-height:1.6;margin:0"></pre>
+
+        <!-- Message preview -->
+        <div style="font-family:var(--ff-mono);font-size:9px;letter-spacing:1.5px;color:var(--app-muted);text-transform:uppercase;margin-bottom:6px">Message Preview</div>
+        <div class="wa-msg-preview">
+          <pre id="waMessagePreview"></pre>
         </div>
-        <button class="app-btn app-btn-primary" onclick="sendViaWhatsApp()" style="width:100%;background:#25D366;border-color:#25D366;justify-content:center;gap:8px">
-          <svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-          Send via WhatsApp &amp; Mark Sent
+
+        <!-- How it works tip -->
+        <div style="display:flex;gap:8px;background:rgba(37,211,102,0.06);border:1px solid rgba(37,211,102,0.15);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--app-muted);line-height:1.6">
+          <span style="font-size:16px;flex-shrink:0">💡</span>
+          <span>The PO PDF will download automatically. When WhatsApp opens, tap the <strong style="color:var(--app-text)">📎 attachment icon</strong> and attach the downloaded PDF before sending.</span>
+        </div>
+
+        <button class="app-btn app-btn-primary" id="waSendBtn" onclick="sendViaWhatsApp()"
+          style="width:100%;background:#25D366;border-color:#25D366;justify-content:center;gap:10px;font-size:13px;padding:11px 18px">
+          <svg viewBox="0 0 24 24" fill="white" width="15" height="15"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          Download PDF &amp; Open WhatsApp
         </button>
       </div>
 
-      <!-- EMAIL SECTION -->
-      <div style="border:1px solid var(--app-border);border-radius:var(--r-sm);padding:16px 18px;background:var(--app-surface2)">
+      <!-- ── EMAIL SECTION ── -->
+      <div class="email-section">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
           <span style="font-weight:600;color:var(--app-text);font-size:13px">Email — Alternative</span>
@@ -382,7 +449,7 @@
           <input class="app-input" type="email" id="emailPreviewTo" placeholder="orders@supplier.com" style="font-family:var(--ff-mono)">
           <div style="font-size:11px;color:var(--app-muted);margin-top:4px">On file: <span id="emailPreviewSupplier" style="color:var(--amber)"></span></div>
         </div>
-        <div style="background:var(--app-surface);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:12px 14px;max-height:140px;overflow-y:auto;margin-bottom:10px">
+        <div style="background:var(--app-surface);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:12px 14px;max-height:130px;overflow-y:auto;margin-bottom:10px">
           <pre id="emailPreviewBody" style="font-family:var(--ff-mono);font-size:11px;color:var(--app-text);white-space:pre-wrap;line-height:1.6;margin:0"></pre>
         </div>
         <button class="app-btn app-btn-ghost" onclick="sendViaEmail()" style="width:100%;justify-content:center;gap:8px">
@@ -391,25 +458,27 @@
         </button>
       </div>
 
-    </div>
+    </div><!-- /modal-body -->
     <div class="modal-footer">
-      <button class="app-btn app-btn-ghost" onclick="Modal.close('emailPreviewModal')">Cancel</button>
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('sendPOModal')">Cancel</button>
     </div>
   </div>
 </div>
-<!-- compat -->
-<span id="emailPreviewSubject" style="display:none"></span>
+
 
 <div class="toast-container" id="toastContainer"></div>
+
+<!-- jsPDF for PDF generation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../js/theme.js"></script>
 <script src="../js/main.js"></script>
 <script src="../js/supabase.js"></script>
 <script src="../js/rbac.js"></script>
 <script>
-/* ════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════
    STATE
-════════════════════════════════════════ */
+════════════════════════════════════════════════════════════ */
 let poData        = [];
 let supplierData  = [];
 let inventoryData = [];
@@ -417,9 +486,9 @@ let selectedSuppId = null;
 let editingSuppId  = null;
 let currentRating  = 3;
 
-/* ════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════
    INIT
-════════════════════════════════════════ */
+════════════════════════════════════════════════════════════ */
 async function initPage() {
   const user = await RBAC.guardPage('supply-chain');
   if (!user) return;
@@ -449,13 +518,12 @@ async function loadAll() {
   renderReorder();
   populatePOSupplierDropdown();
 
-  // Refresh open profile if one is selected
   if (selectedSuppId) renderSupplierProfile(selectedSuppId);
 }
 
-/* ════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════
    NAVIGATION
-════════════════════════════════════════ */
+════════════════════════════════════════════════════════════ */
 function switchPane(btn) {
   document.querySelectorAll('.view-pane').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.app-sub-link').forEach(b => b.classList.remove('active'));
@@ -463,9 +531,9 @@ function switchPane(btn) {
   btn.classList.add('active');
 }
 
-/* ════════════════════════════════════════
-   PURCHASE ORDERS
-════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════
+   PURCHASE ORDERS — STATS & TABLE
+════════════════════════════════════════════════════════════ */
 function renderPOStats() {
   const open  = poData.filter(p => !['Received','Cancelled'].includes(p.status)).length;
   const draft = poData.filter(p => p.status === 'Draft').length;
@@ -519,7 +587,10 @@ function renderPOTable() {
       <td>
         <div style="display:flex;gap:6px">
           <button class="app-btn app-btn-ghost app-btn-sm" onclick="viewPO('${p.id}')">View</button>
-          ${p.status==='Draft' ? `<button class="app-btn app-btn-ghost app-btn-sm" onclick="sendPO('${p.id}')">Send</button>` : ''}
+          ${p.status==='Draft' ? `<button class="app-btn app-btn-ghost app-btn-sm" onclick="sendPO('${p.id}')">
+            <svg viewBox="0 0 24 24" fill="#25D366" width="11" height="11"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+            Send
+          </button>` : ''}
           ${['Sent','Partially Received'].includes(p.status) ? `<button class="app-btn app-btn-primary app-btn-sm" onclick="openReceiveModal('${p.id}')">Receive</button>` : ''}
         </div>
       </td>
@@ -527,6 +598,9 @@ function renderPOTable() {
   }).join('');
 }
 
+/* ════════════════════════════════════════════════════════════
+   PO MODAL — NEW
+════════════════════════════════════════════════════════════ */
 function populatePOSupplierDropdown() {
   const sel = document.getElementById('po-supp');
   if (!sel) return;
@@ -565,7 +639,8 @@ function addPOLine() {
       <span style="font-family:var(--ff-mono);font-size:13px;color:var(--app-muted)">₦</span>
       <input class="app-input" type="number" min="0" step="0.01" style="width:110px" placeholder="Unit cost" oninput="updatePOTotal()">
     </div>
-    <button class="app-btn app-btn-ghost app-btn-sm" style="color:var(--danger);flex-shrink:0" onclick="this.closest('.po-line').remove();updatePOTotal()">✕</button>`;
+    <button class="app-btn app-btn-ghost app-btn-sm" style="color:var(--danger);flex-shrink:0"
+      onclick="this.closest('.po-line').remove();updatePOTotal()">✕</button>`;
   document.getElementById('poLineItems').appendChild(div);
 }
 
@@ -580,9 +655,7 @@ function updatePOTotal() {
   let total = 0;
   document.querySelectorAll('#poLineItems .po-line').forEach(row => {
     const inputs = row.querySelectorAll('input[type=number]');
-    const qty  = parseFloat(inputs[0]?.value) || 0;
-    const cost = parseFloat(inputs[1]?.value) || 0;
-    total += qty * cost;
+    total += (parseFloat(inputs[0]?.value)||0) * (parseFloat(inputs[1]?.value)||0);
   });
   document.getElementById('poSubtotal').textContent = formatCurrency(total);
 }
@@ -605,96 +678,53 @@ async function savePO(status) {
 
   try {
     const po = await GS.createPurchaseOrder(suppId, lines, notes, delivery || null);
-    if (status === 'Sent') await GS.updatePOStatus(po.id, 'Sent');
-    Toast.show(`PO ${status === 'Sent' ? 'sent to supplier' : 'saved as draft'}`, 'success');
-    Modal.close('poModal');
-    await loadAll();
+
+    if (status === 'Sent') {
+      // Close PO create modal and open send modal
+      Modal.close('poModal');
+      await loadAll();
+      sendPO(po.id);
+    } else {
+      Toast.show('PO saved as draft', 'success');
+      Modal.close('poModal');
+      await loadAll();
+    }
   } catch(err) { Toast.show(err.message || 'Failed to save PO', 'error'); }
 }
 
-/* ── HELPER: format phone for WhatsApp ─────────────────── */
-function formatWAPhone(raw) {
-  // Strip spaces, dashes, brackets
-  var clean = (raw || '').replace(/[\s\-\(\)]/g, '');
-  // Nigerian numbers: 0801... → +234801...
-  if (/^0[789]\d{9}$/.test(clean)) clean = '+234' + clean.slice(1);
-  // If already has + keep it, strip the +
-  clean = clean.replace(/^\+/, '');
-  return clean;
-}
-
-/* ── BUILD PO MESSAGE ─────────────────────────────────── */
-function buildPOMessage(po, forWhatsApp) {
-  var supplier = po.suppliers || {};
-  var supplierName = supplier.name || 'Supplier';
-  var items = po.purchase_order_items || [];
-  var total = items.reduce(function(s,i){ return s + (i.unit_cost||0)*(i.qty||0); }, 0);
-  var date  = new Date().toLocaleDateString('en-NG', {day:'numeric',month:'long',year:'numeric'});
-  var sep   = forWhatsApp ? '─────────────────────────' : '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-  var nl    = '\n';
-
-  var msg = '';
-  msg += 'Dear ' + supplierName + ',' + nl + nl;
-  msg += 'Please find below our Purchase Order. Kindly confirm receipt and expected delivery date.' + nl + nl;
-  msg += sep + nl;
-  msg += (forWhatsApp ? '*' : '') + 'PURCHASE ORDER: ' + (po.ref||'') + (forWhatsApp ? '*' : '') + nl;
-  msg += 'Date: ' + date + nl;
-  if (po.expected_at) {
-    msg += 'Expected Delivery: ' + new Date(po.expected_at).toLocaleDateString('en-NG', {day:'numeric',month:'long',year:'numeric'}) + nl;
-  }
-  msg += sep + nl + nl;
-  msg += (forWhatsApp ? '*' : '') + 'ORDER ITEMS:' + (forWhatsApp ? '*' : '') + nl + nl;
-
-  for (var i = 0; i < items.length; i++) {
-    var item = items[i];
-    var name = (item.inventory && item.inventory.name) || 'Part';
-    var sku  = (item.inventory && item.inventory.sku)  || '';
-    var lineTotal = (item.unit_cost||0) * (item.qty||0);
-    msg += (i+1) + '. ' + (forWhatsApp ? '*' : '') + name + (forWhatsApp ? '*' : '') + (sku ? ' [' + sku + ']' : '') + nl;
-    msg += '   Qty: ' + (item.qty||0) + '  |  Unit: ' + formatCurrency(item.unit_cost||0) + '  |  Total: ' + formatCurrency(lineTotal) + nl;
-  }
-
-  msg += nl + sep + nl;
-  msg += (forWhatsApp ? '*' : '') + 'ORDER TOTAL: ' + formatCurrency(total) + (forWhatsApp ? '*' : '') + nl;
-  msg += sep + nl + nl;
-  if (po.notes) msg += 'Notes: ' + po.notes + nl + nl;
-  msg += 'Please confirm this order by replying to this message.' + nl + nl;
-  msg += 'Thank you for your continued partnership.' + nl;
-  msg += 'GearShift Auto Shop';
-  return msg;
-}
-
-/* ── OPEN SEND MODAL ──────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════
+   SEND PO MODAL — OPEN & POPULATE
+════════════════════════════════════════════════════════════ */
 async function sendPO(id) {
-  var po = poData.find(function(p){ return p.id === id; });
+  const po = poData.find(p => p.id === id);
   if (!po) { Toast.show('PO not found', 'error'); return; }
 
-  var supplier = po.suppliers || {};
-  var phone    = supplier.phone || '';
-  var email    = supplier.email || '';
-  var items    = po.purchase_order_items || [];
-  var total    = items.reduce(function(s,i){ return s + (i.unit_cost||0)*(i.qty||0); }, 0);
+  const supplier = po.suppliers || {};
+  const phone    = supplier.phone || '';
+  const email    = supplier.email || '';
+  const items    = po.purchase_order_items || [];
+  const total    = items.reduce((s,i) => s + (i.unit_cost||0)*(i.qty||0), 0);
 
-  // Build messages
-  var waMsg    = buildPOMessage(po, true);
-  var emailMsg = buildPOMessage(po, false);
-  var subject  = 'Purchase Order ' + (po.ref||'') + ' — GearShift Auto Shop';
+  const waMsg    = buildPOMessage(po, true);
+  const emailMsg = buildPOMessage(po, false);
+  const subject  = 'Purchase Order ' + (po.ref||'') + ' — GearShift Auto Shop';
 
-  // Populate modal
-  var modal = document.getElementById('emailPreviewModal');
-  modal.dataset.poId    = id;
-  modal.dataset.subject = subject;
-  modal.dataset.waMsg   = waMsg;
+  // Store on modal dataset
+  const modal = document.getElementById('sendPOModal');
+  modal.dataset.poId     = id;
+  modal.dataset.subject  = subject;
+  modal.dataset.waMsg    = waMsg;
   modal.dataset.emailMsg = emailMsg;
 
-  // PO summary
+  // PO summary strip
   document.getElementById('poSendSummary').innerHTML =
-    '<div style="display:flex;gap:24px;flex-wrap:wrap">' +
-    '<div><div style="font-family:var(--ff-mono);font-size:9px;color:var(--app-muted);letter-spacing:1px">PO REF</div><div style="font-weight:700;color:var(--amber)">' + (po.ref||'--') + '</div></div>' +
-    '<div><div style="font-family:var(--ff-mono);font-size:9px;color:var(--app-muted);letter-spacing:1px">SUPPLIER</div><div style="font-weight:600">' + (supplier.name||'--') + '</div></div>' +
-    '<div><div style="font-family:var(--ff-mono);font-size:9px;color:var(--app-muted);letter-spacing:1px">ITEMS</div><div style="font-weight:600">' + items.length + '</div></div>' +
-    '<div><div style="font-family:var(--ff-mono);font-size:9px;color:var(--app-muted);letter-spacing:1px">TOTAL</div><div style="font-weight:700;color:var(--amber)">' + formatCurrency(total) + '</div></div>' +
-    '</div>';
+    `<div style="display:flex;gap:24px;flex-wrap:wrap">
+      <div><div style="font-family:var(--ff-mono);font-size:9px;color:var(--app-muted);letter-spacing:1px">PO REF</div><div style="font-weight:700;color:var(--amber)">${po.ref||'--'}</div></div>
+      <div><div style="font-family:var(--ff-mono);font-size:9px;color:var(--app-muted);letter-spacing:1px">SUPPLIER</div><div style="font-weight:600">${supplier.name||'--'}</div></div>
+      <div><div style="font-family:var(--ff-mono);font-size:9px;color:var(--app-muted);letter-spacing:1px">ITEMS</div><div style="font-weight:600">${items.length}</div></div>
+      <div><div style="font-family:var(--ff-mono);font-size:9px;color:var(--app-muted);letter-spacing:1px">TOTAL</div><div style="font-weight:700;color:var(--amber)">${formatCurrency(total)}</div></div>
+      ${po.expected_at ? `<div><div style="font-family:var(--ff-mono);font-size:9px;color:var(--app-muted);letter-spacing:1px">EXPECTED</div><div style="font-weight:600">${fmtDate(po.expected_at, true)}</div></div>` : ''}
+    </div>`;
 
   // WhatsApp
   document.getElementById('waPhone').value = phone || '';
@@ -707,62 +737,312 @@ async function sendPO(id) {
   document.getElementById('emailPreviewBody').textContent = emailMsg;
   document.getElementById('warnNoEmail').style.display = email ? 'none' : 'block';
 
-  Modal.open('emailPreviewModal');
+  // Reset state
+  document.getElementById('pdfProgress').classList.remove('show');
+  const sendBtn = document.getElementById('waSendBtn');
+  sendBtn.disabled = false;
+  sendBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="white" width="15" height="15"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+    Download PDF &amp; Open WhatsApp`;
+
+  Modal.open('sendPOModal');
 }
 
-/* ── SEND VIA WHATSAPP ────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════
+   PDF GENERATION
+════════════════════════════════════════════════════════════ */
+function generatePOPdf(po) {
+  const { jsPDF } = window.jspdf;
+  const doc       = new jsPDF({ unit: 'mm', format: 'a4' });
+  const supplier  = po.suppliers || {};
+  const items     = po.purchase_order_items || [];
+  const total     = items.reduce((s,i) => s + (i.unit_cost||0)*(i.qty||0), 0);
+  const dateStr   = new Date().toLocaleDateString('en-NG', { day:'numeric', month:'long', year:'numeric' });
+
+  // ── Header bar
+  doc.setFillColor(201, 75, 30); // --rust
+  doc.rect(0, 0, 210, 22, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text('GEARSHIFT', 14, 14);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text('AUTO SHOP', 14, 19);
+
+  // PO title right side
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text('PURCHASE ORDER', 210 - 14, 11, { align:'right' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text(po.ref || 'PO-' + (po.id||'').slice(0,8).toUpperCase(), 210 - 14, 18, { align:'right' });
+
+  // ── Reset text color
+  doc.setTextColor(30, 30, 30);
+
+  // ── Meta row
+  let y = 32;
+  doc.setFontSize(9);
+  doc.text('Date Issued:', 14, y);
+  doc.setFont('helvetica', 'bold');
+  doc.text(dateStr, 40, y);
+  doc.setFont('helvetica', 'normal');
+
+  if (po.expected_at) {
+    const expStr = new Date(po.expected_at).toLocaleDateString('en-NG', { day:'numeric', month:'long', year:'numeric' });
+    doc.text('Expected Delivery:', 100, y);
+    doc.setFont('helvetica', 'bold');
+    doc.text(expStr, 133, y);
+    doc.setFont('helvetica', 'normal');
+  }
+
+  // ── Divider
+  doc.setDrawColor(220, 220, 220);
+  doc.line(14, y + 5, 196, y + 5);
+  y += 14;
+
+  // ── Supplier block
+  doc.setFillColor(245, 245, 245);
+  doc.rect(14, y - 5, 85, supplier.notes ? 38 : 30, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(130, 130, 130);
+  doc.text('SUPPLIER', 18, y);
+  doc.setTextColor(30, 30, 30);
+  doc.setFontSize(11);
+  doc.text(supplier.name || '—', 18, y + 7);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  if (supplier.contact)  doc.text('Attn: ' + supplier.contact, 18, y + 14);
+  if (supplier.phone)    doc.text('Tel: '  + supplier.phone,   18, y + 20);
+  if (supplier.email)    doc.text(supplier.email,               18, y + 26);
+
+  y += 40;
+
+  // ── Items table header
+  doc.setFillColor(30, 30, 30);
+  doc.rect(14, y, 182, 9, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  const COL = { item:16, sku:95, qty:125, unit:145, total:175 };
+  doc.text('ITEM / DESCRIPTION', COL.item, y + 6);
+  doc.text('SKU',                 COL.sku,  y + 6);
+  doc.text('QTY',                 COL.qty,  y + 6);
+  doc.text('UNIT COST',           COL.unit, y + 6);
+  doc.text('TOTAL',               COL.total,y + 6, { align:'right' });
+
+  y += 9;
+  doc.setTextColor(30, 30, 30);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+
+  items.forEach((item, idx) => {
+    const name      = (item.inventory?.name) || 'Part';
+    const sku       = (item.inventory?.sku)  || '—';
+    const lineTotal = (item.unit_cost||0) * (item.qty||0);
+
+    if (idx % 2 === 0) {
+      doc.setFillColor(250, 250, 250);
+      doc.rect(14, y, 182, 9, 'F');
+    }
+    doc.setDrawColor(230, 230, 230);
+    doc.line(14, y + 9, 196, y + 9);
+
+    // Truncate long names
+    const nameDisplay = name.length > 45 ? name.slice(0,44) + '…' : name;
+    doc.text(nameDisplay,                 COL.item, y + 6);
+    doc.text(sku,                         COL.sku,  y + 6);
+    doc.text(String(item.qty||0),         COL.qty,  y + 6);
+    doc.text(formatCurrency(item.unit_cost||0), COL.unit, y + 6);
+    doc.text(formatCurrency(lineTotal),   COL.total, y + 6, { align:'right' });
+
+    y += 9;
+    if (y > 260) { doc.addPage(); y = 20; }
+  });
+
+  // ── Total row
+  y += 4;
+  doc.setFillColor(232, 160, 32, 0.15); // amber tint
+  doc.setFillColor(255, 248, 230);
+  doc.rect(120, y, 76, 11, 'F');
+  doc.setDrawColor(232, 160, 32);
+  doc.rect(120, y, 76, 11, 'S');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(30, 30, 30);
+  doc.text('ORDER TOTAL:', 124, y + 7.5);
+  doc.setTextColor(201, 75, 30);
+  doc.text(formatCurrency(total), 194, y + 7.5, { align:'right' });
+
+  // ── Notes
+  if (po.notes) {
+    y += 18;
+    doc.setTextColor(100, 100, 100);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text('NOTES', 14, y);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(50, 50, 50);
+    const wrapped = doc.splitTextToSize(po.notes, 170);
+    doc.text(wrapped, 14, y + 6);
+  }
+
+  // ── Footer
+  doc.setFontSize(8);
+  doc.setTextColor(160, 160, 160);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Please confirm receipt of this PO by replying via WhatsApp or email.', 14, 284);
+  doc.text('GearShift Auto Shop  ·  Generated ' + dateStr, 196, 284, { align:'right' });
+  doc.setDrawColor(220, 220, 220);
+  doc.line(14, 280, 196, 280);
+
+  const filename = (po.ref || 'PO') + '-GearShift.pdf';
+  doc.save(filename);
+  return filename;
+}
+
+/* ════════════════════════════════════════════════════════════
+   MESSAGE BUILDER (WhatsApp bold / plain email)
+════════════════════════════════════════════════════════════ */
+function buildPOMessage(po, forWhatsApp) {
+  const supplier     = po.suppliers || {};
+  const supplierName = supplier.name || 'Supplier';
+  const items        = po.purchase_order_items || [];
+  const total        = items.reduce((s,i) => s + (i.unit_cost||0)*(i.qty||0), 0);
+  const date         = new Date().toLocaleDateString('en-NG', { day:'numeric', month:'long', year:'numeric' });
+  const B = forWhatsApp ? '*' : '';   // bold marker
+  const sep = forWhatsApp
+    ? '─────────────────────────'
+    : '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+
+  let msg = '';
+  msg += `Dear ${supplierName},\n\n`;
+  msg += `Please find below our Purchase Order. Kindly confirm receipt and expected delivery date.\n\n`;
+  msg += sep + '\n';
+  msg += `${B}PURCHASE ORDER: ${po.ref||''}${B}\n`;
+  msg += `Date: ${date}\n`;
+  if (po.expected_at) {
+    msg += `Expected Delivery: ${new Date(po.expected_at).toLocaleDateString('en-NG', {day:'numeric',month:'long',year:'numeric'})}\n`;
+  }
+  msg += sep + '\n\n';
+  msg += `${B}ORDER ITEMS:${B}\n\n`;
+
+  items.forEach((item, i) => {
+    const name      = (item.inventory?.name) || 'Part';
+    const sku       = (item.inventory?.sku)  || '';
+    const lineTotal = (item.unit_cost||0) * (item.qty||0);
+    msg += `${i+1}. ${B}${name}${B}${sku ? ' [' + sku + ']' : ''}\n`;
+    msg += `   Qty: ${item.qty||0}  |  Unit: ${formatCurrency(item.unit_cost||0)}  |  Total: ${formatCurrency(lineTotal)}\n`;
+  });
+
+  msg += `\n${sep}\n`;
+  msg += `${B}ORDER TOTAL: ${formatCurrency(total)}${B}\n`;
+  msg += sep + '\n\n';
+  if (po.notes) msg += `Notes: ${po.notes}\n\n`;
+  msg += `A PDF copy of this order has been attached for your records.\n\n`;
+  msg += `Please confirm this order by replying to this message.\n\n`;
+  msg += `Thank you for your continued partnership.\n`;
+  msg += `GearShift Auto Shop`;
+  return msg;
+}
+
+/* ════════════════════════════════════════════════════════════
+   HELPER — FORMAT PHONE FOR WhatsApp
+════════════════════════════════════════════════════════════ */
+function formatWAPhone(raw) {
+  let clean = (raw || '').replace(/[\s\-\(\)]/g, '');
+  // Nigerian local format 0801... → +234801...
+  if (/^0[789]\d{9}$/.test(clean)) clean = '234' + clean.slice(1);
+  clean = clean.replace(/^\+/, '');
+  return clean;
+}
+
+/* ════════════════════════════════════════════════════════════
+   SEND VIA WHATSAPP — PDF + STATUS UPDATE
+════════════════════════════════════════════════════════════ */
 async function sendViaWhatsApp() {
-  var modal  = document.getElementById('emailPreviewModal');
-  var id     = modal.dataset.poId;
-  var waMsg  = modal.dataset.waMsg;
-  var rawPhone = document.getElementById('waPhone').value.trim();
+  const modal    = document.getElementById('sendPOModal');
+  const id       = modal.dataset.poId;
+  const rawPhone = document.getElementById('waPhone').value.trim();
 
   if (!rawPhone) { Toast.show('Please enter the supplier WhatsApp number', 'error'); return; }
 
-  var phone = formatWAPhone(rawPhone);
-  var waUrl = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(waMsg);
+  const po = poData.find(p => p.id === id);
+  if (!po) { Toast.show('PO not found', 'error'); return; }
 
-  // Open WhatsApp
-  window.open(waUrl, '_blank');
+  // Show generating state
+  const sendBtn = document.getElementById('waSendBtn');
+  sendBtn.disabled = true;
+  sendBtn.textContent = 'Generating PDF…';
+  document.getElementById('pdfProgress').classList.add('show');
 
-  // Mark as Sent
   try {
+    // 1. Generate & auto-download the PDF
+    await new Promise(r => setTimeout(r, 150)); // let UI update
+    const filename = generatePOPdf(po);
+
+    // 2. Brief pause so download dialog can appear before WA opens
+    await new Promise(r => setTimeout(r, 600));
+
+    // 3. Open WhatsApp with pre-filled message
+    const phone = formatWAPhone(rawPhone);
+    const waMsg = modal.dataset.waMsg;
+    window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(waMsg), '_blank');
+
+    // 4. Mark PO as Sent in DB + record sent_at timestamp
     await GS.updatePOStatus(id, 'Sent');
-    Toast.show('WhatsApp opened — PO marked as Sent', 'success');
-    Modal.close('emailPreviewModal');
+
+    // 5. Save phone back to supplier if missing
+    const supp = po.suppliers || {};
+    if (!supp.phone && rawPhone && supp.id) {
+      await sb.from('suppliers').update({ phone: rawPhone }).eq('id', supp.id).catch(() => {});
+    }
+
+    Toast.show(`📎 ${filename} downloaded · WhatsApp opened · PO marked Sent ✓`, 'success', 5000);
+    Modal.close('sendPOModal');
     await loadAll();
-  } catch(e) { Toast.show(e.message || 'Failed to update PO status', 'error'); }
+
+  } catch(e) {
+    Toast.show(e.message || 'Something went wrong', 'error');
+    sendBtn.disabled = false;
+    sendBtn.innerHTML = `Download PDF &amp; Open WhatsApp`;
+    document.getElementById('pdfProgress').classList.remove('show');
+  }
 }
 
-/* ── SEND VIA EMAIL ───────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════
+   SEND VIA EMAIL
+════════════════════════════════════════════════════════════ */
 async function sendViaEmail() {
-  var modal    = document.getElementById('emailPreviewModal');
-  var id       = modal.dataset.poId;
-  var subject  = modal.dataset.subject;
-  var emailMsg = modal.dataset.emailMsg;
-  var toEmail  = document.getElementById('emailPreviewTo').value.trim();
+  const modal    = document.getElementById('sendPOModal');
+  const id       = modal.dataset.poId;
+  const subject  = modal.dataset.subject;
+  const emailMsg = modal.dataset.emailMsg;
+  const toEmail  = document.getElementById('emailPreviewTo').value.trim();
 
   if (!toEmail) { Toast.show('Please enter the supplier email address', 'error'); return; }
 
-  var mailto = 'mailto:' + encodeURIComponent(toEmail)
+  const mailto = 'mailto:' + encodeURIComponent(toEmail)
     + '?subject=' + encodeURIComponent(subject)
     + '&body='    + encodeURIComponent(emailMsg);
 
   window.location.href = mailto;
 
-  setTimeout(async function() {
+  setTimeout(async () => {
     try {
       await GS.updatePOStatus(id, 'Sent');
-      Toast.show('Email app opened — PO marked as Sent', 'success');
-      Modal.close('emailPreviewModal');
+      Toast.show('Email app opened · PO marked as Sent ✓', 'success');
+      Modal.close('sendPOModal');
       await loadAll();
     } catch(e) { Toast.show(e.message || 'Failed to update PO status', 'error'); }
   }, 1500);
 }
 
-/* ── BACKWARD COMPAT ──────────────────────────────────── */
-function confirmSendPO() { sendViaEmail(); }
-
+/* ════════════════════════════════════════════════════════════
+   PO DETAIL VIEW MODAL
+════════════════════════════════════════════════════════════ */
 function viewPO(id) {
   const po = poData.find(p => p.id === id);
   if (!po) return;
@@ -796,13 +1076,26 @@ function viewPO(id) {
         </tr>
       </tbody>
     </table>`;
+
   document.getElementById('pdFooter').innerHTML = `
     <button class="app-btn app-btn-ghost" onclick="Modal.close('poDetailModal')">Close</button>
+    <button class="app-btn app-btn-ghost app-btn-sm" onclick="downloadPOPdf('${id}')">⬇ Download PDF</button>
     ${po.status==='Draft' ? `<button class="app-btn app-btn-primary" onclick="sendPO('${id}');Modal.close('poDetailModal')">Send to Supplier →</button>` : ''}
     ${['Sent','Partially Received'].includes(po.status) ? `<button class="app-btn app-btn-primary" onclick="Modal.close('poDetailModal');openReceiveModal('${id}')">Receive Delivery →</button>` : ''}`;
+
   Modal.open('poDetailModal');
 }
 
+function downloadPOPdf(id) {
+  const po = poData.find(p => p.id === id);
+  if (!po) return;
+  generatePOPdf(po);
+  Toast.show('PDF downloaded', 'success', 2000);
+}
+
+/* ════════════════════════════════════════════════════════════
+   RECEIVE DELIVERY MODAL
+════════════════════════════════════════════════════════════ */
 function openReceiveModal(poId) {
   const po = poData.find(p => p.id === poId);
   if (!po) return;
@@ -838,9 +1131,9 @@ async function confirmDelivery() {
   } catch(err) { Toast.show(err.message || 'Failed to confirm delivery', 'error'); }
 }
 
-/* ════════════════════════════════════════
-   SUPPLIER LIST
-════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════
+   SUPPLIER LIST & PROFILE
+════════════════════════════════════════════════════════════ */
 function renderSupplierStats() {
   const total     = supplierData.length;
   const withParts = supplierData.filter(s => inventoryData.some(i => i.supplier_id === s.id)).length;
@@ -848,7 +1141,6 @@ function renderSupplierStats() {
   const avgLead   = leads.length ? Math.round(leads.reduce((a,b)=>a+b,0)/leads.length) : 0;
   const openPOs   = poData.filter(p => !['Received','Cancelled'].includes(p.status)).length;
 
-  // Update tab badge
   const badge = document.getElementById('suppCount');
   if (badge) badge.textContent = total || '';
 
@@ -866,26 +1158,18 @@ function renderSupplierList() {
   const rating = parseInt(document.getElementById('suppRatingFilter')?.value || '0');
 
   const list = supplierData.filter(s => {
-    // Text search across name, contact, email, categories
     const haystack = `${s.name} ${s.contact||''} ${s.email||''} ${s.categories||''}`.toLowerCase();
     if (q && !haystack.includes(q)) return false;
-
-    // Lead time filter
     const days = parseInt(s.lead_days) || 0;
     if (lead === 'fast'   && !(days >= 1 && days <= 3)) return false;
     if (lead === 'medium' && !(days >= 4 && days <= 7)) return false;
     if (lead === 'slow'   && !(days >= 8))              return false;
-
-    // Payment terms filter
     const t = (s.terms||'').toLowerCase();
     if (terms === 'cod'   && !['cod','immediate','cash'].some(x => t.includes(x))) return false;
     if (terms === 'net15' && !t.includes('15')) return false;
     if (terms === 'net30' && !t.includes('30')) return false;
-    if (terms === 'net60' && !/6[0-9]|[7-9][0-9]/.test(t))  return false;
-
-    // Rating filter
+    if (terms === 'net60' && !/6[0-9]|[7-9][0-9]/.test(t)) return false;
     if (rating && (s.rating||0) < rating) return false;
-
     return true;
   });
 
@@ -904,6 +1188,7 @@ function renderSupplierList() {
     const initials  = (s.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
     const leadClass = !s.lead_days ? '' : s.lead_days<=3 ? 'lead-fast' : s.lead_days<=7 ? 'lead-medium' : 'lead-slow';
     const stars     = s.rating ? '★'.repeat(s.rating) + '☆'.repeat(5-s.rating) : '';
+    const hasWA     = !!s.phone;
 
     return `<div class="supplier-card ${active?'selected':''}" onclick="selectSupplier('${s.id}')">
       <div style="display:flex;align-items:center;gap:12px">
@@ -916,6 +1201,7 @@ function renderSupplierList() {
             ${s.lead_days ? `<span class="lead-badge ${leadClass}">${s.lead_days}d</span>` : ''}
             ${s.terms    ? `<span>${s.terms}</span>` : ''}
             ${stars ? `<span style="color:var(--amber);font-size:11px">${stars}</span>` : ''}
+            ${hasWA ? `<span style="color:#25D366;font-size:10px">✓ WhatsApp</span>` : `<span style="color:var(--danger);font-size:10px">No WA#</span>`}
           </div>
         </div>
         <div style="text-align:right;flex-shrink:0">
@@ -957,7 +1243,10 @@ function renderSupplierProfile(id) {
         <div style="font-family:var(--ff-display);font-size:24px;letter-spacing:1px;color:var(--app-text);line-height:1">${s.name}</div>
         <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--app-muted)">
           ${s.email ? `<a href="mailto:${s.email}" style="color:var(--amber)">${s.email}</a>` : ''}
-          ${s.phone ? `<span>📞 ${s.phone}</span>` : ''}
+          ${s.phone ? `<span style="color:#25D366">
+            <svg viewBox="0 0 24 24" fill="#25D366" width="11" height="11" style="vertical-align:middle;margin-right:3px"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+            ${s.phone}
+          </span>` : '<span style="color:var(--danger);font-size:11px">⚠ No WhatsApp number</span>'}
           ${s.contact ? `<span>👤 ${s.contact}</span>` : ''}
         </div>
       </div>
@@ -1060,9 +1349,9 @@ function renderSupplierProfile(id) {
   `;
 }
 
-/* ════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════
    SUPPLIER MODAL — ADD / EDIT
-════════════════════════════════════════ */
+════════════════════════════════════════════════════════════ */
 function setRating(v) {
   currentRating = v;
   document.getElementById('s-rating').value = v;
@@ -1145,7 +1434,6 @@ async function saveSupplier() {
     await loadAll();
     if (savedId) selectSupplier(savedId);
 
-    // Switch to suppliers pane if not already there
     const btn2 = document.querySelector('[data-pane="pane-suppliers"]');
     if (btn2 && !btn2.classList.contains('active')) switchPane(btn2);
 
@@ -1176,17 +1464,13 @@ async function deleteSupplier(id, name) {
   });
 }
 
-/* ════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════
    REORDER SUGGESTIONS
-════════════════════════════════════════ */
+════════════════════════════════════════════════════════════ */
 function renderReorder() {
-  const low = inventoryData.filter(p => (p.qty||0) <= (p.reorder_threshold||p.threshold||0));
-
+  const low   = inventoryData.filter(p => (p.qty||0) <= (p.reorder_threshold||p.threshold||0));
   const badge = document.getElementById('reorderBadge');
-  if (badge) {
-    badge.textContent = low.length || '';
-    badge.style.display = low.length ? 'inline' : 'none';
-  }
+  if (badge) { badge.textContent = low.length || ''; badge.style.display = low.length ? 'inline' : 'none'; }
 
   const tbody = document.getElementById('reorderBody');
   if (!tbody) return;
@@ -1227,17 +1511,12 @@ async function generatePOFromLowStock() {
   const checked = [...document.querySelectorAll('.reorder-chk:checked')];
   if (!checked.length) { Toast.show('Select at least one part', 'error'); return; }
 
-  // Group by supplier
-  const bySup = {};
+  const bySup  = {};
   const noSupp = [];
   checked.forEach(c => {
     if (!c.dataset.supp) { noSupp.push(c); return; }
     if (!bySup[c.dataset.supp]) bySup[c.dataset.supp] = [];
-    bySup[c.dataset.supp].push({
-      part_id:   c.dataset.id,
-      qty:       parseInt(c.dataset.qty),
-      unit_cost: parseFloat(c.dataset.cost),
-    });
+    bySup[c.dataset.supp].push({ part_id:c.dataset.id, qty:parseInt(c.dataset.qty), unit_cost:parseFloat(c.dataset.cost) });
   });
 
   const suppCount = Object.keys(bySup).length;
@@ -1258,9 +1537,9 @@ async function generatePOFromLowStock() {
   } catch(err) { Toast.show(err.message || 'Failed to generate POs', 'error'); }
 }
 
-/* ════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════
    HELPERS
-════════════════════════════════════════ */
+════════════════════════════════════════════════════════════ */
 function fmtDate(d, long = false) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-NG', long

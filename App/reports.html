@@ -82,6 +82,11 @@
 .inv-summary-label { font-family:var(--ff-mono); font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--app-muted); margin-bottom:6px; }
 .inv-summary-value { font-family:var(--ff-display); font-size:32px; line-height:1; color:var(--app-text); }
 .inv-summary-sub { font-size:11px; color:var(--app-muted); margin-top:4px; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.85); }
+}
 </style>
 </head>
 <body>
@@ -102,8 +107,20 @@
 
   <div class="app-main">
     <div class="app-topbar">
-      <span class="topbar-title">REPORTS & ANALYTICS</span>
-      <div class="topbar-actions">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="topbar-title">REPORTS & ANALYTICS</span>
+        <div id="reportsLiveIndicator" style="display:none;align-items:center;gap:6px;
+          background:rgba(31,122,74,0.1);border:1px solid rgba(31,122,74,0.25);
+          border-radius:20px;padding:3px 10px">
+          <div style="width:6px;height:6px;border-radius:50%;background:var(--success);
+            animation:pulse 2s ease-in-out infinite"></div>
+          <span style="font-family:var(--ff-mono);font-size:9px;letter-spacing:1px;
+            color:var(--success)">LIVE</span>
+        </div>
+      </div>
+      <div class="topbar-actions" style="display:flex;align-items:center;gap:10px">
+        <span id="reportsLastUpdated" style="font-family:var(--ff-mono);font-size:10px;
+          color:var(--app-muted);letter-spacing:0.5px"></span>
         <select class="filter-select" id="periodFilter" onchange="renderAll()">
           <option value="week">This Week</option>
           <option value="month" selected>This Month</option>
@@ -290,6 +307,49 @@
 <script src="../js/supabase.js"></script>
 <script src="../js/rbac.js"></script>
 <script>
+/* ── LOCAL: getAllWorkOrderParts ──────────────────────────────────
+   Fetches work_order_parts joined with work_orders to get the job
+   date — needed for inventory turnover date-range filtering.
+   Lives here because GS module doesn't expose this yet.
+   ────────────────────────────────────────────────────────────── */
+async function _getAllWorkOrderParts() {
+  try {
+    // Get shop_id from cached session
+    var shopId = null;
+    try {
+      var shopObj = await RBAC.getShop();
+      shopId = shopObj ? shopObj.id : null;
+    } catch(e) {}
+    if (!shopId) return [];
+
+    // Fetch work_order_parts joined with work_orders for date + shop scope
+    var { data, error } = await sb
+      .from('work_order_parts')
+      .select('id, work_order_id, part_id, qty, unit_cost, work_orders!inner(id, created_at, shop_id)')
+      .eq('work_orders.shop_id', shopId);
+
+    if (error) {
+      console.warn('getAllWorkOrderParts error:', error.message);
+      return [];
+    }
+
+    // Flatten: attach wo_date to each part row for easy date filtering
+    return (data || []).map(function(p) {
+      return {
+        id:            p.id,
+        work_order_id: p.work_order_id,
+        part_id:       p.part_id,
+        qty:           p.qty,
+        unit_cost:     p.unit_cost,
+        wo_date:       p.work_orders ? p.work_orders.created_at : null,
+      };
+    });
+  } catch(e) {
+    console.warn('_getAllWorkOrderParts failed:', e.message);
+    return [];
+  }
+}
+
 var _invoices = [], _inventory = [], _workOrders = [], _suppliers = [], _purchaseOrders = [], _appointments = [];
 var _revenueMonthly = [], _revenueWeekly = [], _woParts = [];
 
@@ -317,7 +377,11 @@ function scheduleReload() {
 
 function updateLastUpdated() {
   var el = document.getElementById('reportsLastUpdated');
-  if (el) el.textContent = 'Updated ' + new Date().toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  if (!el) return;
+  var now = new Date();
+  var t = now.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  el.textContent = 'Last updated ' + t;
+  el.title = 'Data auto-refreshes when changes are made anywhere in the app';
 }
 
 async function initPage() {
@@ -341,6 +405,13 @@ async function initPage() {
   Realtime.subscribe('appointments', {
     onInsert: scheduleReload, onUpdate: scheduleReload, onDelete: scheduleReload
   });
+  Realtime.subscribe('work_order_parts', {
+    onInsert: scheduleReload, onUpdate: scheduleReload, onDelete: scheduleReload
+  });
+
+  // Show LIVE badge now that subscriptions are active
+  var liveEl = document.getElementById('reportsLiveIndicator');
+  if (liveEl) liveEl.style.display = 'flex';
 }
 
 async function loadData() {
@@ -354,7 +425,7 @@ async function loadData() {
       GS.getAppointments().catch(function(){ return []; }),
       GS.getRevenueMonthly(7).catch(function(){ return []; }),
       GS.getRevenueWeekly().catch(function(){ return []; }),
-      GS.getAllWorkOrderParts().catch(function(){ return []; }),
+      _getAllWorkOrderParts().catch(function(){ return []; }),
     ]);
     _invoices = results[0]; _inventory = results[1]; _workOrders = results[2];
     _suppliers = results[3]; _purchaseOrders = results[4]; _appointments = results[5];
@@ -372,9 +443,9 @@ function renderAll() {
 /* REVENUE */
 function renderRevenue() {
   var paid = _invoices.filter(function(i){ return i.status === 'Paid'; });
-  var totalRev = paid.reduce(function(s,i){ return s + (i.total || 0); }, 0);
-  var avgInv = _invoices.length ? _invoices.reduce(function(s,i){ return s + (i.total || 0); }, 0) / _invoices.length : 0;
-  var outstanding = _invoices.filter(function(i){ return i.status !== 'Paid'; }).reduce(function(s,i){ return s + (i.total || 0); }, 0);
+  var totalRev = paid.reduce(function(s,i){ return s + (i.total_amount || 0); }, 0);
+  var avgInv = _invoices.length ? _invoices.reduce(function(s,i){ return s + (i.total_amount || 0); }, 0) / _invoices.length : 0;
+  var outstanding = _invoices.filter(function(i){ return i.status !== 'Paid'; }).reduce(function(s,i){ return s + (i.total_amount || 0); }, 0);
 
   document.getElementById('revenueKPIs').innerHTML =
     '<div class="kpi-box"><div class="kpi-label">Total Revenue</div><div class="kpi-value">' + formatCurrency(totalRev) + '</div><div class="kpi-delta up">From paid invoices</div></div>' +
@@ -402,11 +473,11 @@ function renderRevenue() {
     return '<div style="flex:1;text-align:center;font-family:var(--ff-mono);font-size:9px;color:var(--app-muted)">' + d.label + '</div>';
   }).join('');
 
-  var totalVal = _invoices.reduce(function(s,i){ return s + (i.total || 0); }, 0);
+  var totalVal = _invoices.reduce(function(s,i){ return s + (i.total_amount || 0); }, 0);
   var statuses = ['Paid','Unpaid','Partial','Overdue'];
   document.getElementById('invBreakBody').innerHTML = statuses.map(function(st){
     var group = _invoices.filter(function(i){ return i.status === st; });
-    var val = group.reduce(function(s,i){ return s + (i.total || 0); }, 0);
+    var val = group.reduce(function(s,i){ return s + (i.total_amount || 0); }, 0);
     var pct = totalVal > 0 ? ((val / totalVal) * 100).toFixed(1) : '0.0';
     return '<tr><td>' + makeBadge(st) + '</td><td class="td-mono">' + group.length + '</td><td class="td-mono">' + formatCurrency(val) + '</td><td class="td-mono">' + pct + '%</td></tr>';
   }).join('') || '<tr><td colspan="4" class="td-muted" style="text-align:center;padding:20px">No invoices yet</td></tr>';
