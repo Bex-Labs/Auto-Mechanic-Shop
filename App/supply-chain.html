@@ -1099,6 +1099,7 @@ function downloadPOPdf(id) {
 function openReceiveModal(poId) {
   const po = poData.find(p => p.id === poId);
   if (!po) return;
+  document.getElementById('receiveModal').dataset.poId = poId;
   document.getElementById('rcvTitle').textContent = `RECEIVE — ${po.ref||'PO-'+po.id?.slice(0,6)}`;
   const pending = (po.purchase_order_items||[]).filter(i => (i.qty_received||0) < i.qty);
   if (!pending.length) { Toast.show('All items already received', 'info'); return; }
@@ -1117,6 +1118,7 @@ function openReceiveModal(poId) {
 }
 
 async function confirmDelivery() {
+  const poId  = document.getElementById('receiveModal').dataset.poId;
   const lines = [];
   document.querySelectorAll('#rcvLines .po-line').forEach(row => {
     const qty = parseInt(row.querySelector('input')?.value) || 0;
@@ -1125,9 +1127,24 @@ async function confirmDelivery() {
   if (!lines.length) { Toast.show('Enter at least one received quantity', 'error'); return; }
   try {
     for (const l of lines) await GS.receivePOItem(l.id, l.qty);
+
+    // Reload PO items to check if everything has been received
+    await loadAll();
+    const po = poData.find(p => p.id === poId);
+    if (po) {
+      const items = po.purchase_order_items || [];
+      const allReceived = items.length > 0 && items.every(i => (i.qty_received || 0) >= i.qty);
+      const anyReceived = items.some(i => (i.qty_received || 0) > 0);
+      if (allReceived) {
+        await GS.updatePOStatus(poId, 'Received');
+      } else if (anyReceived) {
+        await GS.updatePOStatus(poId, 'Partially Received');
+      }
+      await loadAll();
+    }
+
     Toast.show('Delivery confirmed — inventory updated', 'success');
     Modal.close('receiveModal');
-    await loadAll();
   } catch(err) { Toast.show(err.message || 'Failed to confirm delivery', 'error'); }
 }
 
