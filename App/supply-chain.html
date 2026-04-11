@@ -972,42 +972,40 @@ async function sendViaWhatsApp() {
   const po = poData.find(p => p.id === id);
   if (!po) { Toast.show('PO not found', 'error'); return; }
 
-  // Show generating state
+  // ── STEP 1: Open WhatsApp IMMEDIATELY — must happen synchronously
+  // before any await, otherwise the browser blocks window.open as a popup
+  const phone = formatWAPhone(rawPhone);
+  const waMsg = modal.dataset.waMsg;
+  const waUrl = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(waMsg);
+
+  // Try window.open first; if blocked fall back to location change
+  const waWin = window.open(waUrl, '_blank');
+  if (!waWin || waWin.closed || typeof waWin.closed === 'undefined') {
+    window.location.href = waUrl;
+    return; // location change will navigate away so stop here
+  }
+
+  // ── STEP 2: Do async work after WhatsApp is already open
   const sendBtn = document.getElementById('waSendBtn');
   sendBtn.disabled = true;
-  sendBtn.textContent = 'Generating PDF…';
+  sendBtn.textContent = 'Sending…';
   document.getElementById('pdfProgress').classList.add('show');
 
   try {
-    // 1. Generate & auto-download the PDF
-    await new Promise(r => setTimeout(r, 150)); // let UI update
-    const filename = generatePOPdf(po);
+    // Generate & download PDF
+    generatePOPdf(po);
 
-    // 2. Brief pause so download dialog can appear before WA opens
-    await new Promise(r => setTimeout(r, 600));
-
-    // 3. Open WhatsApp with pre-filled message
-    const phone = formatWAPhone(rawPhone);
-    const waMsg = modal.dataset.waMsg;
-    window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(waMsg), '_blank');
-
-    // 4. Mark PO as Sent in DB + record sent_at timestamp
+    // Mark PO as Sent
     await GS.updatePOStatus(id, 'Sent');
 
-    // 5. Save phone back to supplier if missing
-    const supp = po.suppliers || {};
-    if (!supp.phone && rawPhone && supp.id) {
-      await sb.from('suppliers').update({ phone: rawPhone }).eq('id', supp.id).catch(() => {});
-    }
-
-    Toast.show(`📎 ${filename} downloaded · WhatsApp opened · PO marked Sent ✓`, 'success', 5000);
+    Toast.show('WhatsApp opened · PDF downloaded · PO marked Sent ✓', 'success', 4000);
     Modal.close('sendPOModal');
     await loadAll();
 
   } catch(e) {
     Toast.show(e.message || 'Something went wrong', 'error');
     sendBtn.disabled = false;
-    sendBtn.innerHTML = `Download PDF &amp; Open WhatsApp`;
+    sendBtn.innerHTML = 'Send via WhatsApp';
     document.getElementById('pdfProgress').classList.remove('show');
   }
 }
