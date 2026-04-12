@@ -67,10 +67,7 @@
   font-family:var(--ff-mono); font-size:11px; color:var(--app-text);
   white-space:pre-wrap; line-height:1.6; margin:0;
 }
-.email-section {
-  border:1px solid var(--app-border); border-radius:var(--r-sm);
-  padding:18px 20px; background:var(--app-surface2);
-}
+
 .send-warn {
   display:none; background:rgba(181,43,30,.1); border:1px solid rgba(181,43,30,.3);
   color:#fca5a5; padding:10px 14px; border-radius:var(--r-sm);
@@ -395,7 +392,6 @@
 
       <!-- WARNINGS -->
       <div id="warnNoPhone" class="send-warn">⚠ No WhatsApp number on file for this supplier. Add it below or update the supplier profile.</div>
-      <div id="warnNoEmail" class="send-warn">⚠ No email address on file for this supplier.</div>
 
       <!-- PDF GENERATING INDICATOR -->
       <div class="pdf-generating" id="pdfProgress">
@@ -438,25 +434,6 @@
         </button>
       </div>
 
-      <!-- ── EMAIL SECTION ── -->
-      <div class="email-section">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-          <span style="font-weight:600;color:var(--app-text);font-size:13px">Email — Alternative</span>
-        </div>
-        <div class="app-form-group" style="margin-bottom:8px">
-          <label class="app-label">Supplier Email</label>
-          <input class="app-input" type="email" id="emailPreviewTo" placeholder="orders@supplier.com" style="font-family:var(--ff-mono)">
-          <div style="font-size:11px;color:var(--app-muted);margin-top:4px">On file: <span id="emailPreviewSupplier" style="color:var(--amber)"></span></div>
-        </div>
-        <div style="background:var(--app-surface);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:12px 14px;max-height:130px;overflow-y:auto;margin-bottom:10px">
-          <pre id="emailPreviewBody" style="font-family:var(--ff-mono);font-size:11px;color:var(--app-text);white-space:pre-wrap;line-height:1.6;margin:0"></pre>
-        </div>
-        <button class="app-btn app-btn-ghost" onclick="sendViaEmail()" style="width:100%;justify-content:center;gap:8px">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-          Open Email App &amp; Mark Sent
-        </button>
-      </div>
 
     </div><!-- /modal-body -->
     <div class="modal-footer">
@@ -706,7 +683,6 @@ async function sendPO(id) {
   const total    = items.reduce((s,i) => s + (i.unit_cost||0)*(i.qty||0), 0);
 
   const waMsg    = buildPOMessage(po, true);
-  const emailMsg = buildPOMessage(po, false);
   const subject  = 'Purchase Order ' + (po.ref||'') + ' — GearShift Auto Shop';
 
   // Store on modal dataset
@@ -714,7 +690,6 @@ async function sendPO(id) {
   modal.dataset.poId     = id;
   modal.dataset.subject  = subject;
   modal.dataset.waMsg    = waMsg;
-  modal.dataset.emailMsg = emailMsg;
 
   // PO summary strip
   document.getElementById('poSendSummary').innerHTML =
@@ -732,10 +707,6 @@ async function sendPO(id) {
   document.getElementById('warnNoPhone').style.display = phone ? 'none' : 'block';
 
   // Email
-  document.getElementById('emailPreviewTo').value = email || '';
-  document.getElementById('emailPreviewSupplier').textContent = email || '(none on file)';
-  document.getElementById('emailPreviewBody').textContent = emailMsg;
-  document.getElementById('warnNoEmail').style.display = email ? 'none' : 'block';
 
   // Reset state
   document.getElementById('pdfProgress').classList.remove('show');
@@ -1013,30 +984,6 @@ async function sendViaWhatsApp() {
 /* ════════════════════════════════════════════════════════════
    SEND VIA EMAIL
 ════════════════════════════════════════════════════════════ */
-async function sendViaEmail() {
-  const modal    = document.getElementById('sendPOModal');
-  const id       = modal.dataset.poId;
-  const subject  = modal.dataset.subject;
-  const emailMsg = modal.dataset.emailMsg;
-  const toEmail  = document.getElementById('emailPreviewTo').value.trim();
-
-  if (!toEmail) { Toast.show('Please enter the supplier email address', 'error'); return; }
-
-  const mailto = 'mailto:' + encodeURIComponent(toEmail)
-    + '?subject=' + encodeURIComponent(subject)
-    + '&body='    + encodeURIComponent(emailMsg);
-
-  window.location.href = mailto;
-
-  setTimeout(async () => {
-    try {
-      await GS.updatePOStatus(id, 'Sent');
-      Toast.show('Email app opened · PO marked as Sent ✓', 'success');
-      Modal.close('sendPOModal');
-      await loadAll();
-    } catch(e) { Toast.show(e.message || 'Failed to update PO status', 'error'); }
-  }, 1500);
-}
 
 /* ════════════════════════════════════════════════════════════
    PO DETAIL VIEW MODAL

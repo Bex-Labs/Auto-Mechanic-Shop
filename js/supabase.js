@@ -88,7 +88,7 @@ const Auth = (() => {
       options: { data: { full_name: fullName, role } }
     });
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function signOut() {
@@ -140,7 +140,7 @@ const Auth = (() => {
 
   async function requireAuth() {
     const session = await getSession();
-    if (!session) window.location.href = '../app/dashboard.html';
+    if (!session) window.location.href = 'dashboard.html';
     return session;
   }
 
@@ -228,7 +228,7 @@ const GS = (() => {
     const { data, error } = await sb.from('customers')
       .select('*').eq('shop_id', sid).order('last_name');
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function getCustomer(id) {
@@ -237,7 +237,7 @@ const GS = (() => {
       .select('*, vehicles(*)')
       .eq('id', id).eq('shop_id', sid).single();
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function createCustomer(payload) {
@@ -245,7 +245,7 @@ const GS = (() => {
     const { data, error } = await sb.from('customers')
       .insert({ ...payload, shop_id: sid }).select().single();
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function updateCustomer(id, payload) {
@@ -307,7 +307,7 @@ const GS = (() => {
     if (customerId) q = q.eq('customer_id', customerId);
     const { data, error } = await q;
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function createVehicle(payload) {
@@ -505,7 +505,7 @@ const GS = (() => {
       .insert({ work_order_id: workOrderId, part_id: partId, qty, unit_cost: unitCost })
       .select().single();
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function removePartFromWorkOrder(workOrderId, partId) {
@@ -553,7 +553,7 @@ const GS = (() => {
     const { data, error } = await sb.from('inventory')
       .select('*').eq('id', id).eq('shop_id', sid).single();
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function createInventoryItem(payload) {
@@ -561,7 +561,7 @@ const GS = (() => {
     const { data, error } = await sb.from('inventory')
       .insert({ ...payload, shop_id: sid }).select().single();
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function updateInventoryItem(id, payload) {
@@ -570,7 +570,7 @@ const GS = (() => {
       .update({ ...payload, updated_at: new Date().toISOString() })
       .eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function adjustStock(id, delta, reason = '') {
@@ -578,7 +578,7 @@ const GS = (() => {
       p_part_id: id, p_delta: delta, p_reason: reason,
     });
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function getLowStockItems() {
@@ -597,7 +597,7 @@ const GS = (() => {
     const { data, error } = await sb.from('suppliers')
       .select('*').eq('shop_id', sid).order('name');
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function createSupplier(payload) {
@@ -605,7 +605,7 @@ const GS = (() => {
     const { data, error } = await sb.from('suppliers')
       .insert({ ...payload, shop_id: sid }).select().single();
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function updateSupplier(id, payload) {
@@ -613,7 +613,7 @@ const GS = (() => {
     const { data, error } = await sb.from('suppliers')
       .update(payload).eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   /* ---------------------------------------------------------------
@@ -622,10 +622,10 @@ const GS = (() => {
   async function getPurchaseOrders() {
     const sid = await _shopId();
     const { data, error } = await sb.from('purchase_orders')
-      .select('*, suppliers(name), purchase_order_items(*, inventory:part_id(id,name,sku))')
+      .select('*, suppliers(id,name,phone,email), purchase_order_items(*, inventory:part_id(id,name,sku))') 
       .eq('shop_id', sid).order('created_at', { ascending: false });
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function createPurchaseOrder(supplierId, items, notes = '', expectedAt = null) {
@@ -641,13 +641,13 @@ const GS = (() => {
       po_id:     po.id,
       part_id:   i.part_id || i.inventory_id || i.partId,
       qty:       i.qty || i.qty_ordered || 1,
-      unit_cost: i.cost ?? i.unitCost ?? 0,
+      unit_cost: i.unit_cost ?? i.cost ?? i.unitCost ?? 0,
     }));
     const { error: itemErr } = await sb.from('purchase_order_items').insert(poItems);
     if (itemErr) throw itemErr;
 
     const { data: full } = await sb.from('purchase_orders')
-      .select('*, suppliers(name), purchase_order_items(*, inventory:part_id(name,sku))')
+      .select('*, suppliers(id,name,phone,email), purchase_order_items(*, inventory:part_id(name,sku))') 
       .eq('id', po.id).single();
     return full || po;
   }
@@ -659,12 +659,16 @@ const GS = (() => {
     const { data, error } = await sb.from('purchase_orders')
       .update(updates).eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function receivePOItem(poItemId, qtyReceived) {
+    const { data: current, error: fetchErr } = await sb.from('purchase_order_items')
+      .select('qty_received, qty').eq('id', poItemId).single();
+    if (fetchErr) throw fetchErr;
+    const newTotal = Math.min((current?.qty_received || 0) + qtyReceived, current?.qty || 0);
     const { data, error } = await sb.from('purchase_order_items')
-      .update({ qty_received: qtyReceived }).eq('id', poItemId).select().single();
+      .update({ qty_received: newTotal }).eq('id', poItemId).select().single();
     if (error) throw error;
     return data;
   }
@@ -692,16 +696,7 @@ const GS = (() => {
       .in('id', ids)
       .order('created_at', { ascending: false });
     if (error) throw error;
-
-    // v_invoices uses 'total' but app expects 'total_amount' — map it
-    // Also add shop_id from base rows for any downstream checks
-    const baseMap = {};
-    baseRows.forEach(r => { baseMap[r.id] = r; });
-    return (data || []).map(inv => ({
-      ...inv,
-      total_amount: inv.total_amount ?? inv.total ?? 0,
-      shop_id: sid,
-    }));
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function createInvoice(payload) {
@@ -709,92 +704,46 @@ const GS = (() => {
     const { data, error } = await sb.from('invoices')
       .insert({ ...payload, shop_id: sid, ref: '' }).select().single();
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function generateInvoiceFromWO(workOrderId) {
     const sid = await _shopId();
-
-    // 1. Get the work order with parts and settings
     const [woRes, settingsRes] = await Promise.all([
-      sb.from('work_orders')
-        .select('*, customers(id,first_name,last_name), work_order_parts(id,qty,unit_cost,part_id,inventory:part_id(name))')
-        .eq('id', workOrderId).single(),
+      sb.from('work_orders').select('*, customers(id,first_name,last_name), work_order_parts(id,qty,unit_cost,part_id,inventory:part_id(name))').eq('id', workOrderId).single(),
       sb.from('shop_settings').select('labor_rate,tax_rate,invoice_prefix').eq('shop_id', sid).single(),
     ]);
-
     if (woRes.error) throw new Error('Work order not found');
-    const wo       = woRes.data;
+    const wo = woRes.data;
     const settings = settingsRes.data || {};
-
-    // 2. Calculate amounts
     const laborRate   = parseFloat(settings.labor_rate || 0);
     const taxRate     = parseFloat(settings.tax_rate   || 0) / 100;
     const laborAmount = Math.round((wo.labor_hours || 0) * laborRate * 100) / 100;
-    const partsAmount = Math.round(
-      (wo.work_order_parts || []).reduce((s, p) => s + (p.unit_cost || 0) * (p.qty || 0), 0) * 100
-    ) / 100;
+    const partsAmount = Math.round((wo.work_order_parts || []).reduce((s, p) => s + (p.unit_cost || 0) * (p.qty || 0), 0) * 100) / 100;
     const taxAmount   = Math.round((laborAmount + partsAmount) * taxRate * 100) / 100;
     const total       = laborAmount + partsAmount + taxAmount;
-
-    // 3. Create the invoice
     const { data: inv, error: invErr } = await sb.from('invoices').insert({
-      shop_id:        sid,
-      work_order_id:  workOrderId,
-      customer_id:    wo.customer_id,
-      ref:            '',
-      status:         'Unpaid',
-      invoice_date:   new Date().toISOString().split('T')[0],
-      labor_amount:   laborAmount,
-      parts_amount:   partsAmount,
-      tax_amount:     taxAmount,
-      total_amount:   total,
+      shop_id: sid, work_order_id: workOrderId, customer_id: wo.customer_id,
+      ref: '', status: 'Unpaid', invoice_date: new Date().toISOString().split('T')[0],
+      labor_amount: laborAmount, parts_amount: partsAmount, tax_amount: taxAmount, total_amount: total,
     }).select().single();
     if (invErr) throw invErr;
-
     return inv;
   }
 
   async function getInvoiceFull(invoiceId) {
     const sid = await _shopId();
-
-    // Try the view first
-    const { data: viewData } = await sb.from('v_invoices')
-      .select('*').eq('id', invoiceId).eq('shop_id', sid).single();
-
-    if (viewData) return viewData;
-
-    // Fallback: build from base tables
-    const { data: inv, error } = await sb.from('invoices')
-      .select('*, customers(id,first_name,last_name), work_orders(ref,fault,labor_hours)')
-      .eq('id', invoiceId).eq('shop_id', sid).single();
+    const { data: viewData } = await sb.from('v_invoices').select('*').eq('id', invoiceId).single();
+    if (viewData) return { ...viewData, total_amount: viewData.total_amount ?? viewData.total ?? 0 };
+    const { data: inv, error } = await sb.from('invoices').select('*, customers(id,first_name,last_name), work_orders(ref,fault,labor_hours)').eq('id', invoiceId).eq('shop_id', sid).single();
     if (error) throw error;
-
-    // Get parts from work order
     let parts = [];
     if (inv.work_order_id) {
-      const { data: woParts } = await sb.from('work_order_parts')
-        .select('qty, unit_cost, inventory:part_id(name,sku)')
-        .eq('work_order_id', inv.work_order_id);
-      parts = (woParts || []).map(p => ({
-        name: p.inventory?.name || '—',
-        sku:  p.inventory?.sku  || '',
-        qty:  p.qty,
-        unit_cost: p.unit_cost,
-      }));
+      const { data: woParts } = await sb.from('work_order_parts').select('qty, unit_cost, inventory:part_id(name,sku)').eq('work_order_id', inv.work_order_id);
+      parts = (woParts || []).map(p => ({ name: p.inventory?.name || '—', sku: p.inventory?.sku || '', qty: p.qty, unit_cost: p.unit_cost }));
     }
-
-    // Get shop info
     const { data: shop } = await sb.from('shops').select('name,phone,email,address').eq('id', sid).single();
-
-    return {
-      ...inv,
-      total_amount:  inv.total_amount ?? inv.total ?? 0,
-      customer_name: inv.customers ? inv.customers.first_name + ' ' + inv.customers.last_name : '—',
-      wo_ref:        inv.work_orders?.ref || '—',
-      parts,
-      shop:          shop || {},
-    };
+    return { ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, customer_name: inv.customers ? inv.customers.first_name + ' ' + inv.customers.last_name : '—', wo_ref: inv.work_orders?.ref || '—', parts, shop: shop || {} };
   }
 
   async function markInvoicePaid(id, method = 'Card') {
@@ -806,7 +755,7 @@ const GS = (() => {
       })
       .eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function updateInvoiceStatus(id, status) {
@@ -815,7 +764,7 @@ const GS = (() => {
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   /* ---------------------------------------------------------------
@@ -862,7 +811,7 @@ const GS = (() => {
     const { data, error } = await sb.from('appointments')
       .insert({ ...payload, shop_id: sid, ref: '' }).select().single();
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function updateAppointment(id, payload) {
@@ -871,7 +820,7 @@ const GS = (() => {
       .update({ ...payload, updated_at: new Date().toISOString() })
       .eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function cancelAppointment(id) {
@@ -909,7 +858,7 @@ const GS = (() => {
     if (unreadOnly) q = q.eq('read', false);
     const { data, error } = await q;
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function getUnreadCount() {
@@ -1068,14 +1017,14 @@ const GS = (() => {
     const { data, error } = await sb.from('profiles')
       .select('*').eq('shop_id', sid).order('full_name');
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   async function updateProfile(id, payload) {
     const { data, error } = await sb.from('profiles')
       .update(payload).eq('id', id).select().single();
     if (error) throw error;
-    return data;
+    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
   }
 
   /* ---------------------------------------------------------------
