@@ -225,7 +225,7 @@
                   <div class="settings-section-title">Labor & Tax</div>
                   <div class="settings-section-sub">These rates apply to all invoices and estimates.</div>
                   <div class="settings-field">
-                    <div class="settings-field-left"><div class="settings-field-label">Labor Rate ($/hr)</div><div class="settings-field-desc">Applied automatically when generating invoices from work orders.</div></div>
+                    <div class="settings-field-left"><div class="settings-field-label">Labor Rate (₦/hr)</div><div class="settings-field-desc">Applied automatically when generating invoices from work orders.</div></div>
                     <div class="settings-field-right"><input class="app-input" type="number" id="set-labor" type="number" min="0" step="1" placeholder="e.g. 90" style="max-width:120px"></div>
                   </div>
                   <div class="settings-field">
@@ -651,29 +651,24 @@
 <div class="modal-backdrop" id="deleteAccountModal">
   <div class="modal modal-sm">
     <div class="modal-header">
-      <span class="modal-title" style="color:var(--danger)">⚠ DELETE ACCOUNT</span>
+      <span class="modal-title" style="color:var(--danger)">&#x26A0; DELETE ACCOUNT</span>
       <button class="modal-close" onclick="Modal.close('deleteAccountModal')">&#x2715;</button>
     </div>
     <div class="modal-body">
       <div style="background:rgba(181,43,30,0.1);border:1px solid rgba(181,43,30,0.3);border-radius:var(--r-sm);padding:14px 16px;margin-bottom:20px;font-size:13px;color:#fca5a5;line-height:1.7">
         <strong>This action is permanent and cannot be undone.</strong><br>
-        Deleting your account will permanently remove:<br>
-        • Your shop and all its data<br>
-        • All work orders, invoices, customers<br>
-        • All staff accounts linked to your shop<br>
-        • All inventory and supply chain records
+        This will permanently delete your shop and all its data — work orders, invoices, customers, inventory, staff and supply chain records.
       </div>
       <div class="app-form-group">
         <label class="app-label">Type <strong style="color:var(--danger)">DELETE</strong> to confirm</label>
         <input class="app-input" type="text" id="deleteConfirmText" placeholder="Type DELETE here"
-          oninput="checkDeleteConfirm()"
-          style="border-color:rgba(181,43,30,0.4)">
+          oninput="checkDeleteConfirm()" style="border-color:rgba(181,43,30,0.4)">
       </div>
       <div class="app-form-group">
         <label class="app-label">Enter your password to verify</label>
         <input class="app-input" type="password" id="deleteConfirmPassword" placeholder="Your current password">
       </div>
-      <div id="deleteAccountError" style="display:none;color:#fca5a5;font-size:12px;margin-top:8px"></div>
+      <div id="deleteAccountError" style="display:none;background:rgba(181,43,30,0.1);border:1px solid rgba(181,43,30,0.3);color:#fca5a5;padding:10px 14px;border-radius:var(--r-sm);font-size:12px;margin-top:8px"></div>
     </div>
     <div class="modal-footer">
       <button class="app-btn app-btn-ghost" onclick="Modal.close('deleteAccountModal')">Cancel</button>
@@ -683,7 +678,6 @@
     </div>
   </div>
 </div>
-
 <div class="toast-container" id="toastContainer"></div>
 <script src="../js/theme.js"></script>
 <script src="../js/main.js"></script>
@@ -1209,17 +1203,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
 /* ── DELETE ACCOUNT ─────────────────────────────────────── */
 function openDeleteAccountModal() {
-  document.getElementById('deleteConfirmText').value = '';
+  document.getElementById('deleteConfirmText').value     = '';
   document.getElementById('deleteConfirmPassword').value = '';
-  document.getElementById('deleteAccountBtn').disabled = true;
-  var errEl = document.getElementById('deleteAccountError');
-  if (errEl) errEl.style.display = 'none';
+  document.getElementById('deleteAccountBtn').disabled   = true;
+  var e = document.getElementById('deleteAccountError');
+  if (e) e.style.display = 'none';
   Modal.open('deleteAccountModal');
 }
 
 function checkDeleteConfirm() {
-  var val = document.getElementById('deleteConfirmText').value;
-  document.getElementById('deleteAccountBtn').disabled = (val !== 'DELETE');
+  document.getElementById('deleteAccountBtn').disabled =
+    document.getElementById('deleteConfirmText').value !== 'DELETE';
 }
 
 async function executeDeleteAccount() {
@@ -1227,97 +1221,58 @@ async function executeDeleteAccount() {
   var password    = document.getElementById('deleteConfirmPassword').value.trim();
   var errEl       = document.getElementById('deleteAccountError');
   var btn         = document.getElementById('deleteAccountBtn');
+  errEl.style.display = 'none';
 
   if (confirmText !== 'DELETE') {
-    errEl.textContent = 'Please type DELETE to confirm.';
-    errEl.style.display = 'block';
-    return;
+    errEl.textContent = 'Please type DELETE exactly.';
+    errEl.style.display = 'block'; return;
   }
   if (!password) {
     errEl.textContent = 'Please enter your password.';
-    errEl.style.display = 'block';
-    return;
+    errEl.style.display = 'block'; return;
   }
 
   btn.disabled = true;
-  btn.textContent = 'Deleting…';
-  errEl.style.display = 'none';
+  btn.textContent = 'Verifying…';
 
   try {
-    // 1. Verify password by re-signing in
-    var session = await Auth.getSession();
-    if (!session) throw new Error('Session expired. Please log in again.');
-    var email = session.user.email;
+    // Step 1: verify password
+    var sessionData = await sb.auth.getSession();
+    var email = sessionData?.data?.session?.user?.email;
+    if (!email) throw new Error('Session expired. Please log in again.');
 
-    var { error: signInErr } = await sb.auth.signInWithPassword({ email, password });
-    if (signInErr) throw new Error('Incorrect password. Please try again.');
+    var signInRes = await sb.auth.signInWithPassword({ email: email, password: password });
+    if (signInRes.error) throw new Error('Incorrect password. Please try again.');
 
-    // 2. Get shop and user info
-    var user   = await Auth.getUser();
-    var shopId = user?.shop_id;
+    btn.textContent = 'Deleting…';
 
-    if (shopId) {
-      // 3. Delete all shop data in order (respecting foreign keys)
-      var tables = [
-        'notifications', 'billing_transactions', 'staff_invites',
-        'purchase_order_items', 'purchase_orders',
-        'work_order_parts', 'wo_status_history',
-        'invoice_payments', 'invoices',
-        'appointments', 'vehicles', 'customers',
-        'work_orders', 'inventory', 'suppliers',
-        'shop_settings', 'subscriptions',
-        'profiles'
-      ];
+    // Step 2: get fresh token
+    var freshSession = await sb.auth.getSession();
+    var token = freshSession?.data?.session?.access_token;
+    if (!token) {
+      var refreshed = await sb.auth.refreshSession();
+      token = refreshed?.data?.session?.access_token;
+    }
+    if (!token) throw new Error('Could not get auth token. Please log out and back in.');
 
-      for (var i = 0; i < tables.length; i++) {
-        var table = tables[i];
-        try {
-          if (table === 'profiles') {
-            await sb.from('profiles').delete().eq('shop_id', shopId);
-          } else if (table === 'vehicles') {
-            // vehicles belong to customers, need nested delete
-            var { data: custs } = await sb.from('customers').select('id').eq('shop_id', shopId);
-            if (custs && custs.length) {
-              var custIds = custs.map(function(c){ return c.id; });
-              await sb.from('vehicles').delete().in('customer_id', custIds);
-            }
-          } else if (table === 'wo_status_history' || table === 'work_order_parts') {
-            var { data: wos } = await sb.from('work_orders').select('id').eq('shop_id', shopId);
-            if (wos && wos.length) {
-              var woIds = wos.map(function(w){ return w.id; });
-              await sb.from(table).delete().in('work_order_id', woIds);
-            }
-          } else if (table === 'invoice_payments') {
-            var { data: invs } = await sb.from('invoices').select('id').eq('shop_id', shopId);
-            if (invs && invs.length) {
-              var invIds = invs.map(function(inv){ return inv.id; });
-              await sb.from('invoice_payments').delete().in('invoice_id', invIds);
-            }
-          } else if (table === 'purchase_order_items') {
-            var { data: pos } = await sb.from('purchase_orders').select('id').eq('shop_id', shopId);
-            if (pos && pos.length) {
-              var poIds = pos.map(function(p){ return p.id; });
-              await sb.from('purchase_order_items').delete().in('po_id', poIds);
-            }
-          } else {
-            await sb.from(table).delete().eq('shop_id', shopId);
-          }
-        } catch(e) {
-          console.warn('Could not delete from', table, e.message);
+    // Step 3: call Edge Function
+    var res = await fetch(
+      'https://tqwwnmgcvaqeigpodirc.supabase.co/functions/v1/delete-account',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': 'Bearer ' + token,
+          'apikey':        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRxd3dubWdjdmFxZWlncG9kaXJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzk4MDM1NDQsImV4cCI6MjA1NTM3OTU0NH0.ixWKcqGiGHiGmFSZCBv4hbCjzOEStlhfCLuNT_Xzs4M',
         }
       }
+    );
 
-      // 4. Delete the shop itself
-      try { await sb.from('shops').delete().eq('id', shopId); } catch(e) {}
-    }
+    var result = await res.json();
+    if (!res.ok || !result.success) throw new Error(result.error || 'Deletion failed. Please try again.');
 
-    // 5. Delete the auth user account
-    var { error: delErr } = await sb.auth.admin?.deleteUser(user.id).catch(function(){ return {}; }) || {};
-
-    // 6. Sign out regardless
+    // Step 4: sign out and redirect
     await sb.auth.signOut();
-
-    // 7. Redirect to home with message
     window.location.href = '../index.html?deleted=1';
 
   } catch(e) {
