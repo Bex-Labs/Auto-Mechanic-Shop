@@ -74,6 +74,13 @@ const RBAC = (() => {
       return null;
     }
 
+    // Deactivated accounts — sign out immediately
+    if (user.active === false) {
+      await Auth.signOut();
+      window.location.href = 'dashboard.html';
+      return null;
+    }
+
     const access = can(user.role, section);
     if (access === false) {
       Toast.show(`Access denied — ${user.role}s cannot access this section`, 'error', 4000);
@@ -328,13 +335,14 @@ const RBAC = (() => {
   }
 
   async function deactivateStaff(profileId) {
-    // No-op: active column removed from profiles
-    return null;
+    const { error } = await sb.rpc('deactivate_staff_member', { staff_id: profileId });
+    if (error) throw error;
   }
 
   async function reactivateStaff(profileId) {
-    // No-op: active column removed from profiles
-    return null;
+    const { error } = await sb.rpc('reactivate_staff_member', { staff_id: profileId });
+    if (error) throw error;
+    return data?.[0];
   }
 
   async function getShop() {
