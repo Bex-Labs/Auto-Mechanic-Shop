@@ -228,32 +228,6 @@
   </div>
 </div>
 
-<!-- DEACTIVATE MODAL -->
-<div class="modal-backdrop" id="deactivateModal">
-  <div class="modal modal-sm">
-    <div class="modal-header">
-      <span class="modal-title">DEACTIVATE ACCOUNT</span>
-      <button class="modal-close" onclick="Modal.close('deactivateModal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <p style="font-size:13px;color:var(--app-text);margin-bottom:8px">
-        Deactivate <strong id="deactivateModalName"></strong>?
-      </p>
-      <p style="font-size:13px;color:var(--app-muted);line-height:1.6">
-        They will be signed out immediately and cannot log back in.
-        All their records (work orders, assignments, history) are kept intact.
-        You can reactivate them at any time from the Inactive tab.
-      </p>
-    </div>
-    <div class="modal-footer">
-      <button class="app-btn app-btn-ghost" onclick="Modal.close('deactivateModal')">Cancel</button>
-      <button class="app-btn app-btn-primary" id="deactivateConfirmBtn"
-        style="background:var(--danger);border-color:var(--danger)"
-        onclick="confirmDeactivate()">Deactivate</button>
-    </div>
-  </div>
-</div>
-
 <div class="toast-container" id="toastContainer"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../js/theme.js"></script>
@@ -316,7 +290,7 @@ function renderStaffStats() {
 /* ── STAFF LIST ── */
 function filterStaff() {
   const q = (document.getElementById('staffSearch')?.value || '').toLowerCase();
-  const filtered = staffData.filter(s => s.active !== false).filter(s =>
+  const filtered = staffData.filter(s => s.active !== false).filter(s => s.active !== false).filter(s =>
     (s.full_name||'').toLowerCase().includes(q) ||
     (s.role||'').toLowerCase().includes(q) ||
     (s.email||'').toLowerCase().includes(q)
@@ -614,36 +588,21 @@ async function saveRoleChange() {
 }
 
 /* ── DEACTIVATE / REACTIVATE ── */
-let _deactivateId = null;
-
-function deactivateStaff(id, name) {
-  _deactivateId = id;
-  document.getElementById('deactivateModalName').textContent = name;
-  Modal.open('deactivateModal');
-}
-
-async function confirmDeactivate() {
-  if (!_deactivateId) return;
-  const btn = document.getElementById('deactivateConfirmBtn');
-  btn.disabled = true; btn.textContent = 'Deactivating…';
+async function deactivateStaff(id, name) {
+  if (!confirm('Deactivate ' + name + '?\n\nThey will be barred from logging in until you reactivate them.')) return;
   try {
-    await RBAC.deactivateStaff(_deactivateId);
-    // Kill their active session immediately via Supabase Admin API
-    await sb.auth.admin.signOut(_deactivateId).catch(() => {});
-    Modal.close('deactivateModal');
-    Toast.show('Account deactivated — they have been signed out', 'success');
-    _deactivateId = null;
+    var { error } = await sb.from('profiles').update({ active: false }).eq('id', id);
+    if (error) throw error;
+    Toast.show(name + ' deactivated — they can no longer log in', 'success');
     await loadAll();
-  } catch(err) {
-    Toast.show(err.message || 'Failed to deactivate', 'error');
-    btn.disabled = false; btn.textContent = 'Deactivate';
-  }
+  } catch(err) { Toast.show(err.message || 'Failed to deactivate', 'error'); }
 }
 
 async function reactivateStaff(id, name) {
   try {
-    await sb.from('profiles').update({ active: true }).eq('id', id);
-    Toast.show(name + ' reactivated — they can log in again', 'success');
+    var { error } = await sb.from('profiles').update({ active: true }).eq('id', id);
+    if (error) throw error;
+    Toast.show(name + ' reactivated — they can now log in', 'success');
     await loadAll();
   } catch(err) { Toast.show(err.message || 'Failed to reactivate', 'error'); }
 }

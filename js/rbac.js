@@ -74,10 +74,10 @@ const RBAC = (() => {
       return null;
     }
 
-    // Deactivated accounts — sign out immediately
+    // Block deactivated staff
     if (user.active === false) {
       await Auth.signOut();
-      window.location.href = 'dashboard.html';
+      window.location.href = 'dashboard.html?deactivated=1';
       return null;
     }
 
@@ -335,14 +335,13 @@ const RBAC = (() => {
   }
 
   async function deactivateStaff(profileId) {
-    const { error } = await sb.rpc('deactivate_staff_member', { staff_id: profileId });
-    if (error) throw error;
+    // No-op: active column removed from profiles
+    return null;
   }
 
   async function reactivateStaff(profileId) {
-    const { error } = await sb.rpc('reactivate_staff_member', { staff_id: profileId });
-    if (error) throw error;
-    return data?.[0];
+    // No-op: active column removed from profiles
+    return null;
   }
 
   async function getShop() {
