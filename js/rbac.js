@@ -228,7 +228,10 @@ const RBAC = (() => {
     const name = user.full_name || 'User';
     if (nameEl)   nameEl.textContent   = name;
     if (roleEl)   roleEl.textContent   = user.role || '—';
-    if (avatarEl) avatarEl.textContent = name[0].toUpperCase();
+    if (avatarEl) {
+      if (typeof renderAvatar === 'function') renderAvatar(avatarEl, name, user.avatar_url);
+      else avatarEl.textContent = (typeof getInitials === 'function' ? getInitials(name) : name[0].toUpperCase());
+    }
   }
 
   /* ---------------------------------------------------------------
@@ -240,6 +243,10 @@ const RBAC = (() => {
     if (!user) return;
     renderNav(user.role, activePage);
     await renderSidebarUser();
+    // Init notification badge on every page that has a sidebar
+    if (typeof initLiveNotificationBadge === 'function') {
+      initLiveNotificationBadge();
+    }
   }
 
   /* ---------------------------------------------------------------

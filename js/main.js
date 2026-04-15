@@ -25,6 +25,42 @@
 })();
 
 /* -----------------------------------------------------------------
+   AVATAR HELPERS
+   ----------------------------------------------------------------- */
+function getInitials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return parts.slice(0, 2).map(part => part[0]).join('').toUpperCase();
+}
+
+function renderAvatar(el, name, avatarUrl) {
+  if (!el) return;
+
+  const initials = getInitials(name);
+  el.classList.remove('has-image');
+  el.replaceChildren();
+  el.textContent = '';
+  el.setAttribute('aria-label', name ? `${name} avatar` : 'User avatar');
+
+  if (avatarUrl) {
+    const img = document.createElement('img');
+    img.src = avatarUrl;
+    img.alt = name ? `${name} profile photo` : 'Profile photo';
+    img.referrerPolicy = 'no-referrer';
+    img.onload = () => el.classList.add('has-image');
+    img.onerror = () => {
+      el.classList.remove('has-image');
+      el.replaceChildren();
+      el.textContent = initials;
+    };
+    el.appendChild(img);
+    return;
+  }
+
+  el.textContent = initials;
+}
+
+/* -----------------------------------------------------------------
    TOAST SYSTEM
    ----------------------------------------------------------------- */
 const Toast = (() => {

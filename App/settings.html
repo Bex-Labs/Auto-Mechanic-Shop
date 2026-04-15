@@ -45,9 +45,14 @@
 .toggle-label { font-size:12px; color:var(--app-muted); font-family:var(--ff-mono); }
 .user-row { display:flex; align-items:center; gap:14px; padding:14px 0; border-bottom:1px solid rgba(48,54,61,.4); }
 .user-row:last-child { border-bottom:none; }
-.user-row-avatar { width:38px; height:38px; border-radius:50%; background:var(--rust); display:flex; align-items:center; justify-content:center; font-family:var(--ff-display); font-size:16px; color:var(--white); flex-shrink:0; }
+.user-row-avatar { width:38px; height:38px; border-radius:50%; background:var(--rust); display:flex; align-items:center; justify-content:center; font-family:var(--ff-display); font-size:16px; color:var(--white); flex-shrink:0; overflow:hidden; }
+.user-row-avatar.has-image { background:var(--app-surface2); }
+.user-row-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
 .user-row-name { font-size:13px; font-weight:700; color:var(--app-text); }
 .user-row-role { font-size:11px; color:var(--app-muted); font-family:var(--ff-mono); margin-top:2px; }
+.profile-photo-editor { display:flex; flex-direction:column; align-items:flex-start; gap:12px; min-width:260px; }
+.profile-photo-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.profile-photo-input { display:none; }
 .danger-zone { background:rgba(181,43,30,.05); border:1px solid rgba(181,43,30,.3); border-radius:var(--r-sm); padding:24px; }
 .danger-zone-title { font-family:var(--ff-display); font-size:16px; letter-spacing:1px; color:var(--danger); margin-bottom:4px; }
 .danger-zone-sub { font-size:12px; color:var(--app-muted); margin-bottom:20px; }
@@ -143,6 +148,26 @@
                   <div class="settings-field">
                     <div class="settings-field-left"><div class="settings-field-label">Phone Number</div><div class="settings-field-desc">Used for internal contact only.</div></div>
                     <div class="settings-field-right"><input class="app-input" id="p-phone" placeholder="e.g. 0801 234 5678" style="max-width:220px"></div>
+                  </div>
+                  <div class="settings-field">
+                    <div class="settings-field-left"><div class="settings-field-label">Profile Photo</div><div class="settings-field-desc">Shown in the left sidebar instead of your initials when added.</div></div>
+                    <div class="settings-field-right">
+                      <div class="profile-photo-editor">
+                        <div class="user-row" style="padding:0;border-bottom:none">
+                          <div class="user-row-avatar" id="profileAvatarPreview">?</div>
+                          <div>
+                            <div class="user-row-name" id="profileAvatarStatus">Using initials</div>
+                            <div class="user-row-role">Square or portrait photos work best.</div>
+                          </div>
+                        </div>
+                        <div class="profile-photo-actions">
+                          <input class="profile-photo-input" id="p-avatar-file" type="file" accept="image/*" onchange="handleAvatarFileChange(event)">
+                          <input id="p-avatar-url" type="hidden">
+                          <button class="app-btn app-btn-ghost app-btn-sm" type="button" onclick="pickAvatarFile()">Upload Photo</button>
+                          <button class="app-btn app-btn-ghost app-btn-sm" id="removeAvatarBtn" type="button" onclick="removeAvatarPhoto()" disabled>Remove Photo</button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   <div class="settings-field">
                     <div class="settings-field-left"><div class="settings-field-label">Role</div><div class="settings-field-desc">Assigned by your admin.</div></div>
@@ -728,15 +753,19 @@ async function loadSettings(user) {
     const user = await Auth.getUser();
     if (user) {
       const { data: profile } = await sb.from('profiles')
-        .select('full_name,phone,role').eq('id', user.id).limit(1);
+        .select('full_name,phone,role,avatar_url').eq('id', user.id).limit(1);
       const p = profile?.[0];
       if (p) {
         setVal('p-fullname', p.full_name || '');
         setVal('p-phone',    p.phone     || '');
         setVal('p-role',     p.role      || '');
+        setVal('p-avatar-url', p.avatar_url || '');
+        renderProfileAvatarPreview();
       }
     }
   } catch(e) {}
+
+  renderProfileAvatarPreview();
 
   // Non-admins: default to My Profile pane, disable shop fields
   if (user?.role !== 'Admin') {
@@ -771,6 +800,93 @@ async function loadSettings(user) {
       }
     }
   } catch(e) { /* settings row may not exist yet */ }
+}
+
+function pickAvatarFile() {
+  document.getElementById('p-avatar-file')?.click();
+}
+
+function renderProfileAvatarPreview() {
+  const avatarUrl = val('p-avatar-url').trim();
+  const fullName = val('p-fullname').trim() || 'User';
+  const previewEl = document.getElementById('profileAvatarPreview');
+  const statusEl = document.getElementById('profileAvatarStatus');
+  const removeBtn = document.getElementById('removeAvatarBtn');
+
+  if (previewEl) {
+    if (typeof renderAvatar === 'function') renderAvatar(previewEl, fullName, avatarUrl);
+    else previewEl.textContent = (typeof getInitials === 'function' ? getInitials(fullName) : fullName[0].toUpperCase());
+  }
+  if (statusEl) statusEl.textContent = avatarUrl ? 'Photo ready' : 'Using initials';
+  if (removeBtn) removeBtn.disabled = !avatarUrl;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Could not read that image'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageElement(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Could not process that image'));
+    img.src = src;
+  });
+}
+
+async function buildAvatarDataUrl(file) {
+  const rawUrl = await readFileAsDataUrl(file);
+  const img = await loadImageElement(rawUrl);
+  const maxSize = 256;
+  let width = img.width;
+  let height = img.height;
+
+  if (width > height && width > maxSize) {
+    height = Math.round(height * (maxSize / width));
+    width = maxSize;
+  } else if (height >= width && height > maxSize) {
+    width = Math.round(width * (maxSize / height));
+    height = maxSize;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Your browser could not process that image');
+  ctx.drawImage(img, 0, 0, width, height);
+  return canvas.toDataURL('image/jpeg', 0.82);
+}
+
+async function handleAvatarFileChange(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    Toast.show('Please choose an image file', 'error');
+    event.target.value = '';
+    return;
+  }
+
+  try {
+    const avatarDataUrl = await buildAvatarDataUrl(file);
+    setVal('p-avatar-url', avatarDataUrl);
+    renderProfileAvatarPreview();
+    Toast.show('Photo added. Save changes to apply it.', 'info');
+  } catch (err) {
+    Toast.show(err.message || 'Could not load photo', 'error');
+  } finally {
+    event.target.value = '';
+  }
+}
+
+function removeAvatarPhoto() {
+  setVal('p-avatar-url', '');
+  renderProfileAvatarPreview();
 }
 
 async function saveShopInfo() {
@@ -837,6 +953,7 @@ async function saveShopInfo() {
 async function savePersonalInfo() {
   const fullName = val('p-fullname').trim();
   const phone    = val('p-phone').trim();
+  const avatarUrl = val('p-avatar-url').trim();
   if (!fullName) { Toast.show('Full name is required', 'error'); return; }
 
   const btn = document.querySelector('#sp-personal .app-btn-primary');
@@ -845,13 +962,13 @@ async function savePersonalInfo() {
     const user = await Auth.getUser();
     if (!user?.id) { Toast.show('Not logged in', 'error'); return; }
     const { error } = await sb.from('profiles')
-      .update({ full_name: fullName, phone })
+      .update({ full_name: fullName, phone, avatar_url: avatarUrl || null })
       .eq('id', user.id);
     if (error) throw error;
+    RBAC.clearCache();
+    await RBAC.renderSidebarUser();
+    renderProfileAvatarPreview();
     Toast.show('Profile saved', 'success');
-    // Update sidebar display name
-    const nameEl = document.getElementById('userName');
-    if (nameEl) nameEl.textContent = fullName;
   } catch(err) {
     Toast.show(err.message || 'Failed to save profile', 'error');
   } finally {
@@ -1284,6 +1401,7 @@ async function executeDeleteAccount() {
 }
 
 document.addEventListener('DOMContentLoaded', initPage);
+document.getElementById('p-fullname')?.addEventListener('input', renderProfileAvatarPreview);
 </script>
 </body>
 </html>

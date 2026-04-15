@@ -6,6 +6,93 @@
 <title>Dashboard — GearShift</title>
 <link rel="stylesheet" href="../css/main.css">
 <link rel="stylesheet" href="../css/app.css">
+<style>
+/* ── LAST UPDATED BAR ─────────────────────────────────────────── */
+.dash-last-updated {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  margin-top: 8px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: var(--r-sm);
+  width: fit-content;
+  margin-left: auto;
+}
+
+/* Pulsing green live dot */
+.dash-updated-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success, #22c55e);
+  flex-shrink: 0;
+  animation: dashDotPulse 2.5s ease-in-out infinite;
+}
+
+@keyframes dashDotPulse {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%       { opacity: 0.3; transform: scale(0.75); }
+}
+
+/* Timestamp text */
+#lastUpdatedText {
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  color: var(--app-muted);
+  white-space: nowrap;
+}
+
+/* Refresh button */
+.dash-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--app-border);
+  border-radius: var(--r-sm);
+  color: var(--app-muted);
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all var(--t-fast, 0.15s);
+  flex-shrink: 0;
+}
+.dash-refresh-btn:hover {
+  border-color: var(--amber);
+  color: var(--amber);
+  background: rgba(232,160,32,0.06);
+}
+.dash-refresh-btn:hover svg {
+  animation: dashSpin 0.6s linear;
+}
+.dash-refresh-btn svg {
+  flex-shrink: 0;
+}
+@keyframes dashSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* LIVE label */
+.dash-live-label {
+  font-family: var(--ff-mono);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--success, #22c55e);
+  padding: 2px 7px;
+  background: rgba(34,197,94,0.08);
+  border: 1px solid rgba(34,197,94,0.2);
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+</style>
 </head>
 <body>
 
@@ -265,7 +352,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               Calendar
             </a>
-            <a href="reports.html" class="app-btn app-btn-ghost app-btn-sm">
+            <a href="reports.html" class="app-btn app-btn-ghost app-btn-sm" id="dashboardReportsBtn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
               Reports
             </a>
@@ -299,8 +386,8 @@
         </div>
 
         <!-- REVENUE + APPOINTMENTS -->
-        <div class="app-grid-2-1">
-          <div class="panel">
+        <div class="app-grid-2-1" id="dashRevenueRow">
+          <div class="panel" id="dashRevenuePanel">
             <div class="panel-header"><span class="panel-title">REVENUE — LAST 7 DAYS</span><a href="reports.html" class="app-btn app-btn-ghost app-btn-sm">Full Report</a></div>
             <div class="panel-body">
               <div class="bar-chart" id="revChart"></div>
@@ -322,9 +409,10 @@
         <!-- LAST UPDATED -->
         <div class="dash-last-updated">
           <span class="dash-updated-dot"></span>
+          <span class="dash-live-label">LIVE</span>
           <span id="lastUpdatedText">—</span>
-          <button class="dash-refresh-btn" onclick="loadDashboard()" title="Refresh">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          <button class="dash-refresh-btn" onclick="loadDashboard()" title="Refresh dashboard data">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
             Refresh
           </button>
         </div>
@@ -345,6 +433,38 @@
 /* ══════════════════════════════════════════════
    AUTH — onAuthChange is the ONLY entry point
    ══════════════════════════════════════════════ */
+
+let _dashboardRole = null;
+
+function canSeeDashboardRevenue() {
+  return _dashboardRole === 'Admin';
+}
+
+function applyDashboardRoleUI(role) {
+  _dashboardRole = role || null;
+
+  const showRevenue = canSeeDashboardRevenue();
+  const statsGrid = document.getElementById('statsGrid');
+  const revenueRow = document.getElementById('dashRevenueRow');
+  const revenuePanel = document.getElementById('dashRevenuePanel');
+  const reportsBtn = document.getElementById('dashboardReportsBtn');
+
+  if (statsGrid) {
+    statsGrid.classList.toggle('stats-grid-3', !showRevenue);
+  }
+
+  if (revenuePanel) {
+    revenuePanel.style.display = showRevenue ? '' : 'none';
+  }
+
+  if (revenueRow) {
+    revenueRow.classList.toggle('dashboard-single-col', !showRevenue);
+  }
+
+  if (reportsBtn) {
+    reportsBtn.style.display = role && RBAC.canAccess(role, 'reports') ? '' : 'none';
+  }
+}
 
 sb.auth.onAuthStateChange(async (event, session) => {
   if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
@@ -380,10 +500,16 @@ async function showApp(session) {
   const profile = await RBAC.getCurrentUser();
   const name = profile?.full_name || session.user.email.split('@')[0];
 
+  applyDashboardRoleUI(profile?.role);
+
   // Sidebar user
   document.getElementById('userName').textContent   = name;
   document.getElementById('userRole').textContent   = profile?.role || '—';
-  document.getElementById('userAvatar').textContent = name[0]?.toUpperCase() || '?';
+  if (typeof renderAvatar === 'function') {
+    renderAvatar(document.getElementById('userAvatar'), name, profile?.avatar_url);
+  } else {
+    document.getElementById('userAvatar').textContent = name[0]?.toUpperCase() || '?';
+  }
 
   // Welcome bar
   const hr = new Date().getHours();
@@ -420,7 +546,6 @@ async function showApp(session) {
 
   // Load data
   loadDashboard();
-  initLiveNotificationBadge();
 }
 
 /* ── LOGIN ACTIONS ── */
@@ -580,22 +705,29 @@ async function loadDashboard() {
   } catch(e) { renderPOs([]); }
 
   // Revenue chart
-  try {
-    const revenueW = await GS.getRevenueWeekly();
-    renderRevChart(revenueW);
-  } catch(e) { renderRevChart([]); }
+  if (canSeeDashboardRevenue()) {
+    try {
+      const revenueW = await GS.getRevenueWeekly();
+      renderRevChart(revenueW);
+    } catch(e) { renderRevChart([]); }
+  }
 
-  document.getElementById('lastUpdatedText').textContent =
-    'Last updated at ' + new Date().toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  const _now = new Date();
+  const _timeStr = _now.toLocaleTimeString('en-NG', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  document.getElementById('lastUpdatedText').textContent = 'Updated ' + _timeStr;
 }
 
 // Fallback KPI builder — runs direct table queries when the view is missing
 async function buildKPIsFallback() {
+  const revenueQuery = canSeeDashboardRevenue()
+    ? sb.from('invoices').select('total_amount,paid_at,status').eq('status','Paid')
+    : Promise.resolve({ data: [] });
+
   const [wos, inv, appts, invoices] = await Promise.allSettled([
     sb.from('work_orders').select('id,status').not('status','in','("Completed","Cancelled")'),
     sb.from('inventory').select('id,qty,threshold').lte('qty', 0),  // rough fallback
     sb.from('appointments').select('id,appt_date').gte('appt_date', new Date().toISOString().split('T')[0]),
-    sb.from('invoices').select('total_amount,paid_at,status').eq('status','Paid'),
+    revenueQuery,
   ]);
 
   const activeWOs = wos.status === 'fulfilled' ? (wos.value.data||[]).length : 0;
@@ -632,7 +764,11 @@ async function buildKPIsFallback() {
 
 function renderStats(k) {
   const fmt = n => n ?? 0;
-  document.getElementById('statsGrid').innerHTML = `
+  const statsGrid = document.getElementById('statsGrid');
+  if (!statsGrid) return;
+
+  statsGrid.classList.toggle('stats-grid-3', !canSeeDashboardRevenue());
+  statsGrid.innerHTML = canSeeDashboardRevenue() ? `
     <div class="stat-card rust" style="cursor:pointer" onclick="location='work-orders.html'">
       <div class="stat-label">Active Jobs</div>
       <div class="stat-value">${fmt(k.active_work_orders)}</div>
@@ -647,6 +783,22 @@ function renderStats(k) {
       <div class="stat-label">Revenue This Month</div>
       <div class="stat-value">${formatCurrency(k.revenue_this_month)}</div>
       <div class="stat-delta ${k.unpaid_invoices > 0 ? 'down' : 'up'}">${fmt(k.unpaid_invoices)} unpaid invoice${k.unpaid_invoices !== 1 ? 's' : ''}</div>
+    </div>
+    <div class="stat-card blue" style="cursor:pointer" onclick="location='appointments.html'">
+      <div class="stat-label">Upcoming Appointments</div>
+      <div class="stat-value">${fmt(k.upcoming_appointments)}</div>
+      <div class="stat-delta">${fmt(k.unread_notifications)} unread alert${k.unread_notifications !== 1 ? 's' : ''}</div>
+    </div>`
+  : `
+    <div class="stat-card rust" style="cursor:pointer" onclick="location='work-orders.html'">
+      <div class="stat-label">Active Jobs</div>
+      <div class="stat-value">${fmt(k.active_work_orders)}</div>
+      <div class="stat-delta">Work orders in progress</div>
+    </div>
+    <div class="stat-card amber" style="cursor:pointer" onclick="location='inventory.html'">
+      <div class="stat-label">Low Stock Parts</div>
+      <div class="stat-value">${fmt(k.low_stock_parts)}</div>
+      <div class="stat-delta ${k.low_stock_parts > 0 ? 'down' : ''}">${k.low_stock_parts > 0 ? 'Reorder needed' : 'All parts stocked'}</div>
     </div>
     <div class="stat-card blue" style="cursor:pointer" onclick="location='appointments.html'">
       <div class="stat-label">Upcoming Appointments</div>
