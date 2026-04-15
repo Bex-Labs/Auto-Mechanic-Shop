@@ -228,6 +228,63 @@
   </div>
 </div>
 
+<!-- DEACTIVATE STAFF MODAL -->
+<div class="modal-backdrop" id="deactivateModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title" style="color:var(--danger)">&#x26A0; DEACTIVATE STAFF</span>
+      <button class="modal-close" onclick="Modal.close('deactivateModal')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 16px">
+        <div style="width:56px;height:56px;border-radius:50%;background:rgba(181,43,30,0.12);display:flex;align-items:center;justify-content:center;margin-bottom:16px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" width="26" height="26"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/></svg>
+        </div>
+        <div style="font-family:var(--ff-display);font-size:18px;letter-spacing:1px;color:var(--app-text);margin-bottom:8px" id="deactivateModalName">Staff Member</div>
+        <div style="font-size:13px;color:var(--app-muted);line-height:1.7;max-width:300px">
+          This staff member will be <strong style="color:var(--danger)">barred from logging in</strong> immediately. All their data stays intact and you can reactivate them at any time.
+        </div>
+      </div>
+      <div style="background:rgba(181,43,30,0.07);border:1px solid rgba(181,43,30,0.2);border-radius:var(--r-sm);padding:12px 16px;font-size:12px;color:var(--app-muted);line-height:1.6">
+        &#x26A0; If this staff member is currently logged in, they will be signed out on their next page load.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('deactivateModal')">Cancel</button>
+      <button class="app-btn app-btn-danger" id="deactivateConfirmBtn" onclick="confirmDeactivate()">
+        Deactivate Account
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- REACTIVATE STAFF MODAL -->
+<div class="modal-backdrop" id="reactivateModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title" style="color:var(--success)">&#x2713; REACTIVATE STAFF</span>
+      <button class="modal-close" onclick="Modal.close('reactivateModal')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 16px">
+        <div style="width:56px;height:56px;border-radius:50%;background:rgba(31,122,74,0.12);display:flex;align-items:center;justify-content:center;margin-bottom:16px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" width="26" height="26"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
+        </div>
+        <div style="font-family:var(--ff-display);font-size:18px;letter-spacing:1px;color:var(--app-text);margin-bottom:8px" id="reactivateModalName">Staff Member</div>
+        <div style="font-size:13px;color:var(--app-muted);line-height:1.7;max-width:300px">
+          This staff member will be able to <strong style="color:var(--success)">log in and access the app</strong> again immediately.
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('reactivateModal')">Cancel</button>
+      <button class="app-btn app-btn-primary" id="reactivateConfirmBtn" onclick="confirmReactivate()" style="background:var(--success);border-color:var(--success)">
+        Reactivate Account
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="toast-container" id="toastContainer"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../js/theme.js"></script>
@@ -290,7 +347,7 @@ function renderStaffStats() {
 /* ── STAFF LIST ── */
 function filterStaff() {
   const q = (document.getElementById('staffSearch')?.value || '').toLowerCase();
-  const filtered = staffData.filter(s => s.active !== false).filter(s => s.active !== false).filter(s =>
+  const filtered = staffData.filter(s => s.active !== false).filter(s =>
     (s.full_name||'').toLowerCase().includes(q) ||
     (s.role||'').toLowerCase().includes(q) ||
     (s.email||'').toLowerCase().includes(q)
@@ -588,23 +645,59 @@ async function saveRoleChange() {
 }
 
 /* ── DEACTIVATE / REACTIVATE ── */
-async function deactivateStaff(id, name) {
-  if (!confirm('Deactivate ' + name + '?\n\nThey will be barred from logging in until you reactivate them.')) return;
-  try {
-    var { error } = await sb.from('profiles').update({ active: false }).eq('id', id);
-    if (error) throw error;
-    Toast.show(name + ' deactivated — they can no longer log in', 'success');
-    await loadAll();
-  } catch(err) { Toast.show(err.message || 'Failed to deactivate', 'error'); }
+var _deactivateId   = null;
+var _deactivateName = null;
+var _reactivateId   = null;
+var _reactivateName = null;
+
+function deactivateStaff(id, name) {
+  _deactivateId   = id;
+  _deactivateName = name;
+  document.getElementById('deactivateModalName').textContent = name;
+  Modal.open('deactivateModal');
 }
 
-async function reactivateStaff(id, name) {
+async function confirmDeactivate() {
+  if (!_deactivateId) return;
+  var btn = document.getElementById('deactivateConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Deactivating…';
   try {
-    var { error } = await sb.from('profiles').update({ active: true }).eq('id', id);
+    var { error } = await sb.from('profiles').update({ active: false }).eq('id', _deactivateId);
     if (error) throw error;
-    Toast.show(name + ' reactivated — they can now log in', 'success');
+    Modal.close('deactivateModal');
+    Toast.show(_deactivateName + ' has been deactivated', 'success');
     await loadAll();
-  } catch(err) { Toast.show(err.message || 'Failed to reactivate', 'error'); }
+  } catch(err) {
+    Toast.show(err.message || 'Failed to deactivate', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Deactivate Account';
+    _deactivateId = null; _deactivateName = null;
+  }
+}
+
+function reactivateStaff(id, name) {
+  _reactivateId   = id;
+  _reactivateName = name;
+  document.getElementById('reactivateModalName').textContent = name;
+  Modal.open('reactivateModal');
+}
+
+async function confirmReactivate() {
+  if (!_reactivateId) return;
+  var btn = document.getElementById('reactivateConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Reactivating…';
+  try {
+    var { error } = await sb.from('profiles').update({ active: true }).eq('id', _reactivateId);
+    if (error) throw error;
+    Modal.close('reactivateModal');
+    Toast.show(_reactivateName + ' has been reactivated', 'success');
+    await loadAll();
+  } catch(err) {
+    Toast.show(err.message || 'Failed to reactivate', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Reactivate Account';
+    _reactivateId = null; _reactivateName = null;
+  }
 }
 
 /* ── HELPERS ── */
