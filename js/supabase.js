@@ -61,45 +61,15 @@ function _clearShopCache() {
   _cachedShopId = null;
 }
 
-const DEACTIVATED_ACCOUNT_MESSAGE = 'Your account has been deactivated. Ask your admin to reactivate it.';
-
 /* =================================================================
    AUTH MODULE
    ================================================================= */
 const Auth = (() => {
 
-  async function ensureActiveSession(session, { signOutOnFailure = true } = {}) {
-    const userId = session?.user?.id;
-    if (!userId) return { ok: true };
-
-    const { data: rows, error } = await sb.from('profiles')
-      .select('active')
-      .eq('id', userId)
-      .limit(1);
-
-    const isDeactivated = !error && rows?.length && rows[0]?.active === false;
-    if (!isDeactivated) return { ok: true };
-
-    if (signOutOnFailure) {
-      _clearShopCache();
-      await sb.auth.signOut();
-    }
-
-    return {
-      ok: false,
-      reason: 'deactivated',
-      message: DEACTIVATED_ACCOUNT_MESSAGE,
-    };
-  }
-
   async function signIn(email, password) {
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) throw error;
     _clearShopCache();
-
-    const access = await ensureActiveSession(data.session);
-    if (!access.ok) throw new Error(access.message || 'Sign in failed.');
-
     return data;
   }
 
@@ -193,7 +163,7 @@ const Auth = (() => {
   return {
     signIn, signInWithGoogle, signUp, signOut,
     getSession, getUser, resetPassword,
-    requireAuth, requireRole, onAuthChange, ensureActiveSession,
+    requireAuth, requireRole, onAuthChange,
   };
 })();
 
@@ -743,26 +713,50 @@ const GS = (() => {
 
   async function generateInvoiceFromWO(workOrderId) {
     const sid = await _shopId();
+
+    // Check if invoice already exists for this work order
+    const { data: existing } = await sb.from('invoices')
+      .select('*').eq('work_order_id', workOrderId).eq('shop_id', sid).limit(1);
+
     const [woRes, settingsRes] = await Promise.all([
       sb.from('work_orders').select('*, customers(id,first_name,last_name), work_order_parts(id,qty,unit_cost,part_id,inventory:part_id(name))').eq('id', workOrderId).single(),
       sb.from('shop_settings').select('labor_rate,tax_rate').eq('shop_id', sid).single(),
     ]);
     if (woRes.error) throw new Error('Work order not found');
-    const wo = woRes.data;
+    const wo       = woRes.data;
     const settings = settingsRes.data || {};
+
     const laborRate   = parseFloat(settings.labor_rate || 0);
     const taxRate     = parseFloat(settings.tax_rate   || 0) / 100;
     const laborAmount = Math.round((wo.labor_hours || 0) * laborRate * 100) / 100;
     const partsAmount = Math.round((wo.work_order_parts || []).reduce((s, p) => s + (p.unit_cost || 0) * (p.qty || 0), 0) * 100) / 100;
     const taxAmount   = Math.round((laborAmount + partsAmount) * taxRate * 100) / 100;
     const total       = laborAmount + partsAmount + taxAmount;
+
+    if (existing && existing.length > 0) {
+      // Invoice already exists — update the amounts to reflect latest parts/labour
+      // then return the existing invoice (don't create a duplicate)
+      const { data: updated, error: updErr } = await sb.from('invoices')
+        .update({
+          labor_amount: laborAmount, parts_amount: partsAmount,
+          tax_amount: taxAmount,    total_amount: total,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing[0].id)
+        .select().limit(1);
+      if (updErr) throw updErr;
+      return updated?.[0] || existing[0];
+    }
+
+    // No existing invoice — insert fresh
     const { data: inv, error: invErr } = await sb.from('invoices').insert({
       shop_id: sid, work_order_id: workOrderId, customer_id: wo.customer_id,
       ref: '', status: 'Unpaid', invoice_date: new Date().toISOString().split('T')[0],
-      labor_amount: laborAmount, parts_amount: partsAmount, tax_amount: taxAmount, total_amount: total,
-    }).select().single();
+      labor_amount: laborAmount, parts_amount: partsAmount,
+      tax_amount: taxAmount,     total_amount: total,
+    }).select().limit(1);
     if (invErr) throw invErr;
-    return inv;
+    return inv?.[0];
   }
 
   async function getInvoiceFull(invoiceId) {
