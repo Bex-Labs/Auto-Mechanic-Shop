@@ -1221,7 +1221,6 @@ async function savePayoutAccount() {
 }
 
 // Hook into existing loadSettings to also load billing when plan pane is active
-const _origShowPane = window.showSettingsPane;
 /* ─────────────────────────────────────────────────────────────────
    BOOKING LINK
 ───────────────────────────────────────────────────────────────── */
@@ -1584,28 +1583,76 @@ async function exportAllData() {
       },
     ];
 
-    // ── Trigger downloads with small delays to avoid browser blocking
-    let delay = 0;
-    let count = 0;
-    exports.forEach(({ filename, data, cols }) => {
-      if (!data || !data.length) return;
-      setTimeout(() => {
-        download(filename, toCSV(data, cols));
-        count++;
-      }, delay);
-      delay += 400;
+    // ── ZIP builder (PKZIP 2.0 stored, no external library) ────────
+    function u16(n){const b=new Uint8Array(2);new DataView(b.buffer).setUint16(0,n,true);return b;}
+    function u32(n){const b=new Uint8Array(4);new DataView(b.buffer).setUint32(0,n,true);return b;}
+    function crc32(bytes){
+      const T=new Uint32Array(256);
+      for(let i=0;i<256;i++){let x=i;for(let j=0;j<8;j++)x=(x&1)?(0xEDB88320^(x>>>1)):(x>>>1);T[i]=x;}
+      let c=0xFFFFFFFF;
+      for(let i=0;i<bytes.length;i++)c=T[(c^bytes[i])&0xFF]^(c>>>8);
+      return(c^0xFFFFFFFF)>>>0;
+    }
+    function cat(arrays){
+      const n=arrays.reduce((s,a)=>s+a.length,0),out=new Uint8Array(n);
+      let p=0;for(const a of arrays){out.set(a,p);p+=a.length;}return out;
+    }
+    function buildZip(files){
+      const locals=[],centrals=[];
+      let offset=0;
+      for(const{name,bytes}of files){
+        const nb=new TextEncoder().encode(name);
+        const crc=crc32(bytes),sz=bytes.length;
+        // Local file header (30 + name + data)
+        const lfh=cat([
+          new Uint8Array([0x50,0x4B,0x03,0x04]),
+          u16(20),u16(0),u16(0),u16(0),u16(0),   // ver, flags, compress, time, date
+          u32(crc),u32(sz),u32(sz),
+          u16(nb.length),u16(0),                   // fname len, extra len
+          nb,bytes
+        ]);
+        // Central directory record (46 + name)
+        const cdr=cat([
+          new Uint8Array([0x50,0x4B,0x01,0x02]),
+          u16(20),u16(20),u16(0),u16(0),u16(0),u16(0),  // ver x2, flags, compress, time, date  (6 u16s)
+          u32(crc),u32(sz),u32(sz),
+          u16(nb.length),u16(0),u16(0),            // fname len, extra len, comment len
+          u16(0),u16(0),u32(0),                    // disk start, int attrs, ext attrs
+          u32(offset),                             // local header offset
+          nb
+        ]);
+        locals.push(lfh);centrals.push(cdr);offset+=lfh.length;
+      }
+      const central=cat(centrals);
+      const eocd=cat([
+        new Uint8Array([0x50,0x4B,0x05,0x06]),
+        u16(0),u16(0),u16(files.length),u16(files.length),
+        u32(central.length),u32(offset),u16(0)
+      ]);
+      return cat([...locals,central,eocd]);
+    }
+
+    // ── Pack CSVs and trigger single download ────────────────────
+    const enc        = new TextEncoder();
+    const folder     = prefix + '/';
+    const zipEntries = [];
+
+    exports.forEach(({filename, data, cols}) => {
+      const shortName = filename.replace(prefix + '_', '');
+      const csv = '﻿' + toCSV(data || [], cols);
+      zipEntries.push({name: folder + shortName, bytes: enc.encode(csv)});
     });
 
-    // ── Show summary toast after all downloads initiated ──────────
-    setTimeout(() => {
-      const nonEmpty = exports.filter(e => e.data && e.data.length).length;
-      Toast.show(
-        nonEmpty + ' CSV files downloaded ✓ — check your Downloads folder',
-        'success',
-        6000
-      );
-      if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" style="margin-right:5px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export Data'; }
-    }, delay + 200);
+    const zipBytes = buildZip(zipEntries);
+    const blob     = new Blob([zipBytes], {type: 'application/zip'});
+    const url      = URL.createObjectURL(blob);
+    const a        = document.createElement('a');
+    a.href = url; a.download = prefix + '_export.zip';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+    Toast.show(zipEntries.length + ' files zipped into ' + prefix + '_export.zip ✓', 'success', 5000);
+    if (btn) { btn.disabled = false; btn.textContent = 'Export Data'; }
 
   } catch(err) {
     Toast.show('Export failed: ' + (err.message || 'Unknown error'), 'error');
