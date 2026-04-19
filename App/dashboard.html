@@ -387,7 +387,7 @@
 
         <!-- REVENUE + APPOINTMENTS -->
         <div class="app-grid-2-1">
-          <div class="panel">
+          <div class="panel" id="revChartPanel">
             <div class="panel-header"><span class="panel-title">REVENUE — LAST 7 DAYS</span><a href="reports.html" class="app-btn app-btn-ghost app-btn-sm">Full Report</a></div>
             <div class="panel-body">
               <div class="bar-chart" id="revChart"></div>
@@ -507,7 +507,7 @@ async function showApp(session) {
   RBAC.initSidebar('dashboard');
 
   // Load data
-  loadDashboard();
+  await loadDashboard(profile);
 }
 
 /* ── LOGIN ACTIONS ── */
@@ -618,21 +618,22 @@ async function doLogout() {
    DASHBOARD DATA
    ══════════════════════════════════════════════ */
 
-async function loadDashboard() {
+async function loadDashboard(profile) {
+  const isAdmin = profile?.role === 'Admin';
   // Each section is independently non-fatal — one failure never blocks the others
 
   // KPIs — try the view first, fall back to direct queries
   try {
     const kpis = await GS.getDashboardKPIs();
-    renderStats(kpis);
+    renderStats(kpis, isAdmin);
   } catch(e) {
     console.warn('v_dashboard_kpis missing — falling back to direct queries:', e.message);
     try {
-      const kpis = await buildKPIsFallback();
-      renderStats(kpis);
+      const kpis = await buildKPIsFallback(isAdmin);
+      renderStats(kpis, isAdmin);
     } catch(e2) {
       console.error('KPI fallback failed:', e2);
-      renderStats({ active_work_orders:0, low_stock_parts:0, revenue_this_month:0, upcoming_appointments:0 });
+      renderStats({ active_work_orders:0, low_stock_parts:0, revenue_this_month:0, upcoming_appointments:0 }, isAdmin);
     }
   }
 
@@ -666,11 +667,17 @@ async function loadDashboard() {
     renderPOs(pos.filter(p => !['Received','Cancelled'].includes(p.status)).slice(0, 6));
   } catch(e) { renderPOs([]); }
 
-  // Revenue chart
-  try {
-    const revenueW = await GS.getRevenueWeekly();
-    renderRevChart(revenueW);
-  } catch(e) { renderRevChart([]); }
+  // Revenue chart — admin only
+  const revPanel = document.getElementById('revChartPanel');
+  if (isAdmin) {
+    if (revPanel) revPanel.style.display = '';
+    try {
+      const revenueW = await GS.getRevenueWeekly();
+      renderRevChart(revenueW);
+    } catch(e) { renderRevChart([]); }
+  } else {
+    if (revPanel) revPanel.style.display = 'none';
+  }
 
   const _now = new Date();
   const _timeStr = _now.toLocaleTimeString('en-NG', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
@@ -678,12 +685,15 @@ async function loadDashboard() {
 }
 
 // Fallback KPI builder — runs direct table queries when the view is missing
-async function buildKPIsFallback() {
+async function buildKPIsFallback(isAdmin) {
   const [wos, inv, appts, invoices] = await Promise.allSettled([
     sb.from('work_orders').select('id,status').not('status','in','("Completed","Cancelled")'),
     sb.from('inventory').select('id,qty,threshold').lte('qty', 0),  // rough fallback
     sb.from('appointments').select('id,appt_date').gte('appt_date', new Date().toISOString().split('T')[0]),
-    sb.from('invoices').select('total_amount,paid_at,status').eq('status','Paid'),
+    // Only fetch invoice data for admins — others cannot see revenue
+    isAdmin
+      ? sb.from('invoices').select('total_amount,paid_at,status').eq('status','Paid')
+      : Promise.resolve({ status: 'fulfilled', value: { data: [] } }),
   ]);
 
   const activeWOs = wos.status === 'fulfilled' ? (wos.value.data||[]).length : 0;
@@ -718,7 +728,7 @@ async function buildKPIsFallback() {
   };
 }
 
-function renderStats(k) {
+function renderStats(k, isAdmin) {
   const fmt = n => n ?? 0;
   document.getElementById('statsGrid').innerHTML = `
     <div class="stat-card rust" style="cursor:pointer" onclick="location='work-orders.html'">
@@ -731,11 +741,12 @@ function renderStats(k) {
       <div class="stat-value">${fmt(k.low_stock_parts)}</div>
       <div class="stat-delta ${k.low_stock_parts > 0 ? 'down' : ''}">${k.low_stock_parts > 0 ? 'Reorder needed' : 'All parts stocked'}</div>
     </div>
+    ${isAdmin ? `
     <div class="stat-card green" style="cursor:pointer" onclick="location='invoices.html'">
       <div class="stat-label">Revenue This Month</div>
       <div class="stat-value">${formatCurrency(k.revenue_this_month)}</div>
       <div class="stat-delta ${k.unpaid_invoices > 0 ? 'down' : 'up'}">${fmt(k.unpaid_invoices)} unpaid invoice${k.unpaid_invoices !== 1 ? 's' : ''}</div>
-    </div>
+    </div>` : ''}
     <div class="stat-card blue" style="cursor:pointer" onclick="location='appointments.html'">
       <div class="stat-label">Upcoming Appointments</div>
       <div class="stat-value">${fmt(k.upcoming_appointments)}</div>
