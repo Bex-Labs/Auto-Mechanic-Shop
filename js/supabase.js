@@ -536,12 +536,13 @@ const GS = (() => {
      --------------------------------------------------------------- */
   async function getInventory(filters = {}) {
     const sid = await _shopId();
-    let q = sb.from('inventory').select('*').eq('shop_id', sid).order('name');
+    let q = sb.from('inventory').select('*, suppliers(id,name)').eq('shop_id', sid).order('name');
     if (filters.category) q = q.eq('category', filters.category);
     const { data, error } = await q;
     if (error) throw error;
     return (data || []).map(item => ({
       ...item,
+      supplier_name: item.suppliers?.name || null,
       stock_status: item.qty <= 0
         ? 'Out of Stock'
         : item.qty <= (item.threshold || 0) ? 'Low Stock' : 'In Stock',
@@ -784,7 +785,7 @@ const GS = (() => {
 
     // Step 1: get base data including guest columns from the base table
     let baseQ = sb.from('appointments')
-      .select('id, guest_name, guest_phone, guest_email, vehicle_info, customer_id, mechanic_id')
+      .select('id, guest_name, guest_phone, guest_email, vehicle_info, customer_id')
       .eq('shop_id', sid);
     if (filters.upcoming)    baseQ = baseQ.gte('appt_date', new Date().toISOString().split('T')[0]);
     if (filters.mechanic_id) baseQ = baseQ.eq('mechanic_id', filters.mechanic_id);
@@ -800,7 +801,6 @@ const GS = (() => {
         guest_phone:  r.guest_phone,
         guest_email:  r.guest_email,
         vehicle_info: r.vehicle_info,
-        mechanic_id:  r.mechanic_id,
       };
     });
 
@@ -822,7 +822,6 @@ const GS = (() => {
         guest_email:  g.guest_email  != null ? g.guest_email  : (a.guest_email  || null),
         vehicle_info: g.vehicle_info != null ? g.vehicle_info : (a.vehicle_info || null),
         vehicle_label: a.vehicle_label || g.vehicle_info || null,
-        mechanic_id:   g.mechanic_id  != null ? g.mechanic_id  : (a.mechanic_id  || null),
       };
     });
   }
