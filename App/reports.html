@@ -441,18 +441,51 @@ function renderAll() {
 }
 
 /* REVENUE */
+function getPeriodRange() {
+  var period = (document.getElementById('periodFilter') || {}).value || 'month';
+  var now = new Date();
+  var from = new Date(now);
+  if (period === 'week') {
+    var day = from.getDay() || 7; // Mon=1
+    from.setDate(from.getDate() - day + 1);
+    from.setHours(0,0,0,0);
+  } else if (period === 'month') {
+    from = new Date(now.getFullYear(), now.getMonth(), 1);
+  } else if (period === 'quarter') {
+    var q = Math.floor(now.getMonth() / 3);
+    from = new Date(now.getFullYear(), q * 3, 1);
+  } else { // year
+    from = new Date(now.getFullYear(), 0, 1);
+  }
+  return { from: from, to: now, label: { week:'This Week', month:'This Month', quarter:'This Quarter', year:'This Year' }[period] };
+}
+
+function filterInvoicesByPeriod(invoices) {
+  var r = getPeriodRange();
+  return invoices.filter(function(i) {
+    var d = new Date(i.paid_at || i.created_at || 0);
+    return d >= r.from && d <= r.to;
+  });
+}
+
 function renderRevenue() {
-  var paid = _invoices.filter(function(i){ return i.status === 'Paid'; });
-  var totalRev = paid.reduce(function(s,i){ return s + (i.total_amount || 0); }, 0);
-  var avgInv = _invoices.length ? _invoices.reduce(function(s,i){ return s + (i.total_amount || 0); }, 0) / _invoices.length : 0;
+  var range = getPeriodRange();
+  var periodInvoices = filterInvoicesByPeriod(_invoices.filter(function(i){ return i.status === 'Paid'; }));
+  var allPaid = _invoices.filter(function(i){ return i.status === 'Paid'; });
+  var totalRev = periodInvoices.reduce(function(s,i){ return s + (i.total_amount || 0); }, 0);
+  var avgInv = periodInvoices.length ? totalRev / periodInvoices.length : 0;
   var outstanding = _invoices.filter(function(i){ return i.status !== 'Paid'; }).reduce(function(s,i){ return s + (i.total_amount || 0); }, 0);
 
   document.getElementById('revenueKPIs').innerHTML =
-    '<div class="kpi-box"><div class="kpi-label">Total Revenue</div><div class="kpi-value">' + formatCurrency(totalRev) + '</div><div class="kpi-delta up">From paid invoices</div></div>' +
+    '<div class="kpi-box"><div class="kpi-label">Revenue (' + range.label + ')</div><div class="kpi-value">' + formatCurrency(totalRev) + '</div><div class="kpi-delta up">' + periodInvoices.length + ' paid invoice' + (periodInvoices.length !== 1 ? 's' : '') + '</div></div>' +
     '<div class="kpi-box"><div class="kpi-label">Outstanding</div><div class="kpi-value">' + formatCurrency(outstanding) + '</div><div class="kpi-delta ' + (outstanding > 0 ? 'down' : '') + '">Unpaid invoices</div></div>' +
-    '<div class="kpi-box"><div class="kpi-label">Avg Invoice</div><div class="kpi-value">' + formatCurrency(avgInv) + '</div><div class="kpi-delta">Per invoice</div></div>' +
-    '<div class="kpi-box"><div class="kpi-label">Total Invoiced</div><div class="kpi-value">' + _invoices.length + '</div><div class="kpi-delta">All time</div></div>';
+    '<div class="kpi-box"><div class="kpi-label">Avg Invoice (' + range.label + ')</div><div class="kpi-value">' + formatCurrency(avgInv) + '</div><div class="kpi-delta">Per invoice</div></div>' +
+    '<div class="kpi-box"><div class="kpi-label">Total Invoiced</div><div class="kpi-value">' + allPaid.length + '</div><div class="kpi-delta">All time</div></div>';
 
+  // Build period-aware chart data from raw invoices
+  var period = (document.getElementById('periodFilter') || {}).value || 'month';
+
+  // Monthly chart: group paid invoices by month (last 7 months regardless of period filter)
   var maxM = Math.max.apply(null, _revenueMonthly.map(function(d){ return d.value; }).concat([1]));
   document.getElementById('revMonthChart').innerHTML = _revenueMonthly.length
     ? _revenueMonthly.map(function(d){
@@ -463,6 +496,7 @@ function renderRevenue() {
     return '<div style="flex:1;text-align:center;font-family:var(--ff-mono);font-size:9px;color:var(--app-muted)">' + d.label + '</div>';
   }).join('');
 
+  // Weekly chart: group paid invoices by day for this week
   var maxW = Math.max.apply(null, _revenueWeekly.map(function(d){ return d.value; }).concat([1]));
   document.getElementById('revWeekChart').innerHTML = _revenueWeekly.length
     ? _revenueWeekly.map(function(d){
@@ -473,13 +507,15 @@ function renderRevenue() {
     return '<div style="flex:1;text-align:center;font-family:var(--ff-mono);font-size:9px;color:var(--app-muted)">' + d.label + '</div>';
   }).join('');
 
-  var totalVal = _invoices.reduce(function(s,i){ return s + (i.total_amount || 0); }, 0);
+  // Invoice breakdown — filter by selected period
+  var periodPaid = filterInvoicesByPeriod(_invoices);
+  var totalVal = periodPaid.reduce(function(s,i){ return s + (i.total_amount || 0); }, 0);
   var statuses = ['Paid','Unpaid','Partial','Overdue'];
   document.getElementById('invBreakBody').innerHTML = statuses.map(function(st){
-    var group = _invoices.filter(function(i){ return i.status === st; });
+    var group = periodPaid.filter(function(i){ return i.status === st; });
     var val = group.reduce(function(s,i){ return s + (i.total_amount || 0); }, 0);
     var pct = totalVal > 0 ? ((val / totalVal) * 100).toFixed(1) : '0.0';
-    return '<tr><td>' + makeBadge(st) + '</td><td class="td-mono">' + group.length + '</td><td class="td-mono">' + formatCurrency(val) + '</td><td class="td-mono">' + pct + '%</td></tr>';
+    return '<tr><td>' + makeBadge(st) + '</td><td class="td-mono" style="color:var(--app-text)">' + group.length + '</td><td class="td-mono" style="color:var(--app-text)">' + formatCurrency(val) + '</td><td class="td-mono" style="color:var(--app-text)">' + pct + '%</td></tr>';
   }).join('') || '<tr><td colspan="4" class="td-muted" style="text-align:center;padding:20px">No invoices yet</td></tr>';
 }
 
@@ -637,10 +673,10 @@ function renderInventory() {
       '<span style="font-weight:600;color:var(--app-text)">' + r.part.name + catSpan + '</span>' +
       '<span class="td-mono" style="color:var(--app-muted);font-size:11px">' + (r.part.sku||'--') + '</span>' +
       '<span class="td-mono" style="text-align:right;color:' + stockColor + '">' + (r.part.qty||0) + '</span>' +
-      '<span class="td-mono" style="text-align:right">' + r.timesUsed + '</span>' +
+      '<span class="td-mono" style="text-align:right;color:var(--app-text)">' + r.timesUsed + '</span>' +
       '<span class="td-mono" style="text-align:right;color:var(--amber)">' + r.qtyUsed + '</span>' +
-      '<span class="td-mono" style="text-align:right">' + formatCurrency(stockVal) + '</span>' +
-      '<span class="td-mono" style="text-align:right">' + (r.qtyUsed > 0 ? ratePct + '%' : '--') + '</span>' +
+      '<span class="td-mono" style="text-align:right;color:var(--app-text)">' + formatCurrency(stockVal) + '</span>' +
+      '<span class="td-mono" style="text-align:right;color:var(--app-text)">' + (r.qtyUsed > 0 ? ratePct + '%' : '--') + '</span>' +
       '<span style="text-align:center"><span class="rate-badge ' + r.turnover.cls + '">' + r.turnover.label + '</span></span>' +
       '</div>';
   }).join('');
@@ -666,12 +702,12 @@ function renderSuppliers() {
           return acc + (p.purchase_order_items||[]).reduce(function(ss,i){ return ss+(i.qty||0)*(i.unit_cost||0); }, 0);
         }, 0);
         return '<div style="display:grid;grid-template-columns:1fr 100px 100px 100px 100px 100px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--app-border);">' +
-          '<span style="font-size:13px;font-weight:600">' + s.name + '</span>' +
-          '<span class="td-mono" style="text-align:right">' + pos.length + '</span>' +
+          '<span style="font-size:13px;font-weight:600;color:var(--app-text)">' + s.name + '</span>' +
+          '<span class="td-mono" style="text-align:right;color:var(--app-text)">' + pos.length + '</span>' +
           '<span class="td-mono" style="text-align:right;color:var(--success)">' + (s.on_time_rate != null ? s.on_time_rate : '--') + '%</span>' +
-          '<span class="td-mono" style="text-align:right">' + (s.lead_time_days != null ? s.lead_time_days : '--') + 'd</span>' +
-          '<span class="td-mono" style="text-align:right">' + (s.rating != null ? s.rating : '--') + '/5</span>' +
-          '<span class="td-mono" style="text-align:right">' + formatCurrency(spend) + '</span>' +
+          '<span class="td-mono" style="text-align:right;color:var(--app-text)">' + (s.lead_time_days != null ? s.lead_time_days : '--') + 'd</span>' +
+          '<span class="td-mono" style="text-align:right;color:var(--app-text)">' + (s.rating != null ? s.rating : '--') + '/5</span>' +
+          '<span class="td-mono" style="text-align:right;color:var(--amber)">' + formatCurrency(spend) + '</span>' +
           '</div>';
       }).join('')
     : '<div style="color:var(--app-muted);font-size:12px;padding:20px">No suppliers yet</div>';
@@ -720,9 +756,9 @@ function renderOps() {
   var maxMech = Math.max.apply(null, sortedMechs.map(function(e){ return e[1]; }).concat([1]));
   document.getElementById('mechChart').innerHTML = sortedMechs.length
     ? sortedMechs.map(function(e) {
-        return '<div class="turnover-row"><span class="turnover-name">' + e[0] + '</span>' +
+        return '<div class="turnover-row"><span class="turnover-name" style="color:var(--app-text)">' + e[0] + '</span>' +
           '<div class="turnover-bar-wrap"><div class="turnover-fill" style="width:' + ((e[1]/maxMech)*100) + '%;background:var(--rust)"></div></div>' +
-          '<span class="td-mono" style="font-size:12px;color:var(--app-muted);min-width:30px;text-align:right">' + e[1] + '</span></div>';
+          '<span class="td-mono" style="font-size:12px;color:var(--app-text);min-width:30px;text-align:right">' + e[1] + '</span></div>';
       }).join('')
     : '<div style="color:var(--app-muted);font-size:12px;padding:12px">No work orders yet</div>';
 
