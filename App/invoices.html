@@ -418,7 +418,13 @@ async function openGenerateModal() {
     _completedWOs = allWOs.filter(w => w.status === 'Completed' && !invoicedWOIds.has(w.id));
 
     if (!_completedWOs.length) {
-      sel.innerHTML = '<option value="">No completed work orders without invoices</option>';
+      const allCompleted = allWOs.filter(w => w.status === 'Completed').length;
+      if (allCompleted > 0) {
+        sel.innerHTML = '<option value="">All completed jobs already have invoices</option>';
+        Toast.show('Every completed work order already has an invoice generated.', 'info', 5000);
+      } else {
+        sel.innerHTML = '<option value="">No completed work orders yet</option>';
+      }
       return;
     }
     sel.innerHTML = '<option value="">— Select a work order —</option>' +
@@ -469,7 +475,13 @@ async function generateInvoice() {
     await loadInvoices();
     if (invoice?.id) openInvoice(invoice.id);
   } catch(err) {
-    Toast.show(err.message || 'Could not generate invoice', 'error');
+    const msg = err.message || '';
+    const isDuplicate = msg.includes('unique') || msg.includes('duplicate') || msg.includes('work_order_id');
+    if (isDuplicate) {
+      Toast.show('An invoice already exists for this work order. Find it in the invoices list.', 'error', 6000);
+    } else {
+      Toast.show(msg || 'Could not generate invoice', 'error');
+    }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Generate Invoice'; }
   }
