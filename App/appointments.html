@@ -170,10 +170,10 @@
             <option value="Confirmed">Confirmed</option>
             <option value="Pending">Pending</option>
             <option value="No Show">No Show</option>
+            <option value="Cancelled">Cancelled</option>
           </select>
           <select class="filter-select" id="apptTechFilter" onchange="renderApptList()">
             <option value="">All Technicians</option>
-            <option>Mike Torres</option><option>Sam Lee</option><option>Rita Patel</option>
           </select>
         </div>
         <div class="panel">
@@ -526,9 +526,12 @@ function renderApptList() {
   const q      = document.getElementById('apptSearch')?.value?.toLowerCase() || '';
   const status = document.getElementById('apptStatusFilter')?.value || '';
 
+  const tech   = document.getElementById('apptTechFilter')?.value || '';
+
   const list = apptData.filter(a => {
     if (status && a.status !== status) return false;
-    if (q && !`${a.service} ${a.appt_date} ${a.appt_time} ${a.status}`.toLowerCase().includes(q)) return false;
+    if (tech   && a.mechanic_id !== tech) return false;
+    if (q && !`${a.customer_name||''} ${a.service||''} ${a.appt_date||''} ${a.appt_time||''} ${a.status||''} ${a.mechanic_name||''}`.toLowerCase().includes(q)) return false;
     return true;
   });
 
@@ -736,6 +739,7 @@ function populateCustomerSelect(custs) {
 function populateTechFilter(staff) {
   const sel = document.getElementById('apptTechFilter');
   if (!sel) return;
+  sel.innerHTML = '<option value="">All Technicians</option>';
   staff.forEach(s => {
     const opt = document.createElement('option');
     opt.value = s.id; opt.textContent = s.full_name;

@@ -570,22 +570,6 @@ const GS = (() => {
       .update({ ...payload, updated_at: new Date().toISOString() })
       .eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
-    if (data && payload.qty !== undefined) {
-      try {
-        const qty = Number(data.qty ?? payload.qty);
-        const threshold = Number(data.threshold || 0);
-        if (qty <= threshold) {
-          await createNotification({
-            type: 'low_stock',
-            title: 'Low Stock: ' + data.name,
-            body: (qty <= 0
-              ? data.name + ' is out of stock.'
-              : data.name + ' is running low — ' + qty + ' unit' + (qty === 1 ? '' : 's') + ' left (min: ' + threshold + ').'),
-            related_id: id, related_type: 'inventory',
-          });
-        }
-      } catch(e) { console.warn('Low stock notification failed:', e.message); }
-    }
     return data;
   }
 
@@ -594,25 +578,6 @@ const GS = (() => {
       p_part_id: id, p_delta: delta, p_reason: reason,
     });
     if (error) throw error;
-    try {
-      const sid = await _shopId();
-      const { data: part } = await sb.from('inventory')
-        .select('name, qty, threshold').eq('id', id).eq('shop_id', sid).single();
-      if (part) {
-        const qty = Number(part.qty || 0);
-        const threshold = Number(part.threshold || 0);
-        if (qty <= threshold) {
-          await createNotification({
-            type: 'low_stock',
-            title: 'Low Stock: ' + part.name,
-            body: (qty <= 0
-              ? part.name + ' is out of stock.'
-              : part.name + ' is running low — ' + qty + ' unit' + (qty === 1 ? '' : 's') + ' left (min: ' + threshold + ').'),
-            related_id: id, related_type: 'inventory',
-          });
-        }
-      }
-    } catch(e) { console.warn('Low stock notification failed:', e.message); }
     return data;
   }
 
@@ -684,18 +649,7 @@ const GS = (() => {
     const { data: full } = await sb.from('purchase_orders')
       .select('*, suppliers(id,name,phone,email), purchase_order_items(*, inventory:part_id(name,sku))') 
       .eq('id', po.id).single();
-    const newPO = full || po;
-    try {
-      const supplierName = newPO.suppliers?.name || 'supplier';
-      const itemCount = (newPO.purchase_order_items || items || []).length;
-      await createNotification({
-        type: 'po_update',
-        title: 'Purchase Order Created — ' + (newPO.ref || ('PO-' + String(newPO.id).slice(0,6).toUpperCase())),
-        body: 'New PO for ' + supplierName + ' with ' + itemCount + ' item' + (itemCount === 1 ? '' : 's') + '.',
-        related_id: newPO.id, related_type: 'purchase_order',
-      });
-    } catch(e) { console.warn('PO create notification failed:', e.message); }
-    return newPO;
+    return full || po;
   }
 
   async function updatePOStatus(id, status) {
@@ -705,19 +659,6 @@ const GS = (() => {
     const { data, error } = await sb.from('purchase_orders')
       .update(updates).eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
-    try {
-      const ref = data?.ref || ('PO-' + String(id).slice(0,6).toUpperCase());
-      const notifMap = {
-        'Sent':               { title: 'PO Sent — ' + ref,      body: 'Purchase order ' + ref + ' has been sent to the supplier.' },
-        'Received':           { title: 'PO Received — ' + ref,  body: 'Purchase order ' + ref + ' has been fully received. Inventory updated.' },
-        'Partially Received': { title: 'PO Part-Received — ' + ref, body: 'Some items from ' + ref + ' have been received.' },
-        'Cancelled':          { title: 'PO Cancelled — ' + ref, body: 'Purchase order ' + ref + ' has been cancelled.' },
-      };
-      const notif = notifMap[status];
-      if (notif) {
-        await createNotification({ type: 'po_update', ...notif, related_id: id, related_type: 'purchase_order' });
-      }
-    } catch(e) { console.warn('PO status notification failed:', e.message); }
     return data;
   }
 
@@ -823,16 +764,6 @@ const GS = (() => {
       })
       .eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
-    try {
-      const ref = data?.ref || ('INV-' + String(id).slice(0,6).toUpperCase());
-      const total = data?.total_amount ? '\u20a6' + Number(data.total_amount).toLocaleString() : '';
-      await createNotification({
-        type: 'payment',
-        title: 'Payment Received — ' + ref,
-        body: 'Invoice ' + ref + ' has been marked as paid' + (total ? ' (' + total + ')' : '') + ' via ' + method + '.',
-        related_id: id, related_type: 'invoice',
-      });
-    } catch(e) { console.warn('Payment notification failed:', e.message); }
     return data;
   }
 
@@ -853,7 +784,7 @@ const GS = (() => {
 
     // Step 1: get base data including guest columns from the base table
     let baseQ = sb.from('appointments')
-      .select('id, guest_name, guest_phone, guest_email, vehicle_info, customer_id')
+      .select('id, guest_name, guest_phone, guest_email, vehicle_info, customer_id, mechanic_id')
       .eq('shop_id', sid);
     if (filters.upcoming)    baseQ = baseQ.gte('appt_date', new Date().toISOString().split('T')[0]);
     if (filters.mechanic_id) baseQ = baseQ.eq('mechanic_id', filters.mechanic_id);
@@ -869,6 +800,7 @@ const GS = (() => {
         guest_phone:  r.guest_phone,
         guest_email:  r.guest_email,
         vehicle_info: r.vehicle_info,
+        mechanic_id:  r.mechanic_id,
       };
     });
 
@@ -890,6 +822,7 @@ const GS = (() => {
         guest_email:  g.guest_email  != null ? g.guest_email  : (a.guest_email  || null),
         vehicle_info: g.vehicle_info != null ? g.vehicle_info : (a.vehicle_info || null),
         vehicle_label: a.vehicle_label || g.vehicle_info || null,
+        mechanic_id:   g.mechanic_id  != null ? g.mechanic_id  : (a.mechanic_id  || null),
       };
     });
   }
@@ -899,18 +832,6 @@ const GS = (() => {
     const { data, error } = await sb.from('appointments')
       .insert({ ...payload, shop_id: sid, ref: '' }).select().single();
     if (error) throw error;
-    try {
-      const name = payload.guest_name || 'A customer';
-      const date = payload.appt_date || '';
-      const time = payload.appt_time ? payload.appt_time.slice(0,5) : '';
-      const service = payload.service || 'service';
-      await createNotification({
-        type: 'appointment',
-        title: 'New Appointment Booked',
-        body: name + ' booked ' + service + (date ? ' on ' + date : '') + (time ? ' at ' + time : '') + '.',
-        related_id: data?.id, related_type: 'appointment',
-      });
-    } catch(e) { console.warn('Appointment notification failed:', e.message); }
     return data;
   }
 
@@ -920,20 +841,6 @@ const GS = (() => {
       .update({ ...payload, updated_at: new Date().toISOString() })
       .eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
-    if (payload.status) {
-      try {
-        const notifMap = {
-          'Confirmed':  { title: 'Appointment Confirmed', body: 'Appointment has been confirmed.' + (data?.appt_date ? ' Date: ' + data.appt_date + (data.appt_time ? ' at ' + data.appt_time.slice(0,5) : '') + '.' : '') },
-          'Cancelled':  { title: 'Appointment Cancelled', body: 'An appointment has been cancelled.' },
-          'No Show':    { title: 'Appointment No Show',   body: 'A customer did not show up for their appointment.' },
-          'Completed':  { title: 'Appointment Completed', body: 'Appointment has been completed.' },
-        };
-        const notif = notifMap[payload.status];
-        if (notif) {
-          await createNotification({ type: 'appointment', ...notif, related_id: id, related_type: 'appointment' });
-        }
-      } catch(e) { console.warn('Appointment status notification failed:', e.message); }
-    }
     return data;
   }
 
