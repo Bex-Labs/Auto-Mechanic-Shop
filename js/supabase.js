@@ -220,6 +220,102 @@ function formatCurrency(amount) {
    ================================================================= */
 const GS = (() => {
 
+  function _jsonChanges(changes) {
+    if (changes == null) return null;
+    return typeof changes === 'string' ? changes : JSON.stringify(changes);
+  }
+
+  function _parseChanges(changes) {
+    if (!changes) return null;
+    if (typeof changes === 'object') return changes;
+    try { return JSON.parse(changes); }
+    catch { return { raw: String(changes) }; }
+  }
+
+  async function _audit(tableName, recordId, action, changes = null) {
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      const actorId = session?.user?.id || null;
+      await sb.from('audit_logs').insert({
+        table_name: tableName,
+        record_id: recordId || actorId,
+        action,
+        changed_by: actorId,
+        changes: _jsonChanges(changes),
+      });
+    } catch (e) {
+      console.warn('Audit log failed:', e);
+    }
+  }
+
+  async function _actorAndStaffMap() {
+    const sid = await _shopId();
+    const { data, error } = await sb.from('profiles')
+      .select('id, full_name, role, email')
+      .eq('shop_id', sid)
+      .order('full_name');
+    if (error) throw error;
+
+    const rows = data || [];
+    const byId = {};
+    rows.forEach(row => { byId[row.id] = row; });
+    return { rows, byId };
+  }
+
+  async function getShopActivity(filters = {}) {
+    const { rows: staffRows, byId: staffMap } = await _actorAndStaffMap();
+    const staffIds = staffRows.map(row => row.id).filter(Boolean);
+    if (!staffIds.length) return [];
+
+    let q = sb.from('audit_logs')
+      .select('id, table_name, record_id, action, changed_by, changes, created_at')
+      .in('changed_by', staffIds)
+      .order('created_at', { ascending: false })
+      .limit(filters.limit || 250);
+
+    if (filters.userId) q = q.eq('changed_by', filters.userId);
+
+    if (filters.date) {
+      const start = new Date(filters.date + 'T00:00:00');
+      const end = new Date(filters.date + 'T23:59:59.999');
+      q = q.gte('created_at', start.toISOString()).lte('created_at', end.toISOString());
+    }
+
+    const { data, error } = await q;
+    if (error) throw error;
+
+    return (data || []).map(row => ({
+      ...row,
+      actor_name: staffMap[row.changed_by]?.full_name || 'Unknown',
+      actor_role: staffMap[row.changed_by]?.role || '—',
+      actor_email: staffMap[row.changed_by]?.email || null,
+      parsed_changes: _parseChanges(row.changes),
+    }));
+  }
+
+  async function logPageView(pageKey, pageTitle = null) {
+    const key = 'gs_page_view:' + pageKey;
+    try {
+      const lastSeen = sessionStorage.getItem(key);
+      if (lastSeen && (Date.now() - Number(lastSeen)) < 5 * 60 * 1000) return;
+      sessionStorage.setItem(key, String(Date.now()));
+    } catch (e) {}
+
+    const { data: { session } } = await sb.auth.getSession();
+    const actorId = session?.user?.id;
+    if (!actorId) return;
+
+    await _audit('app_pages', actorId, 'PAGE_VIEW', {
+      page_key: pageKey,
+      page_title: pageTitle || pageKey,
+      path: window.location.pathname,
+    });
+  }
+
+  async function logActivity(tableName, recordId, action, changes = null) {
+    await _audit(tableName, recordId, action, changes);
+  }
+
   /* ---------------------------------------------------------------
      CUSTOMERS
      --------------------------------------------------------------- */
@@ -245,6 +341,11 @@ const GS = (() => {
     const { data, error } = await sb.from('customers')
       .insert({ ...payload, shop_id: sid }).select().single();
     if (error) throw error;
+    await _audit('customers', data?.id, 'CREATE', {
+      full_name: `${payload.first_name || ''} ${payload.last_name || ''}`.trim() || null,
+      email: payload.email || null,
+      phone: payload.phone || null,
+    });
     return data;
   }
 
@@ -254,25 +355,13 @@ const GS = (() => {
       .update({ ...payload, updated_at: new Date().toISOString() })
       .eq('id', id).eq('shop_id', sid).select();
     if (error) throw error;
-    try {
-      const { data: { session } } = await sb.auth.getSession();
-      await sb.from('audit_logs').insert({
-        table_name: 'customers', record_id: id, action: 'UPDATE',
-        changed_by: session?.user?.id || null, changes: JSON.stringify(payload),
-      });
-    } catch(e) { console.warn('Audit log failed:', e); }
+    await _audit('customers', id, 'UPDATE', payload);
     return data?.[0];
   }
 
   async function deleteCustomer(id) {
     const sid = await _shopId();
-    try {
-      const { data: { session } } = await sb.auth.getSession();
-      await sb.from('audit_logs').insert({
-        table_name: 'customers', record_id: id, action: 'DELETE',
-        changed_by: session?.user?.id || null, changes: null,
-      });
-    } catch(e) {}
+    await _audit('customers', id, 'DELETE');
     const { error } = await sb.from('customers')
       .delete().eq('id', id).eq('shop_id', sid);
     if (error) throw error;
@@ -313,13 +402,7 @@ const GS = (() => {
   async function createVehicle(payload) {
     const { data, error } = await sb.from('vehicles').insert(payload).select();
     if (error) throw error;
-    try {
-      const { data: { session } } = await sb.auth.getSession();
-      await sb.from('audit_logs').insert({
-        table_name: 'vehicles', record_id: data?.[0]?.id,
-        action: 'CREATE', changed_by: session?.user?.id || null, changes: null,
-      });
-    } catch(e) {}
+    await _audit('vehicles', data?.[0]?.id, 'CREATE', payload);
     return data?.[0];
   }
 
@@ -328,24 +411,12 @@ const GS = (() => {
       .update({ ...payload, updated_at: new Date().toISOString() })
       .eq('id', id).select();
     if (error) throw error;
-    try {
-      const { data: { session } } = await sb.auth.getSession();
-      await sb.from('audit_logs').insert({
-        table_name: 'vehicles', record_id: id, action: 'UPDATE',
-        changed_by: session?.user?.id || null, changes: JSON.stringify(payload),
-      });
-    } catch(e) { console.warn('Audit log failed:', e); }
+    await _audit('vehicles', id, 'UPDATE', payload);
     return data?.[0];
   }
 
   async function deleteVehicle(id) {
-    try {
-      const { data: { session } } = await sb.auth.getSession();
-      await sb.from('audit_logs').insert({
-        table_name: 'vehicles', record_id: id, action: 'DELETE',
-        changed_by: session?.user?.id || null, changes: null,
-      });
-    } catch(e) {}
+    await _audit('vehicles', id, 'DELETE');
     const { error } = await sb.from('vehicles').delete().eq('id', id);
     if (error) throw error;
   }
@@ -424,6 +495,14 @@ const GS = (() => {
       .insert({ ...payload, shop_id: sid, status: 'Open', ref: '' }).select();
     if (error) throw error;
     const wo = data?.[0];
+    await _audit('work_orders', wo?.id, 'CREATE', {
+      ref: wo?.ref || null,
+      customer_id: payload.customer_id || null,
+      vehicle_id: payload.vehicle_id || null,
+      mechanic_id: payload.mechanic_id || null,
+      fault: payload.fault || null,
+      status: wo?.status || 'Open',
+    });
     if (wo && payload.mechanic_id) {
       try {
         const [custRes, vehRes] = await Promise.all([
@@ -454,6 +533,10 @@ const GS = (() => {
       .update(update).eq('id', id).eq('shop_id', sid).select();
     if (error) throw error;
     const wo = data?.[0];
+    await _audit('work_orders', id, payload.status ? 'STATUS_UPDATE' : 'UPDATE', {
+      ref: wo?.ref || null,
+      ...payload,
+    });
 
     if (payload.status) {
       try {
@@ -505,13 +588,57 @@ const GS = (() => {
       .insert({ work_order_id: workOrderId, part_id: partId, qty, unit_cost: unitCost })
       .select().single();
     if (error) throw error;
+
+    try {
+      const [partRes, woRes] = await Promise.all([
+        sb.from('inventory').select('name,sku').eq('id', partId).single(),
+        sb.from('work_orders').select('ref').eq('id', workOrderId).single(),
+      ]);
+      await _audit('work_order_parts', data?.id, 'ATTACH_PART', {
+        work_order_id: workOrderId,
+        work_order_ref: woRes.data?.ref || null,
+        part_id: partId,
+        part_name: partRes.data?.name || null,
+        sku: partRes.data?.sku || null,
+        qty,
+        unit_cost: unitCost,
+      });
+    } catch (e) {}
+
     return data;
   }
 
   async function removePartFromWorkOrder(workOrderId, partId) {
+    let removed = null;
+    try {
+      const [rowRes, partRes, woRes] = await Promise.all([
+        sb.from('work_order_parts').select('id,qty,unit_cost').eq('work_order_id', workOrderId).eq('part_id', partId).limit(1),
+        sb.from('inventory').select('name,sku').eq('id', partId).single(),
+        sb.from('work_orders').select('ref').eq('id', workOrderId).single(),
+      ]);
+      removed = {
+        row_id: rowRes.data?.[0]?.id || null,
+        qty: rowRes.data?.[0]?.qty || null,
+        unit_cost: rowRes.data?.[0]?.unit_cost || null,
+        part_name: partRes.data?.name || null,
+        sku: partRes.data?.sku || null,
+        work_order_ref: woRes.data?.ref || null,
+      };
+    } catch (e) {}
+
     const { error } = await sb.from('work_order_parts')
       .delete().eq('work_order_id', workOrderId).eq('part_id', partId);
     if (error) throw error;
+
+    await _audit('work_order_parts', removed?.row_id || workOrderId, 'REMOVE_PART', {
+      work_order_id: workOrderId,
+      work_order_ref: removed?.work_order_ref || null,
+      part_id: partId,
+      part_name: removed?.part_name || null,
+      sku: removed?.sku || null,
+      qty: removed?.qty || null,
+      unit_cost: removed?.unit_cost || null,
+    });
   }
 
   // Returns ALL work_order_parts for this shop — used by reports/turnover
@@ -562,6 +689,12 @@ const GS = (() => {
     const { data, error } = await sb.from('inventory')
       .insert({ ...payload, shop_id: sid }).select().single();
     if (error) throw error;
+    await _audit('inventory', data?.id, 'CREATE', {
+      name: data?.name || payload.name || null,
+      sku: data?.sku || payload.sku || null,
+      qty: data?.qty ?? payload.qty ?? null,
+      category: data?.category || payload.category || null,
+    });
     return data;
   }
 
@@ -571,14 +704,29 @@ const GS = (() => {
       .update({ ...payload, updated_at: new Date().toISOString() })
       .eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
+    await _audit('inventory', id, 'UPDATE', {
+      name: data?.name || null,
+      sku: data?.sku || null,
+      ...payload,
+    });
     return data;
   }
 
   async function adjustStock(id, delta, reason = '') {
+    const before = await getInventoryItem(id);
     const { data, error } = await sb.rpc('adjust_inventory_qty', {
       p_part_id: id, p_delta: delta, p_reason: reason,
     });
     if (error) throw error;
+    const after = await getInventoryItem(id);
+    await _audit('inventory', id, 'ADJUST_STOCK', {
+      name: after?.name || before?.name || null,
+      sku: after?.sku || before?.sku || null,
+      delta,
+      reason: reason || null,
+      previous_qty: before?.qty ?? null,
+      new_qty: after?.qty ?? null,
+    });
     return data;
   }
 
@@ -606,6 +754,11 @@ const GS = (() => {
     const { data, error } = await sb.from('suppliers')
       .insert({ ...payload, shop_id: sid }).select().single();
     if (error) throw error;
+    await _audit('suppliers', data?.id, 'CREATE', {
+      name: data?.name || payload.name || null,
+      contact: data?.contact || payload.contact || null,
+      phone: data?.phone || payload.phone || null,
+    });
     return data;
   }
 
@@ -614,6 +767,10 @@ const GS = (() => {
     const { data, error } = await sb.from('suppliers')
       .update(payload).eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
+    await _audit('suppliers', id, 'UPDATE', {
+      name: data?.name || null,
+      ...payload,
+    });
     return data;
   }
 
@@ -650,6 +807,14 @@ const GS = (() => {
     const { data: full } = await sb.from('purchase_orders')
       .select('*, suppliers(id,name,phone,email), purchase_order_items(*, inventory:part_id(name,sku))') 
       .eq('id', po.id).single();
+    await _audit('purchase_orders', po?.id, 'CREATE', {
+      ref: full?.ref || po?.ref || null,
+      supplier_id: supplierId,
+      supplier_name: full?.suppliers?.name || null,
+      item_count: items.length,
+      notes: notes || null,
+      expected_at: expectedAt || null,
+    });
     return full || po;
   }
 
@@ -660,17 +825,36 @@ const GS = (() => {
     const { data, error } = await sb.from('purchase_orders')
       .update(updates).eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
+    await _audit('purchase_orders', id, 'STATUS_UPDATE', {
+      ref: data?.ref || null,
+      status,
+    });
     return data;
   }
 
   async function receivePOItem(poItemId, qtyReceived) {
     const { data: current, error: fetchErr } = await sb.from('purchase_order_items')
-      .select('qty_received, qty').eq('id', poItemId).single();
+      .select('qty_received, qty, po_id, part_id').eq('id', poItemId).single();
     if (fetchErr) throw fetchErr;
     const newTotal = Math.min((current?.qty_received || 0) + qtyReceived, current?.qty || 0);
     const { data, error } = await sb.from('purchase_order_items')
       .update({ qty_received: newTotal }).eq('id', poItemId).select().single();
     if (error) throw error;
+    try {
+      const [partRes, poRes] = await Promise.all([
+        current?.part_id ? sb.from('inventory').select('name,sku').eq('id', current.part_id).single() : { data: null },
+        current?.po_id ? sb.from('purchase_orders').select('ref').eq('id', current.po_id).single() : { data: null },
+      ]);
+      await _audit('purchase_order_items', poItemId, 'RECEIVE_STOCK', {
+        po_id: current?.po_id || null,
+        po_ref: poRes.data?.ref || null,
+        part_id: current?.part_id || null,
+        part_name: partRes.data?.name || null,
+        sku: partRes.data?.sku || null,
+        qty_received_now: qtyReceived,
+        qty_received_total: newTotal,
+      });
+    } catch (e) {}
     return data;
   }
 
@@ -709,6 +893,13 @@ const GS = (() => {
     const { data, error } = await sb.from('invoices')
       .insert({ ...payload, shop_id: sid, ref: '' }).select().single();
     if (error) throw error;
+    await _audit('invoices', data?.id, 'CREATE', {
+      ref: data?.ref || null,
+      customer_id: payload.customer_id || null,
+      work_order_id: payload.work_order_id || null,
+      total_amount: payload.total_amount || null,
+      status: data?.status || payload.status || null,
+    });
     return data;
   }
 
@@ -733,6 +924,14 @@ const GS = (() => {
       labor_amount: laborAmount, parts_amount: partsAmount, tax_amount: taxAmount, total_amount: total,
     }).select().single();
     if (invErr) throw invErr;
+    await _audit('invoices', inv?.id, 'GENERATE_FROM_WO', {
+      ref: inv?.ref || null,
+      work_order_id: workOrderId,
+      total_amount: total,
+      labor_amount: laborAmount,
+      parts_amount: partsAmount,
+      tax_amount: taxAmount,
+    });
     return inv;
   }
 
@@ -765,6 +964,11 @@ const GS = (() => {
       })
       .eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
+    await _audit('invoices', id, 'MARK_PAID', {
+      ref: data?.ref || null,
+      payment_method: method,
+      total_amount: data?.total_amount ?? null,
+    });
     return data;
   }
 
@@ -774,6 +978,10 @@ const GS = (() => {
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
+    await _audit('invoices', id, 'STATUS_UPDATE', {
+      ref: data?.ref || null,
+      status,
+    });
     return data;
   }
 
@@ -831,6 +1039,14 @@ const GS = (() => {
     const { data, error } = await sb.from('appointments')
       .insert({ ...payload, shop_id: sid, ref: '' }).select().single();
     if (error) throw error;
+    await _audit('appointments', data?.id, 'CREATE', {
+      customer_id: payload.customer_id || null,
+      mechanic_id: payload.mechanic_id || null,
+      appt_date: payload.appt_date || null,
+      appt_time: payload.appt_time || null,
+      service: payload.service || null,
+      guest_name: payload.guest_name || null,
+    });
     return data;
   }
 
@@ -840,6 +1056,7 @@ const GS = (() => {
       .update({ ...payload, updated_at: new Date().toISOString() })
       .eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
+    await _audit('appointments', id, payload.status ? 'STATUS_UPDATE' : 'UPDATE', payload);
     return data;
   }
 
@@ -1044,6 +1261,7 @@ const GS = (() => {
     const { data, error } = await sb.from('profiles')
       .update(payload).eq('id', id).select().single();
     if (error) throw error;
+    await _audit('profiles', id, 'UPDATE', payload);
     return data;
   }
 
@@ -1094,6 +1312,7 @@ const GS = (() => {
     getDashboardKPIs,
     getRevenueMonthly, getRevenueWeekly,
     getStaff, updateProfile,
+    getShopActivity, logPageView, logActivity,
     getSettings, updateSettings,
   };
 })();

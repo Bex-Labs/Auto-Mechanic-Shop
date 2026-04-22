@@ -243,6 +243,13 @@ const RBAC = (() => {
     if (!user) return;
     renderNav(user.role, activePage);
     await renderSidebarUser();
+    if (typeof GS !== 'undefined' && typeof GS.logPageView === 'function') {
+      const pageTitle = String(activePage || 'dashboard')
+        .split('-')
+        .map(part => part ? part[0].toUpperCase() + part.slice(1) : '')
+        .join(' ');
+      GS.logPageView(activePage || 'dashboard', pageTitle).catch(() => {});
+    }
     // Init notification badge on every page that has a sidebar
     if (typeof initLiveNotificationBadge === 'function') {
       initLiveNotificationBadge();
@@ -333,22 +340,66 @@ const RBAC = (() => {
   }
 
   async function updateStaffRole(profileId, role) {
+    const { data: existing } = await sb.from('profiles')
+      .select('full_name, role')
+      .eq('id', profileId)
+      .single();
     const { data, error } = await sb.from('profiles')
       .update({ role })
       .eq('id', profileId)
-      .select();
+      .select()
+      .single();
     if (error) throw error;
-    return data?.[0];
+    if (typeof GS !== 'undefined' && typeof GS.logActivity === 'function') {
+      await GS.logActivity('profiles', profileId, 'ROLE_UPDATE', {
+        full_name: data?.full_name || existing?.full_name || null,
+        previous_role: existing?.role || null,
+        role,
+      });
+    }
+    return data;
   }
 
   async function deactivateStaff(profileId) {
-    // No-op: active column removed from profiles
-    return null;
+    const { data: existing } = await sb.from('profiles')
+      .select('full_name, active')
+      .eq('id', profileId)
+      .single();
+    const { data, error } = await sb.from('profiles')
+      .update({ active: false })
+      .eq('id', profileId)
+      .select()
+      .single();
+    if (error) throw error;
+    if (typeof GS !== 'undefined' && typeof GS.logActivity === 'function') {
+      await GS.logActivity('profiles', profileId, 'DEACTIVATE', {
+        full_name: data?.full_name || existing?.full_name || null,
+        previous_active: existing?.active,
+        active: false,
+      });
+    }
+    return data;
   }
 
   async function reactivateStaff(profileId) {
-    // No-op: active column removed from profiles
-    return null;
+    const { data: existing } = await sb.from('profiles')
+      .select('full_name, active')
+      .eq('id', profileId)
+      .single();
+    const { data, error } = await sb.from('profiles')
+      .update({ active: true })
+      .eq('id', profileId)
+      .select()
+      .single();
+    if (error) throw error;
+    if (typeof GS !== 'undefined' && typeof GS.logActivity === 'function') {
+      await GS.logActivity('profiles', profileId, 'REACTIVATE', {
+        full_name: data?.full_name || existing?.full_name || null,
+        previous_active: existing?.active,
+        active: true,
+      });
+    }
+    return data;
   }
 
   async function getShop() {

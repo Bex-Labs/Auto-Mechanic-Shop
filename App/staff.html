@@ -36,6 +36,72 @@
 }
 .tab-content { display:none; }
 .tab-content.active { display:block; }
+.activity-toolbar {
+  display:grid; gap:18px; margin-bottom:18px;
+}
+.activity-filters {
+  display:grid; grid-template-columns:1.1fr 1fr 1fr 1.4fr auto; gap:12px; align-items:end;
+}
+.activity-summary-grid {
+  display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px;
+}
+.activity-stat {
+  border:1px solid var(--app-border); border-radius:var(--r-md); padding:14px 16px;
+  background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+}
+.activity-stat-label {
+  font-size:11px; color:var(--app-muted); text-transform:uppercase; letter-spacing:.12em;
+}
+.activity-stat-value {
+  margin-top:8px; font-size:24px; font-weight:800; color:var(--app-text);
+}
+.activity-feed {
+  border:1px solid var(--app-border); border-radius:var(--r-md); overflow:hidden;
+}
+.activity-item {
+  padding:16px 18px; border-bottom:1px solid rgba(48,54,61,0.45);
+  background:rgba(255,255,255,0.01);
+}
+.activity-item:last-child { border-bottom:none; }
+.activity-item-head {
+  display:flex; justify-content:space-between; gap:16px; align-items:flex-start;
+}
+.activity-title {
+  font-size:14px; font-weight:700; color:var(--app-text); line-height:1.5;
+}
+.activity-detail {
+  margin-top:6px; font-size:12px; color:var(--app-muted); line-height:1.6;
+}
+.activity-meta {
+  margin-top:8px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+  font-size:11px; color:var(--app-muted); font-family:var(--ff-mono);
+}
+.activity-badge {
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:5px 10px; border-radius:999px; font-size:10px; font-weight:700;
+  letter-spacing:.12em; text-transform:uppercase; white-space:nowrap;
+  border:1px solid transparent;
+}
+.activity-badge-pages { background:rgba(96,165,250,0.12); color:#60a5fa; border-color:rgba(96,165,250,0.22); }
+.activity-badge-parts { background:rgba(232,160,32,0.12); color:var(--amber); border-color:rgba(232,160,32,0.24); }
+.activity-badge-inventory { background:rgba(52,211,153,0.12); color:#34d399; border-color:rgba(52,211,153,0.24); }
+.activity-badge-work-orders { background:rgba(167,139,250,0.12); color:#a78bfa; border-color:rgba(167,139,250,0.24); }
+.activity-badge-sales { background:rgba(31,122,74,0.14); color:var(--success); border-color:rgba(31,122,74,0.26); }
+.activity-badge-customers { background:rgba(244,114,182,0.12); color:#f472b6; border-color:rgba(244,114,182,0.24); }
+.activity-badge-appointments { background:rgba(45,212,191,0.12); color:#2dd4bf; border-color:rgba(45,212,191,0.24); }
+.activity-badge-staff { background:rgba(239,68,68,0.12); color:#f87171; border-color:rgba(239,68,68,0.24); }
+.activity-badge-other { background:rgba(148,163,184,0.12); color:#cbd5e1; border-color:rgba(148,163,184,0.24); }
+.activity-empty {
+  padding:40px 24px; text-align:center; color:var(--app-muted); font-size:14px;
+}
+@media (max-width: 1100px) {
+  .activity-filters { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .activity-summary-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 680px) {
+  .activity-filters, .activity-summary-grid { grid-template-columns:1fr; }
+  .activity-item-head { flex-direction:column; align-items:flex-start; }
+}
 </style>
 </head>
 <body>
@@ -68,6 +134,7 @@
       <span class="topbar-title">STAFF MANAGEMENT</span>
       <div class="topbar-actions">
         <button class="app-btn app-btn-ghost app-btn-sm" onclick="switchTab('invites')">📨 Pending Invites</button>
+        <button class="app-btn app-btn-ghost app-btn-sm" onclick="switchTab('activity')">Daily Activity</button>
         <button class="app-btn app-btn-primary" onclick="Modal.open('addStaffModal')">+ Add Staff Member</button>
       </div>
     </div>
@@ -79,9 +146,10 @@
 
       <!-- TABS -->
       <div class="app-sub-nav" style="margin-bottom:var(--space-4)">
-        <button class="app-sub-link active" data-tab-btn onclick="switchTab('active',this)">Active Staff</button>
-        <button class="app-sub-link" data-tab-btn onclick="switchTab('invites',this)">Pending Invites</button>
-        <button class="app-sub-link" data-tab-btn onclick="switchTab('inactive',this)">Inactive</button>
+        <button class="app-sub-link active" data-tab-btn="active" onclick="switchTab('active',this)">Active Staff</button>
+        <button class="app-sub-link" data-tab-btn="invites" onclick="switchTab('invites',this)">Pending Invites</button>
+        <button class="app-sub-link" data-tab-btn="inactive" onclick="switchTab('inactive',this)">Inactive</button>
+        <button class="app-sub-link" data-tab-btn="activity" onclick="switchTab('activity',this)">Activity</button>
       </div>
 
       <!-- ACTIVE STAFF -->
@@ -112,6 +180,52 @@
         <div class="panel">
           <div class="panel-header"><span class="panel-title">INACTIVE STAFF</span></div>
           <div id="inactiveList"></div>
+        </div>
+      </div>
+
+      <!-- ACTIVITY -->
+      <div class="tab-content" id="tab-activity">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">DAILY STAFF ACTIVITY</span>
+            <button class="app-btn app-btn-ghost app-btn-sm" onclick="loadActivity(true)">↻ Refresh</button>
+          </div>
+          <div class="activity-toolbar">
+            <div class="activity-filters">
+              <div class="app-form-group" style="margin:0">
+                <label class="app-label" for="activityDate">Date</label>
+                <input class="app-input" type="date" id="activityDate" onchange="loadActivity(true)">
+              </div>
+              <div class="app-form-group" style="margin:0">
+                <label class="app-label" for="activityUserFilter">Staff Member</label>
+                <select class="app-input" id="activityUserFilter" onchange="loadActivity(true)">
+                  <option value="">All Staff</option>
+                </select>
+              </div>
+              <div class="app-form-group" style="margin:0">
+                <label class="app-label" for="activityTypeFilter">Activity Type</label>
+                <select class="app-input" id="activityTypeFilter" onchange="renderActivity()">
+                  <option value="">All Activity</option>
+                  <option value="pages">Page Views</option>
+                  <option value="parts">Parts Usage</option>
+                  <option value="inventory">Inventory</option>
+                  <option value="work-orders">Work Orders</option>
+                  <option value="sales">Invoices & Revenue</option>
+                  <option value="customers">Customers & Vehicles</option>
+                  <option value="appointments">Appointments</option>
+                  <option value="staff">Staff Changes</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div class="app-form-group" style="margin:0">
+                <label class="app-label" for="activitySearch">Search</label>
+                <input class="search-box" id="activitySearch" placeholder="Part, work order, page, or staff name" oninput="renderActivity()" style="width:100%">
+              </div>
+              <button class="app-btn app-btn-ghost app-btn-sm" style="align-self:end" onclick="clearActivityFilters()">Reset</button>
+            </div>
+            <div class="activity-summary-grid" id="activitySummary"></div>
+          </div>
+          <div class="activity-feed" id="activityList"></div>
         </div>
       </div>
 
@@ -294,6 +408,7 @@
 <script>
 let staffData   = [];
 let inviteData  = [];
+let activityData = [];
 let currentUser = null;
 let editingProfileId = null;
 let activeAddTab = 'invite';
@@ -302,17 +417,20 @@ async function initPage() {
   currentUser = await RBAC.guardPage('staff');
   if (!currentUser) return;
   await RBAC.initSidebar('staff');
+  initActivityControls();
   await loadAll();
 }
 
 async function loadAll() {
   await Promise.all([loadStaff(), loadInvites()]);
   renderStaffStats();
+  await loadActivity(true);
 }
 
 async function loadStaff() {
   try {
     staffData = await RBAC.getShopStaff();
+    populateActivityStaffFilter();
     renderStaff();
   } catch(e) {
     Toast.show('Failed to load staff', 'error');
@@ -324,6 +442,274 @@ async function loadInvites() {
     inviteData = await RBAC.getShopInvites();
     renderInvites();
   } catch(e) {}
+}
+
+function getTodayInputValue() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+function initActivityControls() {
+  const dateEl = document.getElementById('activityDate');
+  if (dateEl && !dateEl.value) dateEl.value = getTodayInputValue();
+  populateActivityStaffFilter();
+  renderActivitySummary([]);
+}
+
+function populateActivityStaffFilter() {
+  const select = document.getElementById('activityUserFilter');
+  if (!select) return;
+  const currentValue = select.value || '';
+  const options = ['<option value="">All Staff</option>'].concat(
+    staffData.map(staff => {
+      const name = escapeHtml(staff.full_name || staff.email || 'Unknown');
+      return `<option value="${escapeHtml(staff.id)}">${name}</option>`;
+    })
+  );
+  select.innerHTML = options.join('');
+  if ([...select.options].some(option => option.value === currentValue)) {
+    select.value = currentValue;
+  }
+}
+
+async function loadActivity(forceRefresh = false) {
+  const dateEl = document.getElementById('activityDate');
+  const userEl = document.getElementById('activityUserFilter');
+  const listEl = document.getElementById('activityList');
+  if (!dateEl || !userEl || !listEl) return;
+
+  if (!dateEl.value) dateEl.value = getTodayInputValue();
+  listEl.innerHTML = `<div class="activity-empty">${forceRefresh ? "Loading today's activity…" : 'Loading activity…'}</div>`;
+
+  try {
+    activityData = await GS.getShopActivity({
+      date: dateEl.value,
+      userId: userEl.value || null,
+      limit: 300,
+    });
+    renderActivity();
+  } catch (e) {
+    activityData = [];
+    renderActivitySummary([]);
+    listEl.innerHTML = `<div class="activity-empty">Could not load staff activity right now.</div>`;
+  }
+}
+
+function clearActivityFilters() {
+  const dateEl = document.getElementById('activityDate');
+  const userEl = document.getElementById('activityUserFilter');
+  const typeEl = document.getElementById('activityTypeFilter');
+  const searchEl = document.getElementById('activitySearch');
+  if (dateEl) dateEl.value = getTodayInputValue();
+  if (userEl) userEl.value = '';
+  if (typeEl) typeEl.value = '';
+  if (searchEl) searchEl.value = '';
+  loadActivity(true);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function humanizeKey(value) {
+  return String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, ch => ch.toUpperCase())
+    .trim();
+}
+
+function formatCount(value, fallback = '1') {
+  const num = Number(value);
+  if (Number.isFinite(num) && num > 0) return String(num);
+  return fallback;
+}
+
+function formatMoney(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  return '₦' + num.toLocaleString('en-NG', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function getActivityCategory(row) {
+  switch (row.table_name) {
+    case 'app_pages': return 'pages';
+    case 'work_order_parts': return 'parts';
+    case 'inventory':
+    case 'purchase_orders':
+    case 'purchase_order_items':
+    case 'suppliers': return 'inventory';
+    case 'work_orders': return 'work-orders';
+    case 'invoices': return 'sales';
+    case 'customers':
+    case 'vehicles': return 'customers';
+    case 'appointments': return 'appointments';
+    case 'profiles': return 'staff';
+    default: return 'other';
+  }
+}
+
+function getActivityBadgeLabel(category) {
+  return {
+    pages: 'Page View',
+    parts: 'Parts',
+    inventory: 'Inventory',
+    'work-orders': 'Work Order',
+    sales: 'Sales',
+    customers: 'Customer',
+    appointments: 'Booking',
+    staff: 'Staff',
+    other: 'Other',
+  }[category] || 'Other';
+}
+
+function describeActivity(row) {
+  const changes = row.parsed_changes || {};
+  const category = getActivityCategory(row);
+  let title = humanizeKey(row.action || 'activity');
+  let detail = humanizeKey(row.table_name || 'record');
+
+  if (row.table_name === 'app_pages' && row.action === 'PAGE_VIEW') {
+    title = `Viewed ${changes.page_title || humanizeKey(changes.page_key) || 'a page'}`;
+    detail = changes.path || 'Inside the app';
+  } else if (row.table_name === 'work_order_parts' && row.action === 'ATTACH_PART') {
+    const qty = formatCount(changes.qty || changes.quantity);
+    title = `Used ${qty} x ${changes.part_name || 'part'}`;
+    detail = changes.work_order_ref ? `Attached to ${changes.work_order_ref}` : 'Added to a work order';
+  } else if (row.table_name === 'work_order_parts' && row.action === 'REMOVE_PART') {
+    const qty = formatCount(changes.qty || changes.quantity);
+    title = `Removed ${qty} x ${changes.part_name || 'part'}`;
+    detail = changes.work_order_ref ? `Removed from ${changes.work_order_ref}` : 'Removed from a work order';
+  } else if (row.table_name === 'inventory' && row.action === 'ADJUST_STOCK') {
+    const delta = Number(changes.delta);
+    const deltaLabel = Number.isFinite(delta) && delta !== 0 ? ` (${delta > 0 ? '+' : ''}${delta})` : '';
+    title = `Adjusted stock for ${changes.part_name || changes.name || 'inventory item'}${deltaLabel}`;
+    if (changes.previous_qty != null && changes.new_qty != null) {
+      detail = `${changes.previous_qty} -> ${changes.new_qty}`;
+    } else {
+      detail = changes.reason || 'Manual stock adjustment';
+    }
+  } else if (row.table_name === 'purchase_order_items' && row.action === 'RECEIVE_STOCK') {
+    const qty = formatCount(changes.qty || changes.received_qty);
+    title = `Received ${qty} x ${changes.part_name || 'part'}`;
+    detail = changes.po_ref ? `Purchase order ${changes.po_ref}` : 'Received into inventory';
+  } else if (row.table_name === 'work_orders' && row.action === 'STATUS_UPDATE') {
+    title = `Updated ${changes.reference || changes.work_order_ref || 'work order'} to ${changes.status || changes.new_status || 'a new status'}`;
+    detail = changes.vehicle || changes.customer || 'Work order status changed';
+  } else if (row.table_name === 'work_orders' && row.action === 'CREATE') {
+    title = `Created ${changes.reference || 'a new work order'}`;
+    detail = changes.vehicle || changes.customer || 'Work order opened';
+  } else if (row.table_name === 'invoices' && row.action === 'MARK_PAID') {
+    title = `Marked ${changes.invoice_ref || 'invoice'} as paid`;
+    detail = changes.payment_method ? `Paid via ${changes.payment_method}` : (formatMoney(changes.amount) || 'Payment recorded');
+  } else if (row.table_name === 'invoices' && row.action === 'CREATE') {
+    title = `Created ${changes.invoice_ref || 'a new invoice'}`;
+    detail = formatMoney(changes.amount) || 'Invoice created';
+  } else if (row.table_name === 'invoices' && row.action === 'STATUS_UPDATE') {
+    title = `Updated ${changes.invoice_ref || 'invoice'} to ${changes.status || changes.new_status || 'a new status'}`;
+    detail = formatMoney(changes.amount) || 'Invoice status changed';
+  } else if (row.table_name === 'customers') {
+    title = `${humanizeKey((row.action || 'updated').toLowerCase())} customer`;
+    detail = changes.full_name || changes.email || changes.phone || 'Customer record changed';
+  } else if (row.table_name === 'vehicles') {
+    title = `${humanizeKey((row.action || 'updated').toLowerCase())} vehicle`;
+    detail = [changes.make, changes.model, changes.plate_no].filter(Boolean).join(' ') || 'Vehicle record changed';
+  } else if (row.table_name === 'appointments') {
+    title = `${humanizeKey((row.action || 'updated').toLowerCase())} appointment`;
+    detail = changes.customer_name || changes.vehicle || changes.service_type || 'Appointment activity recorded';
+  } else if (row.table_name === 'profiles' && row.action === 'ROLE_UPDATE') {
+    title = `Changed ${changes.full_name || 'staff member'} role to ${changes.role || 'new role'}`;
+    detail = changes.previous_role ? `From ${changes.previous_role}` : 'Staff role updated';
+  } else if (row.table_name === 'profiles' && row.action === 'DEACTIVATE') {
+    title = `Deactivated ${changes.full_name || 'staff member'}`;
+    detail = 'Account access removed';
+  } else if (row.table_name === 'profiles' && row.action === 'REACTIVATE') {
+    title = `Reactivated ${changes.full_name || 'staff member'}`;
+    detail = 'Account access restored';
+  }
+
+  return { category, title, detail };
+}
+
+function renderActivitySummary(rows) {
+  const el = document.getElementById('activitySummary');
+  if (!el) return;
+  const pages = rows.filter(row => getActivityCategory(row) === 'pages').length;
+  const parts = rows.filter(row => getActivityCategory(row) === 'parts').length;
+  const stock = rows.filter(row => getActivityCategory(row) === 'inventory').length;
+  const staff = new Set(rows.map(row => row.changed_by).filter(Boolean)).size;
+  el.innerHTML = `
+    <div class="activity-stat"><div class="activity-stat-label">Events</div><div class="activity-stat-value">${rows.length}</div></div>
+    <div class="activity-stat"><div class="activity-stat-label">Page Views</div><div class="activity-stat-value">${pages}</div></div>
+    <div class="activity-stat"><div class="activity-stat-label">Parts / Stock</div><div class="activity-stat-value">${parts + stock}</div></div>
+    <div class="activity-stat"><div class="activity-stat-label">Active Staff</div><div class="activity-stat-value">${staff}</div></div>
+  `;
+}
+
+function renderActivity() {
+  const listEl = document.getElementById('activityList');
+  if (!listEl) return;
+
+  const typeFilter = document.getElementById('activityTypeFilter')?.value || '';
+  const searchQuery = (document.getElementById('activitySearch')?.value || '').trim().toLowerCase();
+  const filtered = activityData.filter(row => {
+    const category = getActivityCategory(row);
+    if (typeFilter && category !== typeFilter) return false;
+    if (!searchQuery) return true;
+    const summary = describeActivity(row);
+    const haystack = [
+      row.actor_name,
+      row.actor_role,
+      row.actor_email,
+      row.action,
+      row.table_name,
+      summary.title,
+      summary.detail,
+    ].join(' ').toLowerCase();
+    return haystack.includes(searchQuery);
+  });
+
+  renderActivitySummary(filtered);
+
+  if (!filtered.length) {
+    listEl.innerHTML = `<div class="activity-empty">No matching activity for the selected day and filters.</div>`;
+    return;
+  }
+
+  listEl.innerHTML = filtered.map(row => {
+    const summary = describeActivity(row);
+    const actorName = escapeHtml(row.actor_name || 'Unknown');
+    const actorRole = escapeHtml(row.actor_role || '—');
+    const actorEmail = escapeHtml(row.actor_email || '');
+    const time = escapeHtml(new Date(row.created_at).toLocaleTimeString('en-NG', {
+      hour: 'numeric',
+      minute: '2-digit',
+    }));
+    return `
+      <div class="activity-item">
+        <div class="activity-item-head">
+          <div>
+            <div class="activity-title">${escapeHtml(summary.title)}</div>
+            <div class="activity-detail">${escapeHtml(summary.detail)}</div>
+          </div>
+          <span class="activity-badge activity-badge-${summary.category}">${escapeHtml(getActivityBadgeLabel(summary.category))}</span>
+        </div>
+        <div class="activity-meta">
+          <span>${actorName}</span>
+          <span>${actorRole}</span>
+          ${actorEmail ? `<span>${actorEmail}</span>` : ''}
+          <span>${time}</span>
+        </div>
+      </div>`;
+  }).join('');
 }
 
 /* ── STATS ── */
@@ -490,7 +876,9 @@ function switchTab(tab, el) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('[data-tab-btn]').forEach(b => b.classList.remove('active'));
   document.getElementById(`tab-${tab}`)?.classList.add('active');
-  if (el) el.classList.add('active');
+  const activeBtn = el || document.querySelector(`[data-tab-btn="${tab}"]`);
+  if (activeBtn) activeBtn.classList.add('active');
+  if (tab === 'activity') loadActivity();
 }
 
 function switchAddTab(tab, el) {
@@ -662,8 +1050,7 @@ async function confirmDeactivate() {
   var btn = document.getElementById('deactivateConfirmBtn');
   btn.disabled = true; btn.textContent = 'Deactivating…';
   try {
-    var { error } = await sb.from('profiles').update({ active: false }).eq('id', _deactivateId);
-    if (error) throw error;
+    await RBAC.deactivateStaff(_deactivateId);
     Modal.close('deactivateModal');
     Toast.show(_deactivateName + ' has been deactivated', 'success');
     await loadAll();
@@ -687,8 +1074,7 @@ async function confirmReactivate() {
   var btn = document.getElementById('reactivateConfirmBtn');
   btn.disabled = true; btn.textContent = 'Reactivating…';
   try {
-    var { error } = await sb.from('profiles').update({ active: true }).eq('id', _reactivateId);
-    if (error) throw error;
+    await RBAC.reactivateStaff(_reactivateId);
     Modal.close('reactivateModal');
     Toast.show(_reactivateName + ' has been reactivated', 'success');
     await loadAll();
