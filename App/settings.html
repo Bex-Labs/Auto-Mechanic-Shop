@@ -474,9 +474,9 @@
                   <!-- Free card -->
                   <div class="plan-card" id="freeCard">
                     <div>
-                      <div class="plan-name" style="font-size:16px">Free</div>
-                      <div style="font-size:12px;color:var(--app-muted);margin-top:4px;line-height:1.6">
-                        Up to 3 staff · Up to 50 customers · Core features
+                      <div class="plan-name" id="starterPlanName" style="font-size:16px">Starter</div>
+                      <div id="starterFeatures" style="font-size:12px;color:var(--app-muted);margin-top:4px;line-height:1.6">
+                        Up to 5 users · Up to 100 customers · Core workflow
                       </div>
                     </div>
                     <div style="text-align:right">
@@ -493,8 +493,8 @@
                         <span style="background:var(--amber);color:var(--ink);font-family:var(--ff-mono);font-size:9px;letter-spacing:1px;padding:2px 8px;border-radius:3px;font-weight:700">RECOMMENDED</span>
                       </div>
                       <div id="proFeatures" style="font-size:12px;color:var(--app-muted);line-height:1.7">
-                        Unlimited staff & customers · WhatsApp notifications<br>
-                        Reports & analytics · Invoice payments · Priority support
+                        Up to 25 users · Unlimited customers<br>
+                        Reports & analytics · Online invoice payments · Priority support
                       </div>
                       <div id="proSavings" style="font-size:11px;color:#6ee7b7;margin-top:6px;font-family:var(--ff-mono);display:none"></div>
                     </div>
@@ -1092,20 +1092,46 @@ let _selectedCycle = 'monthly';
 let _billingStatus = null;
 let _resolveTimer  = null;
 
+function renderPlanCards() {
+  const starter = BillingStatus.getPlanConfig('free');
+  const pro = BillingStatus.getPlanConfig('pro');
+
+  const starterNameEl = document.getElementById('starterPlanName');
+  const starterFeaturesEl = document.getElementById('starterFeatures');
+  const proFeaturesEl = document.getElementById('proFeatures');
+
+  if (starterNameEl) starterNameEl.textContent = starter.label;
+  if (starterFeaturesEl) {
+    starterFeaturesEl.textContent = [
+      BillingStatus.formatLimit('staff', starter.limits.staff),
+      BillingStatus.formatLimit('customers', starter.limits.customers),
+      'Core workflow'
+    ].join(' · ');
+  }
+  if (proFeaturesEl) {
+    proFeaturesEl.innerHTML = [
+      BillingStatus.formatLimit('staff', pro.limits.staff),
+      BillingStatus.formatLimit('customers', pro.limits.customers)
+    ].join(' · ') + '<br>Reports & analytics · Online invoice payments · Priority support';
+  }
+}
+
 async function loadBillingSection() {
   _billingStatus = await BillingStatus.get();
+  renderPlanCards();
 
   // Plan status bar
   const statusBar = document.getElementById('planStatusBar');
   if (statusBar) {
     if (_billingStatus.isProActive) {
+      const proPlan = BillingStatus.getPlanConfig(_billingStatus);
       const exp = _billingStatus.expiresAt
         ? ' · Renews ' + new Date(_billingStatus.expiresAt).toLocaleDateString('en-NG',{day:'numeric',month:'short',year:'numeric'})
         : '';
       statusBar.innerHTML = `
         <div style="background:rgba(31,122,74,0.1);border:1px solid rgba(31,122,74,0.25);border-radius:var(--r-sm);padding:10px 14px;font-size:13px;color:#6ee7b7;display:flex;align-items:center;gap:8px">
           ✅ <strong>Pro Plan Active</strong>
-          <span style="color:var(--app-muted);font-size:12px">${_billingStatus.billingCycle === 'annual' ? '· Annual billing' : '· Monthly billing'}${exp}</span>
+          <span style="color:var(--app-muted);font-size:12px">${BillingStatus.formatLimit('staff', proPlan.limits.staff)} · ${BillingStatus.formatLimit('customers', proPlan.limits.customers)} ${_billingStatus.billingCycle === 'annual' ? '· Annual billing' : '· Monthly billing'}${exp}</span>
         </div>`;
       document.getElementById('upgradeSection').style.display = 'none';
       document.getElementById('proActiveSection').style.display = 'block';
@@ -1115,10 +1141,11 @@ async function loadBillingSection() {
           + 'Renews ' + new Date(_billingStatus.expiresAt).toLocaleDateString('en-NG',{day:'numeric',month:'long',year:'numeric'});
       }
     } else {
+      const starterPlan = BillingStatus.getPlanConfig(_billingStatus);
       statusBar.innerHTML = `
         <div style="background:rgba(232,160,32,0.08);border:1px solid rgba(232,160,32,0.2);border-radius:var(--r-sm);padding:10px 14px;font-size:13px;color:var(--amber);display:flex;align-items:center;gap:8px">
-          ⭐ You are on the <strong>Free Plan</strong>
-          <span style="color:var(--app-muted);font-size:12px">· Up to 3 staff, 50 customers</span>
+          ⭐ You are on the <strong>${starterPlan.label} Plan</strong>
+          <span style="color:var(--app-muted);font-size:12px">· ${BillingStatus.formatLimit('staff', starterPlan.limits.staff)}, ${BillingStatus.formatLimit('customers', starterPlan.limits.customers).toLowerCase()}</span>
         </div>`;
     }
   }

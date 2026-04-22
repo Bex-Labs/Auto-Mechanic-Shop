@@ -17,6 +17,23 @@ const BILLING = {
   // ── Replace with your live key when going live ────────────────
   PAYSTACK_PUBLIC_KEY: 'pk_live_be4f4d74116e85025bd14090699f3fd3979cd821',
 
+  PLAN_TIERS: {
+    free: {
+      key:          'free',
+      label:        'Starter',
+      limits:       { staff: 5, customers: 100 },
+      featureAccess:{ reports: false, onlinePayments: false },
+      summary:      'Up to 5 users · Up to 100 customers · Core workflow',
+    },
+    pro: {
+      key:          'pro',
+      label:        'Pro',
+      limits:       { staff: 25, customers: null },
+      featureAccess:{ reports: true, onlinePayments: true },
+      summary:      'Up to 25 users · Unlimited customers · Reports & online payments',
+    },
+  },
+
   // ── Plan prices in kobo (Paystack uses the smallest currency unit)
   PLANS: {
     monthly: {
@@ -53,8 +70,11 @@ const BillingStatus = {
       if (!shop) return { plan: 'free', isProActive: false };
       const isProActive = shop.plan === 'pro' &&
         (!shop.plan_expires_at || new Date(shop.plan_expires_at) > new Date());
+      const planKey = isProActive ? 'pro' : 'free';
       return {
         plan:             shop.plan || 'free',
+        planKey,
+        planLabel:        BILLING.PLAN_TIERS[planKey]?.label || 'Starter',
         isProActive,
         expiresAt:        shop.plan_expires_at,
         billingCycle:     shop.plan_billing_cycle,
@@ -64,30 +84,64 @@ const BillingStatus = {
         bankAccountNumber:shop.bank_account_number,
       };
     } catch(e) {
-      return { plan: 'free', isProActive: false };
+      return { plan: 'free', planKey: 'free', planLabel: 'Starter', isProActive: false };
     }
   },
 
-  // Free plan hard limits
-  FREE_LIMITS: {
-    staff:     3,
-    customers: 50,
+  getPlanKey(status) {
+    return status?.isProActive ? 'pro' : 'free';
+  },
+
+  getPlanConfig(statusOrKey = null) {
+    const key = typeof statusOrKey === 'string'
+      ? statusOrKey
+      : this.getPlanKey(statusOrKey);
+    return BILLING.PLAN_TIERS[key] || BILLING.PLAN_TIERS.free;
+  },
+
+  getResourceLabel(resource, count = 2) {
+    const base = {
+      staff: 'user',
+      customers: 'customer',
+    }[resource] || resource.replace(/s$/, '');
+    return count === 1 ? base : base + 's';
+  },
+
+  formatLimit(resource, limit) {
+    if (!limit) return `Unlimited ${this.getResourceLabel(resource)}`;
+    return `Up to ${limit} ${this.getResourceLabel(resource, limit)}`;
+  },
+
+  async hasFeature(feature) {
+    const status = await this.get();
+    return !!this.getPlanConfig(status).featureAccess?.[feature];
   },
 
   async checkLimit(resource, currentCount) {
     const status = await this.get();
-    if (status.isProActive) return { allowed: true };
-    const limit = this.FREE_LIMITS[resource];
-    if (!limit) return { allowed: true };
+    const plan = this.getPlanConfig(status);
+    const limit = plan.limits?.[resource];
+    if (!limit) return { allowed: true, planKey: plan.key, planLabel: plan.label };
     if (currentCount >= limit) {
+      const proPlan = this.getPlanConfig('pro');
       return {
         allowed:  false,
         limit,
         resource,
-        message:  `Free plan is limited to ${limit} ${resource}. Upgrade to Pro for unlimited ${resource}.`,
+        planKey:  plan.key,
+        planLabel: plan.label,
+        message:  plan.key === 'free'
+          ? `${plan.label} includes up to ${limit} ${this.getResourceLabel(resource, limit)}. Upgrade to ${proPlan.label} for ${this.formatLimit('staff', proPlan.limits.staff)}, reports, and online payments.`
+          : `${plan.label} currently includes up to ${limit} ${this.getResourceLabel(resource, limit)}. Contact support if you need a higher limit.`,
       };
     }
-    return { allowed: true, remaining: limit - currentCount };
+    return {
+      allowed: true,
+      remaining: limit - currentCount,
+      limit,
+      planKey: plan.key,
+      planLabel: plan.label,
+    };
   },
 };
 

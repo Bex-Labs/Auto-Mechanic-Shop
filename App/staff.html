@@ -405,6 +405,7 @@
 <script src="../js/main.js"></script>
 <script src="../js/supabase.js"></script>
 <script src="../js/rbac.js"></script>
+<script src="../js/billing.js"></script>
 <script>
 let staffData   = [];
 let inviteData  = [];
@@ -444,6 +445,7 @@ async function loadInvites() {
   } catch(e) {}
 }
 
+<<<<<<< Updated upstream
 function getTodayInputValue() {
   const now = new Date();
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
@@ -710,6 +712,24 @@ function renderActivity() {
         </div>
       </div>`;
   }).join('');
+=======
+function getActiveStaffCount() {
+  return staffData.filter(s => s.active !== false).length;
+}
+
+function getPendingInviteCount() {
+  const now = Date.now();
+  return inviteData.filter(i => !i.accepted && (!i.expires_at || new Date(i.expires_at).getTime() > now)).length;
+}
+
+async function ensureStaffCapacity(includePendingInvites) {
+  if (typeof BillingStatus === 'undefined') return true;
+  const currentSeats = getActiveStaffCount() + (includePendingInvites ? getPendingInviteCount() : 0);
+  const check = await BillingStatus.checkLimit('staff', currentSeats);
+  if (check.allowed) return true;
+  Toast.show(check.message + ' Upgrade from Settings → Plan & Billing when you need more seats.', 'error', 8000);
+  return false;
+>>>>>>> Stashed changes
 }
 
 /* ── STATS ── */
@@ -903,6 +923,7 @@ async function handleSendInvite() {
 
   if (!email) { Toast.show('Please enter an email address', 'error'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { Toast.show('Enter a valid email address', 'error'); return; }
+  if (!(await ensureStaffCapacity(true))) return;
 
   const btn = document.getElementById('addStaffBtn');
   btn.disabled = true; btn.textContent = 'Generating…';
@@ -938,6 +959,7 @@ async function handleDirectCreate() {
   if (!fn)    { Toast.show('First name is required', 'error'); return; }
   if (!email) { Toast.show('Email address is required', 'error'); return; }
   if (!pw || pw.length < 6) { Toast.show('Password must be at least 6 characters', 'error'); return; }
+  if (!(await ensureStaffCapacity(false))) return;
 
   const { data: { session: adminSession } } = await sb.auth.getSession();
   if (!adminSession) { Toast.show('Session expired — please sign in again', 'error'); return; }

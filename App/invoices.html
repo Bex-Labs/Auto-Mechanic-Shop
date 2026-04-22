@@ -201,12 +201,16 @@ let invoiceData    = [];
 let _payingInvoiceId = null;
 let _completedWOs  = [];
 let _shopSettings  = null;
+let _billingStatus = null;
 
 // ── INIT ─────────────────────────────────────────────────────────
 async function initPage() {
   const _user = await RBAC.guardPage('invoices');
   if (!_user) return;
   await RBAC.initSidebar('invoices');
+  if (typeof BillingStatus !== 'undefined') {
+    _billingStatus = await BillingStatus.get();
+  }
   await loadInvoices();
 
   Realtime.subscribe('invoices', {
@@ -235,6 +239,26 @@ function switchPane(btn) {
 
 // ── ALIAS for oninput calls in HTML ──────────────────────────────
 function renderInvTable(filter) { renderInvoiceTable(filter); }
+
+function canUseOnlinePayments() {
+  return !!_billingStatus?.isProActive;
+}
+
+function showOnlinePaymentUpgrade() {
+  Toast.show('Online invoice payments are available on Pro. Upgrade from Settings → Plan & Billing to enable Paystack checkout.', 'info', 7000);
+}
+
+function renderOnlinePaymentAction(inv) {
+  if (canUseOnlinePayments()) {
+    return `<button class="app-btn app-btn-sm" onclick="payViaPaystack('${inv.id}')"
+      style="background:#25D366;color:white;border:none;font-size:10px;padding:4px 8px;border-radius:4px;cursor:pointer">
+      💳 Pay Online
+    </button>`;
+  }
+  return `<button class="app-btn app-btn-ghost app-btn-sm" onclick="showOnlinePaymentUpgrade()" title="Available on Pro">
+    ⭐ Pro Pay
+  </button>`;
+}
 
 // ── RECORD PAYMENT ────────────────────────────────────────────────
 async function markPaid(id) {
@@ -272,7 +296,12 @@ async function recordPayment() {
 async function payViaPaystack(id) {
   const inv = invoiceData.find(i => i.id === id);
   if (!inv) return;
-  const billing = await BillingStatus.get();
+  const billing = _billingStatus || await BillingStatus.get();
+  _billingStatus = billing;
+  if (!billing.isProActive) {
+    showOnlinePaymentUpgrade();
+    return;
+  }
   let customerEmail = '';
   if (inv.customer_id) {
     try {
@@ -321,10 +350,7 @@ function renderInvoiceTable(filter) {
             <button class="app-btn app-btn-ghost app-btn-sm" onclick="openInvoice('${inv.id}')">👁 View</button>
             ${inv.status !== 'Paid' ? `
               <button class="app-btn app-btn-ghost app-btn-sm" onclick="markPaid('${inv.id}')">Record</button>
-              <button class="app-btn app-btn-sm" onclick="payViaPaystack('${inv.id}')"
-                style="background:#25D366;color:white;border:none;font-size:10px;padding:4px 8px;border-radius:4px;cursor:pointer">
-                💳 Pay Online
-              </button>` : `<span style="color:var(--success);font-size:11px;font-family:var(--ff-mono)">✓ Paid</span>`}
+              ${renderOnlinePaymentAction(inv)}` : `<span style="color:var(--success);font-size:11px;font-family:var(--ff-mono)">✓ Paid</span>`}
           </div>
         </td>
       </tr>`).join('') : emptyRow;
@@ -350,10 +376,7 @@ function renderInvoiceTable(filter) {
             <div style="display:flex;gap:4px">
               <button class="app-btn app-btn-ghost app-btn-sm" onclick="openInvoice('${inv.id}')">👁 View</button>
               <button class="app-btn app-btn-ghost app-btn-sm" onclick="markPaid('${inv.id}')">Record</button>
-              <button class="app-btn app-btn-sm" onclick="payViaPaystack('${inv.id}')"
-                style="background:#25D366;color:white;border:none;font-size:10px;padding:4px 8px;border-radius:4px;cursor:pointer">
-                💳 Pay Online
-              </button>
+              ${renderOnlinePaymentAction(inv)}
             </div>
           </td>
         </tr>`;

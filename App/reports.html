@@ -306,6 +306,7 @@
 <script src="../js/main.js"></script>
 <script src="../js/supabase.js"></script>
 <script src="../js/rbac.js"></script>
+<script src="../js/billing.js"></script>
 <script>
 /* ── LOCAL: getAllWorkOrderParts ──────────────────────────────────
    Fetches work_order_parts joined with work_orders to get the job
@@ -384,10 +385,58 @@ function updateLastUpdated() {
   el.title = 'Data auto-refreshes when changes are made anywhere in the app';
 }
 
+function renderReportsUpgradeState() {
+  var contentEl = document.querySelector('.app-content');
+  var subNavEl = document.querySelector('.app-sub-nav');
+  var topbarMetaEl = document.getElementById('reportsLastUpdated');
+  var starterPlan = BillingStatus.getPlanConfig('free');
+  var proPlan = BillingStatus.getPlanConfig('pro');
+
+  if (subNavEl) subNavEl.style.display = 'none';
+  if (topbarMetaEl) topbarMetaEl.textContent = 'Pro feature';
+
+  if (!contentEl) return;
+  contentEl.innerHTML = `
+    <div class="report-card" style="max-width:780px;margin:0 auto">
+      <div class="report-card-title">REPORTS ARE INCLUDED IN PRO</div>
+      <div class="report-card-sub">Starter keeps your daily workflow running, while Pro unlocks deeper visibility for the shop owner.</div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:18px">
+        <div style="border:1px solid var(--app-border);border-radius:var(--r-sm);padding:18px;background:var(--app-surface2)">
+          <div style="font-family:var(--ff-display);font-size:16px;letter-spacing:1px;color:var(--app-text)">${starterPlan.label}</div>
+          <div style="font-size:12px;color:var(--app-muted);margin-top:8px;line-height:1.7">
+            ${BillingStatus.formatLimit('staff', starterPlan.limits.staff)} · ${BillingStatus.formatLimit('customers', starterPlan.limits.customers)}<br>
+            Core workflow, bookings, work orders, inventory, and manual invoice tracking
+          </div>
+        </div>
+        <div style="border:1px solid rgba(232,160,32,0.28);border-radius:var(--r-sm);padding:18px;background:rgba(232,160,32,0.06)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="font-family:var(--ff-display);font-size:16px;letter-spacing:1px;color:var(--app-text)">${proPlan.label}</div>
+            <span style="background:var(--amber);color:var(--ink);font-family:var(--ff-mono);font-size:9px;letter-spacing:1px;padding:2px 8px;border-radius:3px;font-weight:700">RECOMMENDED</span>
+          </div>
+          <div style="font-size:12px;color:var(--app-muted);margin-top:8px;line-height:1.7">
+            ${BillingStatus.formatLimit('staff', proPlan.limits.staff)} · ${BillingStatus.formatLimit('customers', proPlan.limits.customers)}<br>
+            Revenue analytics, supplier performance, inventory turnover, and operations reporting
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap">
+        <a href="settings.html" class="app-btn app-btn-primary" style="background:var(--amber);border-color:var(--amber);color:var(--ink)">Upgrade from Settings</a>
+        <button class="app-btn app-btn-ghost" onclick="window.location.href='dashboard.html'">Back to Dashboard</button>
+      </div>
+    </div>`;
+}
+
 async function initPage() {
   var user = await RBAC.guardPage('reports');
   if (!user) return;
   await RBAC.initSidebar('reports');
+  if (typeof BillingStatus !== 'undefined') {
+    var billing = await BillingStatus.get();
+    if (!billing.isProActive) {
+      renderReportsUpgradeState();
+      return;
+    }
+  }
   await loadData();
   renderAll();
   updateLastUpdated();
