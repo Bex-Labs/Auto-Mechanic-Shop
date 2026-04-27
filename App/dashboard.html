@@ -434,7 +434,7 @@
    AUTH — onAuthChange is the ONLY entry point
    ══════════════════════════════════════════════ */
 
-sb.auth.onAuthStateChange(async (event, session) => {
+Auth.onAuthChange(async (event, session) => {
   if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
     if (session) {
       showApp(session);
@@ -448,9 +448,30 @@ sb.auth.onAuthStateChange(async (event, session) => {
 
 /* ── SHOW/HIDE SCREENS ── */
 function showLogin() {
+  const err = document.getElementById('loginError');
+  const btn = document.getElementById('loginBtn');
+  const params = new URLSearchParams(window.location.search);
+  let notice = '';
+  try {
+    notice = window.sessionStorage.getItem('gs_login_notice') || '';
+    if (notice) window.sessionStorage.removeItem('gs_login_notice');
+  } catch(e) {}
+  if (params.get('timeout') === '1') {
+    notice = 'timeout';
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
   document.getElementById('loginScreen').style.display    = 'flex';
   document.getElementById('registerScreen').style.display = 'none';
   document.getElementById('appShell').style.display       = 'none';
+  document.getElementById('loginPw').value = '';
+  btn.textContent = 'Sign In';
+  btn.disabled = false;
+  if (notice === 'timeout') {
+    err.textContent = 'You were signed out after 30 minutes of inactivity. Please sign in again.';
+    err.style.display = 'block';
+  } else {
+    err.style.display = 'none';
+  }
 }
 
 function showRegister() {

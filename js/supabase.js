@@ -17,6 +17,52 @@
    ----------------------------------------------------------------- */
 const SUPABASE_URL  = 'https://tqwwnmgcvaqeigpodirc.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRxd3dubWdjdmFxZWlncG9kaXJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0Nzg5ODEsImV4cCI6MjA4ODA1NDk4MX0.mP5RNZ0Tu7ckrDkjCmrVcbnaMJ2Sf7QfuGCslElGLo0';
+const SUPABASE_PROJECT_REF = (() => {
+  try { return new URL(SUPABASE_URL).hostname.split('.')[0]; }
+  catch { return 'gearshift'; }
+})();
+const SUPABASE_STORAGE_PREFIX = `sb-${SUPABASE_PROJECT_REF}-`;
+const INACTIVITY_STORAGE_KEY = 'gs_last_activity_at';
+const LOGIN_NOTICE_KEY = 'gs_login_notice';
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+
+function _authSessionStorage() {
+  return {
+    getItem(key) {
+      try { return window.sessionStorage.getItem(key); }
+      catch { return null; }
+    },
+    setItem(key, value) {
+      try { window.sessionStorage.setItem(key, value); }
+      catch {}
+    },
+    removeItem(key) {
+      try { window.sessionStorage.removeItem(key); }
+      catch {}
+    },
+  };
+}
+
+function _clearLegacySupabaseStorage() {
+  try {
+    if (!window.localStorage) return;
+    for (let i = window.localStorage.length - 1; i >= 0; i--) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith(SUPABASE_STORAGE_PREFIX)) {
+        window.localStorage.removeItem(key);
+      }
+    }
+  } catch {}
+}
+
+function _setLoginNotice(reason) {
+  try {
+    if (reason) window.sessionStorage.setItem(LOGIN_NOTICE_KEY, reason);
+    else window.sessionStorage.removeItem(LOGIN_NOTICE_KEY);
+  } catch {}
+}
+
+_clearLegacySupabaseStorage();
 
 /* -----------------------------------------------------------------
    CLIENT  (global `sb`)
@@ -27,6 +73,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
     autoRefreshToken:   true,
     persistSession:     true,
     detectSessionInUrl: true,
+    storage:            _authSessionStorage(),
   },
 });
 
@@ -61,6 +108,89 @@ function _clearShopCache() {
   _cachedShopId = null;
 }
 
+const SessionSecurity = (() => {
+  const ACTIVITY_EVENTS = ['mousedown', 'keydown', 'click', 'scroll', 'touchstart'];
+  let _started = false;
+  let _intervalId = null;
+  let _activityHandler = null;
+  let _visibilityHandler = null;
+  let _expiring = false;
+
+  function _touch() {
+    try { window.sessionStorage.setItem(INACTIVITY_STORAGE_KEY, String(Date.now())); }
+    catch {}
+  }
+
+  function _clearTouch() {
+    try { window.sessionStorage.removeItem(INACTIVITY_STORAGE_KEY); }
+    catch {}
+  }
+
+  function _lastActivity() {
+    try { return Number(window.sessionStorage.getItem(INACTIVITY_STORAGE_KEY) || '0'); }
+    catch { return 0; }
+  }
+
+  async function _expire() {
+    if (_expiring) return;
+    _expiring = true;
+    try {
+      await Auth.signOut({ reason: 'timeout' });
+    } catch {}
+    window.location.href = 'dashboard.html?timeout=1';
+  }
+
+  function check() {
+    const last = _lastActivity();
+    if (!last) {
+      _touch();
+      return;
+    }
+    if (Date.now() - last >= INACTIVITY_TIMEOUT_MS) {
+      _expire();
+    }
+  }
+
+  function start() {
+    if (_started || typeof window === 'undefined') return;
+    _started = true;
+    _expiring = false;
+    _touch();
+    _activityHandler = () => _touch();
+    _visibilityHandler = () => {
+      if (!document.hidden) check();
+    };
+    ACTIVITY_EVENTS.forEach(eventName => {
+      window.addEventListener(eventName, _activityHandler, { passive: true });
+    });
+    document.addEventListener('visibilitychange', _visibilityHandler);
+    _intervalId = window.setInterval(check, 60000);
+  }
+
+  function stop() {
+    if (typeof window === 'undefined') return;
+    if (_activityHandler) {
+      ACTIVITY_EVENTS.forEach(eventName => {
+        window.removeEventListener(eventName, _activityHandler);
+      });
+    }
+    if (_visibilityHandler) {
+      document.removeEventListener('visibilitychange', _visibilityHandler);
+    }
+    if (_intervalId) {
+      window.clearInterval(_intervalId);
+    }
+    _activityHandler = null;
+    _visibilityHandler = null;
+    _intervalId = null;
+    _started = false;
+    _expiring = false;
+    _clearTouch();
+  }
+
+  return { start, stop, check };
+})();
+
 /* =================================================================
    AUTH MODULE
    ================================================================= */
@@ -70,6 +200,8 @@ const Auth = (() => {
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) throw error;
     _clearShopCache();
+    _setLoginNotice(null);
+    SessionSecurity.start();
     return data;
   }
 
@@ -91,13 +223,23 @@ const Auth = (() => {
     return data;
   }
 
-  async function signOut() {
+  async function signOut(options = {}) {
+    const reason = typeof options === 'string' ? options : options.reason;
     _clearShopCache();
+    SessionSecurity.stop();
+    _setLoginNotice(reason === 'timeout' ? 'timeout' : null);
     await sb.auth.signOut();
+    _clearLegacySupabaseStorage();
   }
 
   async function getSession() {
     const { data: { session } } = await sb.auth.getSession();
+    if (session) {
+      _setLoginNotice(null);
+      SessionSecurity.start();
+    } else {
+      SessionSecurity.stop();
+    }
     return session;
   }
 
@@ -156,6 +298,12 @@ const Auth = (() => {
   function onAuthChange(callback) {
     sb.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') _clearShopCache();
+      if (session) {
+        _setLoginNotice(null);
+        SessionSecurity.start();
+      } else {
+        SessionSecurity.stop();
+      }
       callback(event, session);
     });
   }
