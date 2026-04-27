@@ -1324,9 +1324,14 @@ async function initBookingLink() {
     const shop = await RBAC.getShop();
     if (!shop?.id) return;
 
-    // Build the booking URL — absolute URL using current origin
-    const base = window.location.origin;
-    _bookingUrl = `${base}/app/booking.html?shop=${shop.id}`;
+    // Build the booking URL from the current settings page path so it works
+    // both in local/dev environments and on deployed app subpaths.
+    const bookingUrl = new URL('booking.html', window.location.href);
+    bookingUrl.searchParams.set('shop', shop.id);
+    if (shop.name) bookingUrl.searchParams.set('shop_name', shop.name);
+    if (shop.phone) bookingUrl.searchParams.set('shop_phone', shop.phone);
+    if (shop.address) bookingUrl.searchParams.set('shop_address', shop.address);
+    _bookingUrl = bookingUrl.toString();
 
     // Display it
     const display = document.getElementById('bookingLinkDisplay');

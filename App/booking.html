@@ -619,6 +619,63 @@ var ALL_SLOTS = [
   '12:00','13:00','14:00','15:00','16:00'
 ];
 
+function readBookingFallback(params) {
+  function clean(value) {
+    return String(value || '').trim();
+  }
+
+  return {
+    name: clean(params.get('shop_name') || params.get('name')),
+    phone: clean(params.get('shop_phone') || params.get('phone')),
+    address: clean(params.get('shop_address') || params.get('address')),
+  };
+}
+
+function renderBookingBranding(shop) {
+  var details = shop || {};
+  var name = String(details.name || '').trim();
+  var phone = String(details.phone || '').trim();
+
+  if (name) {
+    document.title = 'Book a Service — ' + name;
+
+    var logo = document.querySelector('.logo');
+    if (logo) {
+      var brand = name
+        .replace(/\bAUTO(?:\s+SHOP)?\b/ig, '')
+        .replace(/\bMECHANIC(?:\s+SHOP)?\b/ig, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toUpperCase();
+      if (!brand) brand = name.toUpperCase();
+      logo.textContent = '';
+      logo.appendChild(document.createTextNode(brand + ' '));
+      var accent = document.createElement('span');
+      accent.textContent = 'AUTO';
+      logo.appendChild(accent);
+    }
+  }
+
+  var heroSub = document.querySelector('.hero-sub');
+  if (heroSub) {
+    heroSub.textContent = name
+      ? 'Schedule your vehicle for service at ' + name + '. Takes less than 2 minutes.'
+      : 'Schedule your vehicle for repair or maintenance. Takes less than 2 minutes.';
+  }
+
+  var footer = document.querySelector('.footer p');
+  if (footer) {
+    footer.textContent = '';
+    footer.appendChild(document.createTextNode(name || 'Auto Shop'));
+    if (phone) footer.appendChild(document.createTextNode(' \u00a0\u00b7\u00a0 ' + phone));
+    footer.appendChild(document.createTextNode(' \u00a0\u00b7\u00a0 '));
+    var backLink = document.createElement('a');
+    backLink.href = '#';
+    backLink.textContent = 'Back to site';
+    footer.appendChild(backLink);
+  }
+}
+
 var selectedSlot = null;
 var currentPanel = 1;
 
@@ -632,6 +689,7 @@ window.addEventListener('DOMContentLoaded', async function() {
   // Read shop ID from URL: booking.html?shop=SHOP_ID
   var params = new URLSearchParams(window.location.search);
   var shopParam = params.get('shop');
+  var fallbackShop = readBookingFallback(params);
 
   if (!shopParam) {
     // No shop ID in URL — show error
@@ -648,27 +706,24 @@ window.addEventListener('DOMContentLoaded', async function() {
   }
 
   SHOP_ID = shopParam;
+  if (fallbackShop.name || fallbackShop.phone) {
+    renderBookingBranding(fallbackShop);
+  }
 
   // Load shop name to personalise the page
   try {
-    var res = await sb.from('shops').select('id,name,address,phone').eq('id', SHOP_ID).single();
+    var res = await sb.from('shops').select('id,name,address,phone').eq('id', SHOP_ID).maybeSingle();
+    if (res.error) throw res.error;
     if (res.data) {
-      var shop = res.data;
-      document.title = 'Book a Service — ' + shop.name;
-      document.querySelector('.logo').innerHTML = shop.name.toUpperCase().replace("'S SHOP", '') + ' <span>AUTO</span>';
-      // Update hero
-      document.querySelector('.hero-sub').textContent =
-        'Schedule your vehicle for service at ' + shop.name + '. Takes less than 2 minutes.';
-      // Update footer
-      var footer = document.querySelector('.footer p');
-      if (footer) footer.innerHTML = shop.name + (shop.phone ? ' &nbsp;·&nbsp; ' + shop.phone : '') + ' &nbsp;·&nbsp; <a href="#">Back to site</a>';
-    } else {
-      throw new Error('Shop not found');
+      renderBookingBranding(res.data);
+    } else if (!fallbackShop.name && !fallbackShop.phone) {
+      renderBookingBranding({ name: 'Auto Shop' });
     }
   } catch(e) {
-    document.querySelector('.hero-sub').innerHTML =
-      '<span style="color:#fca5a5">Could not load shop details. Please check your booking link.</span>';
     console.warn('Shop load error:', e.message);
+    if (!fallbackShop.name && !fallbackShop.phone) {
+      renderBookingBranding({ name: 'Auto Shop' });
+    }
   }
 });
 
