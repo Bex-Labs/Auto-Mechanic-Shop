@@ -608,14 +608,11 @@
                 <div class="divider-dark"></div>
                 <div class="settings-section">
                   <div class="settings-section-title">Active Sessions</div>
-                  <div class="settings-section-sub">You are currently logged in from these devices.</div>
-                  <div style="background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-                    <div><div style="font-size:13px;color:var(--app-text);font-weight:600">Chrome on macOS — Detroit, MI</div><div style="font-size:11px;color:var(--app-muted);font-family:var(--ff-mono)">Current session · Last active just now</div></div>
-                    <span class="badge badge-success">Current</span>
-                  </div>
-                  <div style="background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:14px 18px;display:flex;align-items:center;justify-content:space-between">
-                    <div><div style="font-size:13px;color:var(--app-text);font-weight:600">Safari on iPhone — Detroit, MI</div><div style="font-size:11px;color:var(--app-muted);font-family:var(--ff-mono)">Last active 2h ago</div></div>
-                    <button class="app-btn app-btn-danger app-btn-xs" onclick="Toast.show('Session revoked','info')">Revoke</button>
+                  <div class="settings-section-sub" id="activeSessionsSubtext">You are currently logged in from these devices. Location is based on each browser's timezone and locale.</div>
+                  <div id="activeSessionsList">
+                    <div style="background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:14px 18px;font-size:12px;color:var(--app-muted)">
+                      Loading active sessions…
+                    </div>
                   </div>
                 </div>
               </div>
@@ -717,6 +714,7 @@
 <script>
 let _currentShop = null;
 let _settingsUserRole = null;
+let _activeSessionsTimer = null;
 const STAFF_SETTINGS_PANES = new Set(['personal', 'security']);
 
 function val(id) {
@@ -820,6 +818,9 @@ async function loadSettings(user) {
       }
     }
   } catch(e) { /* settings row may not exist yet */ }
+
+  await loadActiveSessions();
+  startActiveSessionsRefresh();
 }
 
 function pickAvatarFile() {
@@ -1049,6 +1050,178 @@ function toggleSetting(el) {
   el.classList.toggle('on');
   const lbl = document.getElementById(el.id + '-lbl');
   if (lbl) lbl.textContent = el.classList.contains('on') ? 'Enabled' : 'Disabled';
+}
+
+function formatSessionRelativeTime(iso) {
+  if (!iso) return 'recently';
+  const diff = Math.max(0, Date.now() - new Date(iso).getTime());
+  if (diff < 45 * 1000) return 'just now';
+  if (diff < 90 * 1000) return '1m ago';
+  if (diff < 60 * 60 * 1000) return Math.round(diff / (60 * 1000)) + 'm ago';
+  if (diff < 24 * 60 * 60 * 1000) return Math.round(diff / (60 * 60 * 1000)) + 'h ago';
+  return Math.round(diff / (24 * 60 * 60 * 1000)) + 'd ago';
+}
+
+function activeSessionStatusLabel(session) {
+  if (session.current) return 'Current session';
+  if (session.status === 'active') return 'Active now';
+  if (session.status === 'revoked') return 'Revoked';
+  if (session.status === 'ended') return 'Signed out';
+  return 'Inactive';
+}
+
+function activeSessionBadge(session) {
+  const badge = document.createElement('span');
+  badge.className = 'badge ' + (
+    session.current || session.status === 'active' ? 'badge-active' :
+    session.status === 'revoked' ? 'badge-inactive' :
+    'badge-draft'
+  );
+  badge.textContent = session.current ? 'Current' :
+    session.status === 'active' ? 'Active' :
+    session.status === 'revoked' ? 'Revoked' :
+    session.status === 'ended' ? 'Signed Out' :
+    'Inactive';
+  return badge;
+}
+
+function renderActiveSessions(sessions) {
+  const listEl = document.getElementById('activeSessionsList');
+  const subtextEl = document.getElementById('activeSessionsSubtext');
+  if (!listEl) return;
+
+  listEl.replaceChildren();
+
+  if (!sessions.length) {
+    const empty = document.createElement('div');
+    empty.style.background = 'var(--app-surface2)';
+    empty.style.border = '1px solid var(--app-border)';
+    empty.style.borderRadius = 'var(--r-sm)';
+    empty.style.padding = '14px 18px';
+    empty.style.fontSize = '12px';
+    empty.style.color = 'var(--app-muted)';
+    empty.textContent = 'No active session details are available yet.';
+    listEl.appendChild(empty);
+    if (subtextEl) {
+      subtextEl.textContent = 'You are currently logged in from these devices. Location is based on each browser\'s timezone and locale.';
+    }
+    return;
+  }
+
+  if (subtextEl) {
+    const activeCount = sessions.filter(session => session.current || session.status === 'active').length;
+    subtextEl.textContent = `You are currently logged in from ${activeCount} ${activeCount === 1 ? 'device' : 'devices'}. Location is based on each browser's timezone and locale.`;
+  }
+
+  sessions.forEach((session, index) => {
+    const row = document.createElement('div');
+    row.style.background = 'var(--app-surface2)';
+    row.style.border = '1px solid var(--app-border)';
+    row.style.borderRadius = 'var(--r-sm)';
+    row.style.padding = '14px 18px';
+    row.style.display = 'flex';
+    row.style.alignItems = 'center';
+    row.style.justifyContent = 'space-between';
+    if (index < sessions.length - 1) row.style.marginBottom = '8px';
+
+    const left = document.createElement('div');
+    left.style.minWidth = '0';
+
+    const title = document.createElement('div');
+    title.style.fontSize = '13px';
+    title.style.color = 'var(--app-text)';
+    title.style.fontWeight = '600';
+    title.textContent = session.locationLabel
+      ? `${session.deviceLabel} — ${session.locationLabel}`
+      : session.deviceLabel || 'Browser session';
+
+    const meta = document.createElement('div');
+    meta.style.fontSize = '11px';
+    meta.style.color = 'var(--app-muted)';
+    meta.style.fontFamily = 'var(--ff-mono)';
+    meta.textContent = `${activeSessionStatusLabel(session)} · Last active ${formatSessionRelativeTime(session.lastActiveAt || session.latestAt)}`;
+
+    left.appendChild(title);
+    left.appendChild(meta);
+
+    const right = document.createElement('div');
+    right.style.display = 'flex';
+    right.style.alignItems = 'center';
+    right.style.gap = '8px';
+
+    if (session.canRevoke) {
+      const revokeBtn = document.createElement('button');
+      revokeBtn.className = 'app-btn app-btn-danger app-btn-xs';
+      revokeBtn.textContent = 'Revoke';
+      revokeBtn.onclick = () => revokeActiveSession(session.id, revokeBtn);
+      right.appendChild(revokeBtn);
+    } else {
+      right.appendChild(activeSessionBadge(session));
+    }
+
+    row.appendChild(left);
+    row.appendChild(right);
+    listEl.appendChild(row);
+  });
+}
+
+function startActiveSessionsRefresh() {
+  if (_activeSessionsTimer) window.clearInterval(_activeSessionsTimer);
+  _activeSessionsTimer = window.setInterval(() => {
+    void loadActiveSessions({ silent: true });
+  }, 30000);
+}
+
+async function loadActiveSessions(options = {}) {
+  const listEl = document.getElementById('activeSessionsList');
+  if (!listEl || typeof Auth.listSessions !== 'function') return;
+
+  if (!options.silent) {
+    listEl.innerHTML = `
+      <div style="background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:14px 18px;font-size:12px;color:var(--app-muted)">
+        Loading active sessions…
+      </div>`;
+  }
+
+  try {
+    const sessions = await Auth.listSessions();
+    renderActiveSessions(sessions);
+  } catch (err) {
+    console.warn('Could not load active sessions:', err);
+    listEl.innerHTML = `
+      <div style="background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:14px 18px;font-size:12px;color:var(--danger)">
+        Could not load active sessions right now.
+      </div>`;
+  }
+}
+
+async function revokeActiveSession(sessionId, buttonEl) {
+  if (!sessionId) return;
+  if (!window.confirm('Revoke this session and force that device to sign in again?')) return;
+
+  const originalText = buttonEl?.textContent || 'Revoke';
+  if (buttonEl) {
+    buttonEl.disabled = true;
+    buttonEl.textContent = 'Revoking…';
+  }
+
+  try {
+    await Auth.revokeSession(sessionId);
+    Toast.show('Session revoked', 'success');
+    await loadActiveSessions({ silent: true });
+  } catch (err) {
+    Toast.show(err.message || 'Could not revoke session', 'error');
+    if (buttonEl) {
+      buttonEl.disabled = false;
+      buttonEl.textContent = originalText;
+    }
+    return;
+  }
+
+  if (buttonEl) {
+    buttonEl.disabled = false;
+    buttonEl.textContent = originalText;
+  }
 }
 
 async function updatePassword() {
@@ -1760,6 +1933,12 @@ async function exportAllData() {
 
 document.addEventListener('DOMContentLoaded', initPage);
 document.getElementById('p-fullname')?.addEventListener('input', renderProfileAvatarPreview);
+window.addEventListener('pagehide', () => {
+  if (_activeSessionsTimer) {
+    window.clearInterval(_activeSessionsTimer);
+    _activeSessionsTimer = null;
+  }
+});
 </script>
 </body>
 </html>

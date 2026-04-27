@@ -25,6 +25,10 @@ const SUPABASE_STORAGE_PREFIX = `sb-${SUPABASE_PROJECT_REF}-`;
 const INACTIVITY_STORAGE_KEY = 'gs_last_activity_at';
 const LOGIN_NOTICE_KEY = 'gs_login_notice';
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+const SESSION_ID_STORAGE_KEY = 'gs_device_session_id';
+const SESSION_STARTED_STORAGE_KEY = 'gs_device_session_started';
+const SESSION_HEARTBEAT_INTERVAL_MS = 60 * 1000;
+const SESSION_ACTIVE_WINDOW_MS = 3 * 60 * 1000;
 
 function _authSessionStorage() {
   return {
@@ -191,6 +195,427 @@ const SessionSecurity = (() => {
   return { start, stop, check };
 })();
 
+const SessionRegistry = (() => {
+  const SESSION_TABLE = 'auth_sessions';
+  const ACTION_START = 'SESSION_START';
+  const ACTION_HEARTBEAT = 'SESSION_HEARTBEAT';
+  const ACTION_END = 'SESSION_END';
+  const ACTION_REVOKE = 'SESSION_REVOKE';
+  const ACTIVE_ACTIONS = new Set([ACTION_START, ACTION_HEARTBEAT, ACTION_END]);
+  let _started = false;
+  let _heartbeatId = null;
+  let _startedUserId = null;
+  let _lastHeartbeatAt = 0;
+
+  function _isUuid(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
+  }
+
+  function _readSessionStorage(key) {
+    try { return window.sessionStorage.getItem(key); }
+    catch { return null; }
+  }
+
+  function _writeSessionStorage(key, value) {
+    try {
+      if (value == null) window.sessionStorage.removeItem(key);
+      else window.sessionStorage.setItem(key, String(value));
+    } catch {}
+  }
+
+  function _generateSessionId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, token => {
+      const rand = Math.floor(Math.random() * 16);
+      const value = token === 'x' ? rand : ((rand & 0x3) | 0x8);
+      return value.toString(16);
+    });
+  }
+
+  function _sessionId() {
+    let value = _readSessionStorage(SESSION_ID_STORAGE_KEY);
+    if (value && !_isUuid(value)) {
+      value = null;
+      _writeSessionStorage(SESSION_STARTED_STORAGE_KEY, null);
+    }
+    if (!value) {
+      value = _generateSessionId();
+      _writeSessionStorage(SESSION_ID_STORAGE_KEY, value);
+    }
+    return value;
+  }
+
+  function _clearStoredSession() {
+    _writeSessionStorage(SESSION_ID_STORAGE_KEY, null);
+    _writeSessionStorage(SESSION_STARTED_STORAGE_KEY, null);
+  }
+
+  function _browserLabel(userAgent) {
+    const ua = String(userAgent || '');
+    if (/Edg\//.test(ua)) return 'Edge';
+    if (/OPR\//.test(ua) || /Opera/.test(ua)) return 'Opera';
+    if (/Firefox\//.test(ua)) return 'Firefox';
+    if (/Chrome\//.test(ua) && !/Edg\//.test(ua) && !/OPR\//.test(ua)) return 'Chrome';
+    if (/Safari\//.test(ua) && !/Chrome\//.test(ua) && !/Chromium\//.test(ua)) return 'Safari';
+    return 'Browser';
+  }
+
+  function _osLabel(userAgent, platform) {
+    const ua = String(userAgent || '');
+    const pf = String(platform || '');
+    if (/iPhone/.test(ua)) return 'iPhone';
+    if (/iPad/.test(ua)) return 'iPad';
+    if (/Android/.test(ua)) return 'Android';
+    if (/Windows/.test(ua) || /^Win/.test(pf)) return 'Windows';
+    if (/Mac OS X/.test(ua) || /^Mac/.test(pf)) return 'macOS';
+    if (/Linux/.test(ua) || /Linux/.test(pf)) return 'Linux';
+    return 'Device';
+  }
+
+  function _localeRegion(locale) {
+    const value = String(locale || '');
+    if (!value) return null;
+    try {
+      if (typeof Intl !== 'undefined' && typeof Intl.Locale === 'function') {
+        return new Intl.Locale(value).region || null;
+      }
+    } catch {}
+    const match = value.match(/[-_]([A-Za-z]{2}|\d{3})(?:$|[-_])/);
+    return match ? match[1].toUpperCase() : null;
+  }
+
+  function _countryLabel(regionCode, locale) {
+    if (!regionCode) return null;
+    try {
+      if (typeof Intl !== 'undefined' && typeof Intl.DisplayNames === 'function') {
+        const names = new Intl.DisplayNames([locale || 'en'], { type: 'region' });
+        return names.of(regionCode) || regionCode;
+      }
+    } catch {}
+    return regionCode;
+  }
+
+  function _countryFromTimeZone(timeZone, locale) {
+    const zone = String(timeZone || '');
+    const zoneCountryMap = {
+      'Africa/Lagos': 'NG',
+    };
+    const regionCode = zoneCountryMap[zone];
+    return regionCode ? _countryLabel(regionCode, locale) : null;
+  }
+
+  function _cityLabel(timeZone) {
+    const value = String(timeZone || '');
+    if (!value || !value.includes('/')) return value || null;
+    const parts = value.split('/');
+    return parts[parts.length - 1].replace(/_/g, ' ');
+  }
+
+  function _sessionMetadata() {
+    const nav = typeof navigator === 'undefined' ? {} : navigator;
+    const locale = nav.languages?.[0] || nav.language || 'en-US';
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    const city = _cityLabel(timeZone);
+    const regionCode = _localeRegion(locale);
+    const country = _countryFromTimeZone(timeZone, locale) || _countryLabel(regionCode, locale);
+    const browser = _browserLabel(nav.userAgent);
+    const os = _osLabel(nav.userAgent, nav.platform);
+
+    let locationLabel = city || timeZone || 'Unknown location';
+    if (country && city && !locationLabel.includes(country)) {
+      locationLabel = `${city}, ${country}`;
+    } else if (country && !city) {
+      locationLabel = country;
+    }
+
+    return {
+      browser,
+      os,
+      device_label: `${browser} on ${os}`,
+      location_label: locationLabel,
+      timezone: timeZone || null,
+      locale,
+      user_agent: nav.userAgent || null,
+      platform: nav.platform || null,
+    };
+  }
+
+  async function _insertEvent(action, changes = null, userId = null) {
+    const { data: { session } } = await sb.auth.getSession();
+    const actorId = userId || session?.user?.id || _startedUserId || null;
+    if (!actorId) return;
+    const { error } = await sb.from('audit_logs').insert({
+      table_name: SESSION_TABLE,
+      record_id: _sessionId(),
+      action,
+      changed_by: actorId,
+      changes: typeof changes === 'string' ? changes : JSON.stringify(changes),
+    });
+    if (error) throw error;
+  }
+
+  async function _heartbeat(force = false) {
+    if (!_started) return;
+    if (!force && Date.now() - _lastHeartbeatAt < SESSION_HEARTBEAT_INTERVAL_MS - 5000) return;
+    const metadata = _sessionMetadata();
+    await _insertEvent(ACTION_HEARTBEAT, {
+      ...metadata,
+      session_id: _sessionId(),
+      last_active_at: new Date().toISOString(),
+    }, _startedUserId);
+    _lastHeartbeatAt = Date.now();
+  }
+
+  async function _checkRevoked() {
+    if (!_started) return false;
+    const { data, error } = await sb.from('audit_logs')
+      .select('id, created_at')
+      .eq('table_name', SESSION_TABLE)
+      .eq('record_id', _sessionId())
+      .eq('action', ACTION_REVOKE)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) return false;
+    return !!data?.length;
+  }
+
+  async function _tick() {
+    if (!_started) return;
+    try {
+      if (await _checkRevoked()) {
+        await Auth.signOut({ reason: 'revoked' });
+        window.location.href = 'dashboard.html';
+        return;
+      }
+      await _heartbeat();
+    } catch (e) {
+      console.warn('Session heartbeat failed:', e);
+    }
+  }
+
+  async function start() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session?.user?.id) {
+      await stop('missing_session');
+      return;
+    }
+
+    _startedUserId = session.user.id;
+    const startedAt = _readSessionStorage(SESSION_STARTED_STORAGE_KEY);
+    const metadata = _sessionMetadata();
+
+    if (!startedAt) {
+      const now = new Date().toISOString();
+      _writeSessionStorage(SESSION_STARTED_STORAGE_KEY, now);
+      try {
+        await _insertEvent(ACTION_START, {
+          ...metadata,
+          session_id: _sessionId(),
+          started_at: now,
+          last_active_at: now,
+        }, session.user.id);
+      } catch (e) {
+        console.warn('Session start log failed:', e);
+      }
+    } else if (!_started) {
+      try {
+        await _heartbeat(true);
+      } catch (e) {
+        console.warn('Session resume heartbeat failed:', e);
+      }
+    }
+
+    if (_started) return;
+    _started = true;
+    _lastHeartbeatAt = 0;
+    _heartbeatId = window.setInterval(() => {
+      void _tick();
+    }, SESSION_HEARTBEAT_INTERVAL_MS);
+    void _tick();
+  }
+
+  async function stop(reason = 'signed_out') {
+    if (_heartbeatId) {
+      window.clearInterval(_heartbeatId);
+      _heartbeatId = null;
+    }
+    if (_started) {
+      try {
+        await _insertEvent(ACTION_END, {
+          session_id: _sessionId(),
+          ended_at: new Date().toISOString(),
+          reason,
+        }, _startedUserId);
+      } catch (e) {
+        console.warn('Session end log failed:', e);
+      }
+    }
+    _started = false;
+    _lastHeartbeatAt = 0;
+    _startedUserId = null;
+    _clearStoredSession();
+  }
+
+  function _readChanges(changes) {
+    if (!changes) return {};
+    if (typeof changes === 'object') return changes;
+    try { return JSON.parse(changes); }
+    catch { return {}; }
+  }
+
+  function _currentSessionFallback() {
+    const metadata = _sessionMetadata();
+    const now = new Date().toISOString();
+    const startedAt = _readSessionStorage(SESSION_STARTED_STORAGE_KEY) || now;
+    return {
+      id: _sessionId(),
+      current: true,
+      latestAt: startedAt,
+      latestAction: ACTION_HEARTBEAT,
+      lastActiveAt: now,
+      startedAt,
+      revokedAt: null,
+      deviceLabel: metadata.device_label,
+      locationLabel: metadata.location_label,
+      browser: metadata.browser,
+      os: metadata.os,
+      locale: metadata.locale,
+      timezone: metadata.timezone,
+      status: 'current',
+      canRevoke: false,
+    };
+  }
+
+  async function list() {
+    const { data: { session } } = await sb.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) return [];
+
+    const { data, error } = await sb.from('audit_logs')
+      .select('id, record_id, action, changes, created_at')
+      .eq('table_name', SESSION_TABLE)
+      .eq('changed_by', userId)
+      .order('created_at', { ascending: false })
+      .limit(400);
+    if (error) {
+      console.warn('Could not read saved sessions:', error);
+      return [_currentSessionFallback()];
+    }
+
+    const now = Date.now();
+    const grouped = new Map();
+
+    (data || []).forEach(row => {
+      const sessionId = row.record_id || row.id;
+      const changes = _readChanges(row.changes);
+      if (!grouped.has(sessionId)) {
+        grouped.set(sessionId, {
+          id: sessionId,
+          current: sessionId === _sessionId(),
+          latestAt: row.created_at,
+          latestAction: row.action,
+          lastActiveAt: ACTIVE_ACTIONS.has(row.action) ? row.created_at : null,
+          startedAt: row.action === ACTION_START ? row.created_at : null,
+          revokedAt: row.action === ACTION_REVOKE ? row.created_at : null,
+          deviceLabel: changes.device_label || 'Browser session',
+          locationLabel: changes.location_label || changes.timezone || 'Unknown location',
+          browser: changes.browser || null,
+          os: changes.os || null,
+          locale: changes.locale || null,
+          timezone: changes.timezone || null,
+        });
+      }
+
+      const item = grouped.get(sessionId);
+      if (!item.lastActiveAt && ACTIVE_ACTIONS.has(row.action)) item.lastActiveAt = row.created_at;
+      if (!item.startedAt && row.action === ACTION_START) item.startedAt = row.created_at;
+      if (!item.revokedAt && row.action === ACTION_REVOKE) item.revokedAt = row.created_at;
+      if (!item.deviceLabel && changes.device_label) item.deviceLabel = changes.device_label;
+      if ((!item.locationLabel || item.locationLabel === 'Unknown location') && (changes.location_label || changes.timezone)) {
+        item.locationLabel = changes.location_label || changes.timezone;
+      }
+      if (!item.browser && changes.browser) item.browser = changes.browser;
+      if (!item.os && changes.os) item.os = changes.os;
+      if (!item.locale && changes.locale) item.locale = changes.locale;
+      if (!item.timezone && changes.timezone) item.timezone = changes.timezone;
+    });
+
+    const sessions = Array.from(grouped.values()).map(item => {
+      const lastActiveMs = item.lastActiveAt ? new Date(item.lastActiveAt).getTime() : 0;
+      let status = 'inactive';
+      if (item.revokedAt) status = 'revoked';
+      else if (item.latestAction === ACTION_END) status = 'ended';
+      else if (lastActiveMs && (now - lastActiveMs) <= SESSION_ACTIVE_WINDOW_MS) status = 'active';
+
+      if (item.current && status === 'active') status = 'current';
+
+      return {
+        ...item,
+        status,
+        canRevoke: !item.current && status === 'active',
+      };
+    }).map(item => {
+      if (!item.current) return item;
+      const metadata = _sessionMetadata();
+      return {
+        ...item,
+        deviceLabel: metadata.device_label,
+        locationLabel: metadata.location_label,
+        browser: metadata.browser,
+        os: metadata.os,
+        locale: metadata.locale,
+        timezone: metadata.timezone,
+      };
+    }).sort((a, b) => {
+      const rank = session => {
+        if (session.current) return 0;
+        if (session.status === 'active') return 1;
+        if (session.status === 'revoked') return 3;
+        return 2;
+      };
+      return rank(a) - rank(b) || new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime();
+    });
+
+    if (!sessions.some(item => item.current)) {
+      sessions.unshift(_currentSessionFallback());
+    }
+
+    return sessions;
+  }
+
+  async function revoke(sessionId) {
+    const { data: { session } } = await sb.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId || !sessionId) throw new Error('No active session to revoke.');
+
+    await sb.from('audit_logs').insert({
+      table_name: SESSION_TABLE,
+      record_id: sessionId,
+      action: ACTION_REVOKE,
+      changed_by: userId,
+      changes: JSON.stringify({
+        revoked_at: new Date().toISOString(),
+        revoked_by_session_id: _sessionId(),
+        ..._sessionMetadata(),
+      }),
+    });
+  }
+
+  function currentSessionId() {
+    return _sessionId();
+  }
+
+  return {
+    start,
+    stop,
+    list,
+    revoke,
+    currentSessionId,
+  };
+})();
+
 /* =================================================================
    AUTH MODULE
    ================================================================= */
@@ -202,6 +627,7 @@ const Auth = (() => {
     _clearShopCache();
     _setLoginNotice(null);
     SessionSecurity.start();
+    await SessionRegistry.start();
     return data;
   }
 
@@ -226,6 +652,7 @@ const Auth = (() => {
   async function signOut(options = {}) {
     const reason = typeof options === 'string' ? options : options.reason;
     _clearShopCache();
+    await SessionRegistry.stop(reason || 'signed_out');
     SessionSecurity.stop();
     _setLoginNotice(reason === 'timeout' ? 'timeout' : null);
     await sb.auth.signOut();
@@ -237,8 +664,10 @@ const Auth = (() => {
     if (session) {
       _setLoginNotice(null);
       SessionSecurity.start();
+      await SessionRegistry.start();
     } else {
       SessionSecurity.stop();
+      await SessionRegistry.stop('missing_session');
     }
     return session;
   }
@@ -301,8 +730,10 @@ const Auth = (() => {
       if (session) {
         _setLoginNotice(null);
         SessionSecurity.start();
+        void SessionRegistry.start();
       } else {
         SessionSecurity.stop();
+        void SessionRegistry.stop(event === 'SIGNED_OUT' ? 'signed_out' : 'missing_session');
       }
       callback(event, session);
     });
@@ -312,6 +743,9 @@ const Auth = (() => {
     signIn, signInWithGoogle, signUp, signOut,
     getSession, getUser, resetPassword,
     requireAuth, requireRole, onAuthChange,
+    listSessions: SessionRegistry.list,
+    revokeSession: SessionRegistry.revoke,
+    getCurrentSessionId: SessionRegistry.currentSessionId,
   };
 })();
 
