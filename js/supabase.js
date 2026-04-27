@@ -25,6 +25,24 @@ const SUPABASE_STORAGE_PREFIX = `sb-${SUPABASE_PROJECT_REF}-`;
 const INACTIVITY_STORAGE_KEY = 'gs_last_activity_at';
 const LOGIN_NOTICE_KEY = 'gs_login_notice';
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+const NOTIFICATION_PREFERENCE_STORAGE_PREFIX = 'gs_notification_preferences:';
+const DEFAULT_NOTIFICATION_PREFERENCES = Object.freeze({
+  app_low_stock_alerts: true,
+  app_work_order_updates: true,
+  app_new_booking_requests: true,
+  app_po_delivery_confirmations: true,
+  app_invoice_payments: true,
+  email_daily_summary: true,
+  email_overdue_invoices: true,
+  email_supplier_delivery: false,
+});
+const NOTIFICATION_TYPE_PREFERENCE_KEY = Object.freeze({
+  low_stock: 'app_low_stock_alerts',
+  wo_update: 'app_work_order_updates',
+  appointment: 'app_new_booking_requests',
+  po_update: 'app_po_delivery_confirmations',
+  payment: 'app_invoice_payments',
+});
 
 function _authSessionStorage() {
   return {
@@ -464,6 +482,107 @@ const GS = (() => {
     await _audit(tableName, recordId, action, changes);
   }
 
+  function _notificationPreferenceStorageKey(shopId) {
+    return NOTIFICATION_PREFERENCE_STORAGE_PREFIX + (shopId || 'global');
+  }
+
+  function _parseNotificationPreferences(raw) {
+    if (!raw) return {};
+    if (typeof raw === 'object') return raw;
+    try { return JSON.parse(raw); }
+    catch { return {}; }
+  }
+
+  function _mergeNotificationPreferences(prefs = {}) {
+    return { ...DEFAULT_NOTIFICATION_PREFERENCES, ...(prefs || {}) };
+  }
+
+  function _readStoredNotificationPreferences(shopId) {
+    try {
+      const raw = window.localStorage.getItem(_notificationPreferenceStorageKey(shopId));
+      return _mergeNotificationPreferences(_parseNotificationPreferences(raw));
+    } catch {
+      return _mergeNotificationPreferences();
+    }
+  }
+
+  function _writeStoredNotificationPreferences(shopId, prefs) {
+    try {
+      window.localStorage.setItem(
+        _notificationPreferenceStorageKey(shopId),
+        JSON.stringify(_mergeNotificationPreferences(prefs))
+      );
+    } catch {}
+  }
+
+  function _isNotificationVisibleWithPrefs(type, prefs) {
+    const key = NOTIFICATION_TYPE_PREFERENCE_KEY[type];
+    return key ? prefs[key] !== false : true;
+  }
+
+  async function getNotificationPreferences() {
+    const sid = await _shopId();
+    let prefs = _readStoredNotificationPreferences(sid);
+
+    try {
+      const settings = await getSettings();
+      const dbPrefs = _parseNotificationPreferences(settings?.notification_preferences);
+      if (Object.keys(dbPrefs).length) {
+        prefs = _mergeNotificationPreferences({ ...prefs, ...dbPrefs });
+        _writeStoredNotificationPreferences(sid, prefs);
+      }
+    } catch {}
+
+    return prefs;
+  }
+
+  async function saveNotificationPreferences(prefs) {
+    const sid = await _shopId();
+    const merged = _mergeNotificationPreferences(prefs);
+
+    _writeStoredNotificationPreferences(sid, merged);
+
+    try {
+      await updateSettings({ notification_preferences: merged });
+    } catch (e) {
+      console.warn('Notification preference DB sync skipped:', e.message);
+    }
+
+    return merged;
+  }
+
+  async function isNotificationEnabled(type) {
+    const prefs = await getNotificationPreferences();
+    return _isNotificationVisibleWithPrefs(type, prefs);
+  }
+
+  async function filterNotificationsByPreference(items) {
+    const prefs = await getNotificationPreferences();
+    return (items || []).filter(item => _isNotificationVisibleWithPrefs(item?.type, prefs));
+  }
+
+  async function _maybeCreateLowStockNotification(beforeItem, afterItem) {
+    if (!afterItem?.id) return;
+
+    const afterQty = Number(afterItem.qty || 0);
+    const afterThreshold = Number(afterItem.threshold || 0);
+    const beforeQty = Number(beforeItem?.qty);
+    const beforeThreshold = Number(beforeItem?.threshold ?? afterThreshold);
+    const beforeLow = Number.isFinite(beforeQty) ? beforeQty <= beforeThreshold : false;
+    const afterLow = afterQty <= afterThreshold;
+
+    if (!afterLow || beforeLow) return;
+
+    const partName = afterItem.name || 'Inventory item';
+    await createNotification({
+      type: 'low_stock',
+      title: `Low Stock Alert — ${partName}`,
+      body: `${partName} has dropped to ${afterQty} unit${afterQty === 1 ? '' : 's'} with a reorder threshold of ${afterThreshold}.`,
+      related_id: afterItem.id,
+      related_type: 'inventory',
+    });
+  }
+
   /* ---------------------------------------------------------------
      CUSTOMERS
      --------------------------------------------------------------- */
@@ -732,6 +851,7 @@ const GS = (() => {
   }
 
   async function addPartToWorkOrder(workOrderId, partId, qty, unitCost) {
+    const beforePart = await getInventoryItem(partId).catch(() => null);
     const { data, error } = await sb.from('work_order_parts')
       .insert({ work_order_id: workOrderId, part_id: partId, qty, unit_cost: unitCost })
       .select().single();
@@ -752,6 +872,9 @@ const GS = (() => {
         unit_cost: unitCost,
       });
     } catch (e) {}
+
+    const afterPart = await getInventoryItem(partId).catch(() => null);
+    await _maybeCreateLowStockNotification(beforePart, afterPart);
 
     return data;
   }
@@ -848,6 +971,7 @@ const GS = (() => {
 
   async function updateInventoryItem(id, payload) {
     const sid = await _shopId();
+    const before = await getInventoryItem(id).catch(() => null);
     const { data, error } = await sb.from('inventory')
       .update({ ...payload, updated_at: new Date().toISOString() })
       .eq('id', id).eq('shop_id', sid).select().single();
@@ -857,6 +981,7 @@ const GS = (() => {
       sku: data?.sku || null,
       ...payload,
     });
+    await _maybeCreateLowStockNotification(before, data);
     return data;
   }
 
@@ -875,6 +1000,7 @@ const GS = (() => {
       previous_qty: before?.qty ?? null,
       new_qty: after?.qty ?? null,
     });
+    await _maybeCreateLowStockNotification(before, after);
     return data;
   }
 
@@ -977,6 +1103,15 @@ const GS = (() => {
       ref: data?.ref || null,
       status,
     });
+    if (status === 'Received' || status === 'Partially Received') {
+      await createNotification({
+        type: 'po_update',
+        title: `Purchase Order ${data?.ref || id} — ${status}`,
+        body: `${data?.ref || 'A purchase order'} was marked ${status.toLowerCase()}.`,
+        related_id: id,
+        related_type: 'purchase_order',
+      });
+    }
     return data;
   }
 
@@ -1117,6 +1252,13 @@ const GS = (() => {
       payment_method: method,
       total_amount: data?.total_amount ?? null,
     });
+    await createNotification({
+      type: 'payment',
+      title: `Invoice Payment Received — ${data?.ref || id}`,
+      body: `${data?.ref || 'An invoice'} was marked paid via ${method}.`,
+      related_id: id,
+      related_type: 'invoice',
+    });
     return data;
   }
 
@@ -1195,6 +1337,31 @@ const GS = (() => {
       service: payload.service || null,
       guest_name: payload.guest_name || null,
     });
+    if ((data?.status || payload.status) === 'Pending') {
+      let customerLabel = payload.guest_name || 'A customer';
+      if (!payload.guest_name && payload.customer_id) {
+        try {
+          const { data: customer } = await sb.from('customers')
+            .select('first_name,last_name')
+            .eq('id', payload.customer_id)
+            .single();
+          if (customer) customerLabel = `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || customerLabel;
+        } catch {}
+      }
+
+      const apptDate = data?.appt_date
+        ? new Date(`${data.appt_date}T12:00:00`).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })
+        : 'the selected date';
+      const apptTime = data?.appt_time ? String(data.appt_time).slice(0, 5) : '';
+
+      await createNotification({
+        type: 'appointment',
+        title: 'New Booking Request',
+        body: `${customerLabel} requested ${data?.service || payload.service || 'service'} for ${apptDate}${apptTime ? ` at ${apptTime}` : ''}.`,
+        related_id: data?.id || null,
+        related_type: 'appointment',
+      });
+    }
     return data;
   }
 
@@ -1243,19 +1410,20 @@ const GS = (() => {
     if (unreadOnly) q = q.eq('read', false);
     const { data, error } = await q;
     if (error) throw error;
-    return data;
+    return filterNotificationsByPreference(data);
   }
 
   async function getUnreadCount() {
     const sid = await _shopId();
     const { data: { user: authUser } } = await sb.auth.getUser();
     const uid = authUser?.id || null;
-    const { count, error } = await sb.from('notifications')
-      .select('*', { count: 'exact', head: true })
+    const { data, error } = await sb.from('notifications')
+      .select('id, type')
       .eq('shop_id', sid).eq('read', false)
       .or('for_user_id.is.null,for_user_id.eq.' + uid);
     if (error) return 0;
-    return count || 0;
+    const visible = await filterNotificationsByPreference(data);
+    return visible.length;
   }
 
   async function markNotificationRead(id) {
@@ -1457,6 +1625,7 @@ const GS = (() => {
     getAppointments, createAppointment, updateAppointment, cancelAppointment,
     createNotification, getNotifications, getUnreadCount, markNotificationRead,
     markAllNotificationsRead, deleteNotification, clearReadNotifications,
+    getNotificationPreferences, saveNotificationPreferences, isNotificationEnabled,
     getDashboardKPIs,
     getRevenueMonthly, getRevenueWeekly,
     getStaff, updateProfile,
@@ -1476,7 +1645,9 @@ async function initLiveNotificationBadge() {
     onInsert: async (newNotif) => {
       const count = await GS.getUnreadCount();
       updateNotifBadges(count);
-      Toast.show(newNotif.title, 'info', 5000);
+      if (await GS.isNotificationEnabled(newNotif.type)) {
+        Toast.show(newNotif.title, 'info', 5000);
+      }
     },
     onUpdate: async () => {
       const count = await GS.getUnreadCount();

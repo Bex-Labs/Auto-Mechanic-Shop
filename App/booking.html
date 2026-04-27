@@ -897,6 +897,23 @@ async function submitBooking() {
     if (res.error) throw res.error;
 
     var appt = res.data;
+    var notifDateLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-NG', {
+      weekday:'short', day:'numeric', month:'short', year:'numeric'
+    });
+
+    try {
+      await sb.from('notifications').insert({
+        shop_id: SHOP_ID,
+        type: 'appointment',
+        title: 'New Booking Request',
+        body: first + ' ' + last + ' requested ' + service + ' for ' + notifDateLabel + ' at ' + selectedSlot + '.',
+        related_id: appt.id,
+        related_type: 'appointment',
+        read: false,
+      });
+    } catch (notifErr) {
+      console.warn('Booking notification failed:', notifErr?.message || notifErr);
+    }
 
     // Show success screen
     var d = new Date(date + 'T12:00:00');

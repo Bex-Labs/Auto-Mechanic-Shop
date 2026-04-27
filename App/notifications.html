@@ -256,6 +256,22 @@ function openNotif(id) {
     actionBtn.style.display = '';
     actionBtn.onclick = () => { Modal.close('notifModal'); window.location.href = 'work-orders.html'; };
     actionBtn.textContent = 'Go to Work Orders →';
+  } else if (n.related_type === 'inventory') {
+    actionBtn.style.display = '';
+    actionBtn.onclick = () => { Modal.close('notifModal'); window.location.href = 'inventory.html'; };
+    actionBtn.textContent = 'Go to Inventory →';
+  } else if (n.related_type === 'purchase_order') {
+    actionBtn.style.display = '';
+    actionBtn.onclick = () => { Modal.close('notifModal'); window.location.href = 'supply-chain.html'; };
+    actionBtn.textContent = 'Go to Supply Chain →';
+  } else if (n.related_type === 'invoice') {
+    actionBtn.style.display = '';
+    actionBtn.onclick = () => { Modal.close('notifModal'); window.location.href = 'invoices.html'; };
+    actionBtn.textContent = 'Go to Invoices →';
+  } else if (n.related_type === 'appointment') {
+    actionBtn.style.display = '';
+    actionBtn.onclick = () => { Modal.close('notifModal'); window.location.href = 'appointments.html'; };
+    actionBtn.textContent = 'Go to Appointments →';
   } else {
     actionBtn.style.display = 'none';
   }
@@ -270,14 +286,22 @@ async function initPage() {
 
   // Live subscription — new notifications appear instantly
   Realtime.subscribe('notifications', {
-    onInsert: (n) => {
+    onInsert: async (n) => {
+      if (!(await GS.isNotificationEnabled(n.type))) return;
       notifData.unshift(n);
       renderSummary();
       renderList();
     },
-    onUpdate: (n) => {
+    onUpdate: async (n) => {
       const idx = notifData.findIndex(x => x.id === n.id);
-      if (idx >= 0) { notifData[idx] = { ...notifData[idx], ...n }; renderSummary(); renderList(); }
+      if (await GS.isNotificationEnabled(n.type)) {
+        if (idx >= 0) notifData[idx] = { ...notifData[idx], ...n };
+        else notifData.unshift(n);
+      } else if (idx >= 0) {
+        notifData.splice(idx, 1);
+      }
+      renderSummary();
+      renderList();
     },
     onDelete: (n) => {
       notifData = notifData.filter(x => x.id !== n.id);

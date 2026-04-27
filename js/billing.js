@@ -338,13 +338,22 @@ const PaystackInvoice = {
 
     // Mark invoice as paid
     const sid = await (async () => { try { return await GS.getSettings().then(() => shopId); } catch(e) { return shopId; } })();
-    await sb.from('invoices').update({
+    const { data: paidInvoice, error: paidErr } = await sb.from('invoices').update({
       status:           'Paid',
       payment_method:   'Paystack',
       paid_at:          new Date().toISOString(),
       updated_at:       new Date().toISOString(),
       paystack_reference: reference,
-    }).eq('id', invoiceId);
+    }).eq('id', invoiceId).select('id, ref').single();
+    if (paidErr) throw paidErr;
+
+    await GS.createNotification({
+      type: 'payment',
+      title: `Invoice Payment Received — ${paidInvoice?.ref || invoiceId}`,
+      body: `${paidInvoice?.ref || 'An invoice'} was paid online via Paystack.`,
+      related_id: invoiceId,
+      related_type: 'invoice',
+    }).catch(e => console.warn('Payment notification failed:', e.message));
   },
 };
 

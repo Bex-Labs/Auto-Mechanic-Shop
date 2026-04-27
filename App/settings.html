@@ -348,24 +348,24 @@
             <div class="panel">
               <div class="panel-header">
                 <span class="panel-title">NOTIFICATION PREFERENCES</span>
-                <button class="app-btn app-btn-primary app-btn-sm" onclick="Toast.show('Notification preferences saved','success')">Save Changes</button>
+                <button class="app-btn app-btn-primary app-btn-sm" onclick="saveNotificationSettings()">Save Changes</button>
               </div>
               <div class="panel-body">
                 <div class="settings-section">
                   <div class="settings-section-title">In-App Notifications</div>
                   <div class="settings-section-sub">These appear in your GearShift notification center.</div>
-                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Low Stock Alerts</div><div class="settings-field-desc">Notify when a part drops below its reorder threshold.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div></div>
-                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Work Order Status Changes</div><div class="settings-field-desc">Alert when a WO moves to a new status.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div></div>
-                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">New Booking Requests</div><div class="settings-field-desc">Alert when a customer submits an appointment request.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div></div>
-                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">PO Delivery Confirmations</div><div class="settings-field-desc">Alert when a purchase order is marked received.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div></div>
-                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Invoice Payments</div><div class="settings-field-desc">Alert when a payment is recorded on an invoice.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div></div>
+                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Low Stock Alerts</div><div class="settings-field-desc">Notify when a part drops below its reorder threshold.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" id="notif-low-stock" onclick="toggleSetting(this)"></div><span class="toggle-label" id="notif-low-stock-lbl">Enabled</span></div></div></div>
+                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Work Order Status Changes</div><div class="settings-field-desc">Alert when a WO moves to a new status.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" id="notif-work-orders" onclick="toggleSetting(this)"></div><span class="toggle-label" id="notif-work-orders-lbl">Enabled</span></div></div></div>
+                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">New Booking Requests</div><div class="settings-field-desc">Alert when a customer submits an appointment request.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" id="notif-booking-requests" onclick="toggleSetting(this)"></div><span class="toggle-label" id="notif-booking-requests-lbl">Enabled</span></div></div></div>
+                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">PO Delivery Confirmations</div><div class="settings-field-desc">Alert when a purchase order is marked received.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" id="notif-po-delivery" onclick="toggleSetting(this)"></div><span class="toggle-label" id="notif-po-delivery-lbl">Enabled</span></div></div></div>
+                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Invoice Payments</div><div class="settings-field-desc">Alert when a payment is recorded on an invoice.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" id="notif-invoice-payments" onclick="toggleSetting(this)"></div><span class="toggle-label" id="notif-invoice-payments-lbl">Enabled</span></div></div></div>
                 </div>
                 <div class="settings-section">
                   <div class="settings-section-title">Email Notifications</div>
                   <div class="settings-section-sub">Emails sent to your admin address.</div>
-                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Daily Summary Email</div><div class="settings-field-desc">Morning digest: active WOs, appointments today, low stock.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div></div>
-                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Overdue Invoice Alerts</div><div class="settings-field-desc">Email when invoices pass their due date.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div></div>
-                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Supplier Delivery Alerts</div><div class="settings-field-desc">Email when a PO expected delivery date passes.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Disabled</span></div></div></div>
+                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Daily Summary Email</div><div class="settings-field-desc">Morning digest: active WOs, appointments today, low stock.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" id="notif-email-daily-summary" onclick="toggleSetting(this)"></div><span class="toggle-label" id="notif-email-daily-summary-lbl">Enabled</span></div></div></div>
+                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Overdue Invoice Alerts</div><div class="settings-field-desc">Email when invoices pass their due date.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" id="notif-email-overdue-invoices" onclick="toggleSetting(this)"></div><span class="toggle-label" id="notif-email-overdue-invoices-lbl">Enabled</span></div></div></div>
+                  <div class="settings-field"><div class="settings-field-left"><div class="settings-field-label">Supplier Delivery Alerts</div><div class="settings-field-desc">Email when a PO expected delivery date passes.</div></div><div class="settings-field-right"><div class="toggle-wrap"><div class="toggle" id="notif-email-supplier-delivery" onclick="toggleSetting(this)"></div><span class="toggle-label" id="notif-email-supplier-delivery-lbl">Disabled</span></div></div></div>
                 </div>
               </div>
             </div>
@@ -820,6 +820,18 @@ async function loadSettings(user) {
       }
     }
   } catch(e) { /* settings row may not exist yet */ }
+
+  try {
+    const notifPrefs = await GS.getNotificationPreferences();
+    setToggle('notif-low-stock',             notifPrefs.app_low_stock_alerts !== false);
+    setToggle('notif-work-orders',           notifPrefs.app_work_order_updates !== false);
+    setToggle('notif-booking-requests',      notifPrefs.app_new_booking_requests !== false);
+    setToggle('notif-po-delivery',           notifPrefs.app_po_delivery_confirmations !== false);
+    setToggle('notif-invoice-payments',      notifPrefs.app_invoice_payments !== false);
+    setToggle('notif-email-daily-summary',   notifPrefs.email_daily_summary !== false);
+    setToggle('notif-email-overdue-invoices',notifPrefs.email_overdue_invoices !== false);
+    setToggle('notif-email-supplier-delivery', notifPrefs.email_supplier_delivery === true);
+  } catch(e) { /* notification preferences fall back to defaults */ }
 }
 
 function pickAvatarFile() {
@@ -1026,6 +1038,29 @@ async function saveBillingSettings() {
     Toast.show('Billing settings saved ✓', 'success');
   } catch(err) {
     Toast.show(err.message || 'Failed to save', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Changes'; }
+  }
+}
+
+async function saveNotificationSettings() {
+  const btn = document.querySelector('#sp-notifications .app-btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  try {
+    await GS.saveNotificationPreferences({
+      app_low_stock_alerts:          getToggle('notif-low-stock'),
+      app_work_order_updates:        getToggle('notif-work-orders'),
+      app_new_booking_requests:      getToggle('notif-booking-requests'),
+      app_po_delivery_confirmations: getToggle('notif-po-delivery'),
+      app_invoice_payments:          getToggle('notif-invoice-payments'),
+      email_daily_summary:           getToggle('notif-email-daily-summary'),
+      email_overdue_invoices:        getToggle('notif-email-overdue-invoices'),
+      email_supplier_delivery:       getToggle('notif-email-supplier-delivery'),
+    });
+    Toast.show('Notification preferences saved', 'success');
+  } catch(err) {
+    Toast.show(err.message || 'Could not save notification preferences', 'error');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Save Changes'; }
   }
