@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="55" failures="0" errors="0" time="0.282677124">
+    <testsuite name="tests/currency.test.js" timestamp="2026-04-26T21:51:08.557Z" hostname="Khalifas-Macbook-Air.local" tests="5" failures="0" errors="0" skipped="0" time="0.053791958">
+        <testcase classname="tests/currency.test.js" name="formatCurrency &gt; formats whole numbers correctly" time="0.05048">
+        </testcase>
+        <testcase classname="tests/currency.test.js" name="formatCurrency &gt; formats decimal amounts" time="0.000522708">
+        </testcase>
+        <testcase classname="tests/currency.test.js" name="formatCurrency &gt; handles zero" time="0.000346708">
+        </testcase>
+        <testcase classname="tests/currency.test.js" name="formatCurrency &gt; handles null" time="0.000296333">
+        </testcase>
+        <testcase classname="tests/currency.test.js" name="formatCurrency &gt; handles undefined" time="0.000317791">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/work-orders.test.js" timestamp="2026-04-26T21:51:08.558Z" hostname="Khalifas-Macbook-Air.local" tests="12" failures="0" errors="0" skipped="0" time="0.123705833">
+        <testcase classname="tests/work-orders.test.js" name="Work Orders Module &gt; TEST 1: should load all work orders on page init" time="0.007411083">
+        </testcase>
+        <testcase classname="tests/work-orders.test.js" name="Work Orders Module &gt; TEST 2: should create a new work order with valid input" time="0.002164">
+        </testcase>
+        <testcase classname="tests/work-orders.test.js" name="Work Orders Module &gt; TEST 3: should reject work order creation with missing fields" time="0.001363375">
+        </testcase>
+        <testcase classname="tests/work-orders.test.js" name="Work Orders Module &gt; TEST 4: should update work order status when dragged to new column" time="0.001441">
+        </testcase>
+        <testcase classname="tests/work-orders.test.js" name="Work Orders Module &gt; TEST 5: should log status change to history table" time="0.001282875">
+        </testcase>
+        <testcase classname="tests/work-orders.test.js" name="Work Orders Module &gt; TEST 6: should attach a part to a work order" time="0.000980708">
+        </testcase>
+        <testcase classname="tests/work-orders.test.js" name="Work Orders Module &gt; TEST 7: should auto-deduct stock when part is attached" time="0.000706125">
+        </testcase>
+        <testcase classname="tests/work-orders.test.js" name="Work Orders Module &gt; TEST 8: should increment quantity when attaching same part twice" time="0.001051583">
+        </testcase>
+        <testcase classname="tests/work-orders.test.js" name="Work Orders Module &gt; TEST 9: should generate invoice when work order is marked completed" time="0.001217">
+        </testcase>
+        <testcase classname="tests/work-orders.test.js" name="Work Orders Module &gt; TEST 10: should calculate correct invoice total (labour + parts + tax)" time="0.00128525">
+        </testcase>
+        <testcase classname="tests/work-orders.test.js" name="Work Orders Module &gt; TEST 11: should prevent duplicate work order creation" time="0.000970625">
+        </testcase>
+        <testcase classname="tests/work-orders.test.js" name="Work Orders Module &gt; TEST 12: should retry work order operation on network failure" time="0.101822541">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/functional/ui-behavior.test.js" timestamp="2026-04-26T21:51:08.559Z" hostname="Khalifas-Macbook-Air.local" tests="4" failures="0" errors="0" skipped="0" time="0.0310235">
+        <testcase classname="tests/functional/ui-behavior.test.js" name="main.js UI behaviour &gt; shows initials when a staff member has no profile photo" time="0.013377791">
+        </testcase>
+        <testcase classname="tests/functional/ui-behavior.test.js" name="main.js UI behaviour &gt; falls back to initials when a profile photo fails to load" time="0.003594208">
+        </testcase>
+        <testcase classname="tests/functional/ui-behavior.test.js" name="main.js UI behaviour &gt; filters table rows based on what the user types" time="0.008784208">
+        </testcase>
+        <testcase classname="tests/functional/ui-behavior.test.js" name="main.js UI behaviour &gt; switches the active settings pane when a different tab is selected" time="0.003418667">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/tests/billing.test.js" timestamp="2026-04-26T21:51:08.559Z" hostname="Khalifas-Macbook-Air.local" tests="5" failures="0" errors="0" skipped="0" time="0.004127541">
+        <testcase classname="tests/tests/billing.test.js" name="calcCommission — Paystack 5% split &gt; 5% of ₦50,000 = ₦2,500 commission" time="0.001525875">
+        </testcase>
+        <testcase classname="tests/tests/billing.test.js" name="calcCommission — Paystack 5% split &gt; shop always gets 95%" time="0.00034225">
+        </testcase>
+        <testcase classname="tests/tests/billing.test.js" name="calcCommission — Paystack 5% split &gt; zero invoice amount" time="0.000250167">
+        </testcase>
+        <testcase classname="tests/tests/billing.test.js" name="calcKobo — Naira to kobo conversion &gt; ₦10,500 = 1,050,000 kobo (monthly plan)" time="0.000226667">
+        </testcase>
+        <testcase classname="tests/tests/billing.test.js" name="calcKobo — Naira to kobo conversion &gt; ₦90,000 = 9,000,000 kobo (annual plan)" time="0.000247125">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/tests/inventory.test.js" timestamp="2026-04-26T21:51:08.560Z" hostname="Khalifas-Macbook-Air.local" tests="10" failures="0" errors="0" skipped="0" time="0.006128625">
+        <testcase classname="tests/tests/inventory.test.js" name="isLowStock &gt; flags part at exactly threshold as low stock" time="0.002098333">
+        </testcase>
+        <testcase classname="tests/tests/inventory.test.js" name="isLowStock &gt; flags part below threshold" time="0.000393958">
+        </testcase>
+        <testcase classname="tests/tests/inventory.test.js" name="isLowStock &gt; does not flag part above threshold" time="0.000255709">
+        </testcase>
+        <testcase classname="tests/tests/inventory.test.js" name="isLowStock &gt; flags zero stock" time="0.000256125">
+        </testcase>
+        <testcase classname="tests/tests/inventory.test.js" name="classifyTurnover — inventory reports &gt; 0 uses = Dead Stock" time="0.000335291">
+        </testcase>
+        <testcase classname="tests/tests/inventory.test.js" name="classifyTurnover — inventory reports &gt; 1–2 uses = Slow Mover" time="0.000196875">
+        </testcase>
+        <testcase classname="tests/tests/inventory.test.js" name="classifyTurnover — inventory reports &gt; 3–5 uses = Medium Mover" time="0.000160375">
+        </testcase>
+        <testcase classname="tests/tests/inventory.test.js" name="classifyTurnover — inventory reports &gt; 6+ uses = Fast Mover" time="0.000158125">
+        </testcase>
+        <testcase classname="tests/tests/inventory.test.js" name="calcStockDeficit &gt; returns shortfall when below threshold" time="0.000198042">
+        </testcase>
+        <testcase classname="tests/tests/inventory.test.js" name="calcStockDeficit &gt; returns 0 when stock is sufficient" time="0.000190084">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/tests/invoice.test.js" timestamp="2026-04-26T21:51:08.561Z" hostname="Khalifas-Macbook-Air.local" tests="5" failures="0" errors="0" skipped="0" time="0.004683167">
+        <testcase classname="tests/tests/invoice.test.js" name="calculateInvoice &gt; calculates labour + parts + tax correctly" time="0.001780625">
+        </testcase>
+        <testcase classname="tests/tests/invoice.test.js" name="calculateInvoice &gt; handles zero labour hours" time="0.00039875">
+        </testcase>
+        <testcase classname="tests/tests/invoice.test.js" name="calculateInvoice &gt; handles zero tax rate" time="0.00024675">
+        </testcase>
+        <testcase classname="tests/tests/invoice.test.js" name="calculateInvoice &gt; handles no parts attached" time="0.000272917">
+        </testcase>
+        <testcase classname="tests/tests/invoice.test.js" name="calculateInvoice &gt; rounds to 2 decimal places" time="0.000275833">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/tests/phone.test.js" timestamp="2026-04-26T21:51:08.561Z" hostname="Khalifas-Macbook-Air.local" tests="5" failures="0" errors="0" skipped="0" time="0.00463775">
+        <testcase classname="tests/tests/phone.test.js" name="normalisePhone — Nigerian number formatting &gt; converts 0801... to 2348..." time="0.001689125">
+        </testcase>
+        <testcase classname="tests/tests/phone.test.js" name="normalisePhone — Nigerian number formatting &gt; strips the + from +234..." time="0.000373125">
+        </testcase>
+        <testcase classname="tests/tests/phone.test.js" name="normalisePhone — Nigerian number formatting &gt; strips spaces" time="0.000253">
+        </testcase>
+        <testcase classname="tests/tests/phone.test.js" name="normalisePhone — Nigerian number formatting &gt; strips dashes" time="0.000234541">
+        </testcase>
+        <testcase classname="tests/tests/phone.test.js" name="normalisePhone — Nigerian number formatting &gt; leaves already-normalised number unchanged" time="0.00032275">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/unit/billing-plan.test.js" timestamp="2026-04-26T21:51:08.561Z" hostname="Khalifas-Macbook-Air.local" tests="5" failures="0" errors="0" skipped="0" time="0.007394708">
+        <testcase classname="tests/unit/billing-plan.test.js" name="billing plan rules &gt; keeps Starter plan at 5 users with core features only" time="0.00274425">
+        </testcase>
+        <testcase classname="tests/unit/billing-plan.test.js" name="billing plan rules &gt; keeps Pro plan at 25 users with reports and online payments" time="0.000995458">
+        </testcase>
+        <testcase classname="tests/unit/billing-plan.test.js" name="billing plan rules &gt; formats resource limits using user-friendly labels" time="0.000640375">
+        </testcase>
+        <testcase classname="tests/unit/billing-plan.test.js" name="billing plan rules &gt; blocks new staff creation once Starter has reached 5 active users" time="0.000719625">
+        </testcase>
+        <testcase classname="tests/unit/billing-plan.test.js" name="billing plan rules &gt; allows more staff when the shop is on an active Pro plan" time="0.000513875">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/unit/main-helpers.test.js" timestamp="2026-04-26T21:51:08.562Z" hostname="Khalifas-Macbook-Air.local" tests="4" failures="0" errors="0" skipped="0" time="0.047184042">
+        <testcase classname="tests/unit/main-helpers.test.js" name="main.js shared helpers &gt; builds initials from first and last name" time="0.0117595">
+        </testcase>
+        <testcase classname="tests/unit/main-helpers.test.js" name="main.js shared helpers &gt; returns a placeholder when no name is available" time="0.001528541">
+        </testcase>
+        <testcase classname="tests/unit/main-helpers.test.js" name="main.js shared helpers &gt; formats naira values consistently for dashboards and invoices" time="0.031136625">
+        </testcase>
+        <testcase classname="tests/unit/main-helpers.test.js" name="main.js shared helpers &gt; increments generated ids from the highest existing record" time="0.000864042">
+        </testcase>
+    </testsuite>
+</testsuites>
