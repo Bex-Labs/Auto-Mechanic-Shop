@@ -1783,15 +1783,45 @@ const GS = (() => {
      --------------------------------------------------------------- */
   async function getRevenueMonthly(months = 7) {
     const sid = await _shopId();
-    const { data, error } = await sb.from('revenue_snapshots')
-      .select('*').eq('shop_id', sid)
-      .eq('period_type', 'month')
-      .order('period', { ascending: true }).limit(months);
+    const monthCount = Math.max(1, Number(months) || 7);
+    const startMonth = new Date();
+    startMonth.setDate(1);
+    startMonth.setHours(0, 0, 0, 0);
+    startMonth.setMonth(startMonth.getMonth() - (monthCount - 1));
+
+    const buckets = [];
+    const totals = {};
+    for (let i = 0; i < monthCount; i++) {
+      const monthDate = new Date(startMonth.getFullYear(), startMonth.getMonth() + i, 1);
+      const key = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
+      buckets.push({
+        key,
+        label: String(monthDate.getMonth() + 1),
+      });
+      totals[key] = 0;
+    }
+
+    const { data, error } = await sb.from('invoices')
+      .select('paid_at, labor_amount, parts_amount, tax_amount')
+      .eq('shop_id', sid)
+      .eq('status', 'Paid')
+      .gte('paid_at', startMonth.toISOString())
+      .not('paid_at', 'is', null);
     if (error) throw error;
-    return (data || []).map(r => ({
-      label: r.period.slice(-2).replace(/^0/, ''),
-      value: r.amount,
-      formatted: formatCurrency(r.amount),
+
+    (data || []).forEach(row => {
+      const paidAt = String(row.paid_at || '');
+      const key = paidAt.slice(0, 7);
+      if (!totals[key] && totals[key] !== 0) return;
+      totals[key] += (Number(row.labor_amount) || 0)
+                   + (Number(row.parts_amount) || 0)
+                   + (Number(row.tax_amount) || 0);
+    });
+
+    return buckets.map(bucket => ({
+      label: bucket.label,
+      value: totals[bucket.key] || 0,
+      formatted: formatCurrency(totals[bucket.key] || 0),
     }));
   }
 
@@ -1875,6 +1905,382 @@ const GS = (() => {
     }
   }
 
+  async function resetDemoData() {
+    const sid = await _shopId();
+    const user = await Auth.getUser();
+    if (!user) throw new Error('You must be signed in to reset demo data.');
+    if (user.role !== 'Admin') throw new Error('Only admins can reset demo data.');
+
+    function dateOffset(days) {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() + days);
+      return d.toISOString().split('T')[0];
+    }
+
+    function timeValue(hour, minute = 0) {
+      return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+    }
+
+    async function deleteQuery(queryPromise, label) {
+      const { error } = await queryPromise;
+      if (error) throw new Error((label || 'Delete failed') + ': ' + error.message);
+    }
+
+    const [staff, currentSettings] = await Promise.all([
+      getStaff(),
+      getSettings().catch(() => null),
+    ]);
+
+    const team = staff || [];
+    const mechanic = team.find(member => member.role === 'Mechanic')
+      || team.find(member => member.role === 'Parts Manager')
+      || team.find(member => member.role === 'Service Advisor')
+      || team.find(member => member.id === user.id)
+      || team[0]
+      || null;
+
+    const [poRows, woRows, invoiceRows, customerRows] = await Promise.all([
+      sb.from('purchase_orders').select('id').eq('shop_id', sid),
+      sb.from('work_orders').select('id').eq('shop_id', sid),
+      sb.from('invoices').select('id').eq('shop_id', sid),
+      sb.from('customers').select('id').eq('shop_id', sid),
+    ]);
+
+    if (poRows.error) throw poRows.error;
+    if (woRows.error) throw woRows.error;
+    if (invoiceRows.error) throw invoiceRows.error;
+    if (customerRows.error) throw customerRows.error;
+
+    const poIds = (poRows.data || []).map(row => row.id).filter(Boolean);
+    const woIds = (woRows.data || []).map(row => row.id).filter(Boolean);
+    const invoiceIds = (invoiceRows.data || []).map(row => row.id).filter(Boolean);
+    const customerIds = (customerRows.data || []).map(row => row.id).filter(Boolean);
+
+    if (poIds.length) {
+      await deleteQuery(sb.from('purchase_order_items').delete().in('po_id', poIds), 'Could not clear purchase order items');
+    }
+    if (woIds.length) {
+      await deleteQuery(sb.from('work_order_parts').delete().in('work_order_id', woIds), 'Could not clear work order parts');
+      await deleteQuery(sb.from('wo_status_history').delete().in('work_order_id', woIds), 'Could not clear work order history');
+    }
+    if (invoiceIds.length) {
+      await deleteQuery(sb.from('invoice_payments').delete().in('invoice_id', invoiceIds), 'Could not clear invoice payments');
+    }
+    if (customerIds.length) {
+      await deleteQuery(sb.from('vehicles').delete().in('customer_id', customerIds), 'Could not clear vehicles');
+    }
+
+    await deleteQuery(sb.from('appointments').delete().eq('shop_id', sid), 'Could not clear appointments');
+    await deleteQuery(sb.from('notifications').delete().eq('shop_id', sid), 'Could not clear notifications');
+    await deleteQuery(sb.from('invoices').delete().eq('shop_id', sid), 'Could not clear invoices');
+    await deleteQuery(sb.from('work_orders').delete().eq('shop_id', sid), 'Could not clear work orders');
+    await deleteQuery(sb.from('purchase_orders').delete().eq('shop_id', sid), 'Could not clear purchase orders');
+    await deleteQuery(sb.from('customers').delete().eq('shop_id', sid), 'Could not clear customers');
+    await deleteQuery(sb.from('inventory').delete().eq('shop_id', sid), 'Could not clear inventory');
+    await deleteQuery(sb.from('suppliers').delete().eq('shop_id', sid), 'Could not clear suppliers');
+
+    if (!currentSettings) {
+      await updateSettings({
+        labor_rate: 18000,
+        tax_rate: 7.5,
+        invoice_prefix: 'INV-',
+        invoice_next_num: 1,
+        bays: 4,
+      });
+    }
+
+    const supplierA = await createSupplier({
+      name: 'Arewa Auto Parts',
+      contact: 'Musa Bala',
+      email: 'sales@arewaautoparts.ng',
+      phone: '08031234567',
+      lead_days: 2,
+      terms: 'Net 7',
+      categories: 'Brakes, Filters, Suspension',
+      on_time_pct: 96,
+      notes: 'Reliable same-week delivery for fast-moving service parts.',
+      rating: 5,
+    });
+    const supplierB = await createSupplier({
+      name: 'NorthGate Lubricants',
+      contact: 'Amina Yusuf',
+      email: 'orders@northgatelubes.ng',
+      phone: '08039876543',
+      lead_days: 3,
+      terms: 'Net 14',
+      categories: 'Lubricants, Fluids, Batteries',
+      on_time_pct: 91,
+      notes: 'Handles workshop consumables and monthly restock orders.',
+      rating: 4,
+    });
+
+    const brakePads = await createInventoryItem({
+      name: 'Front Brake Pad Set',
+      sku: 'BRK-PAD-001',
+      category: 'Brakes',
+      location: 'Rack A1',
+      qty: 18,
+      threshold: 6,
+      cost: 35000,
+      supplier_id: supplierA.id,
+    });
+    const engineOil = await createInventoryItem({
+      name: '5W-30 Engine Oil 5L',
+      sku: 'OIL-5W30-5L',
+      category: 'Lubricants',
+      location: 'Rack B2',
+      qty: 12,
+      threshold: 8,
+      cost: 18000,
+      supplier_id: supplierB.id,
+    });
+    const oilFilter = await createInventoryItem({
+      name: 'Oil Filter',
+      sku: 'FLT-OIL-014',
+      category: 'Filters',
+      location: 'Rack B1',
+      qty: 7,
+      threshold: 5,
+      cost: 6500,
+      supplier_id: supplierA.id,
+    });
+    const wheelBearing = await createInventoryItem({
+      name: 'Front Wheel Bearing',
+      sku: 'WHL-BRG-118',
+      category: 'Suspension',
+      location: 'Rack C3',
+      qty: 1,
+      threshold: 3,
+      cost: 42000,
+      supplier_id: supplierA.id,
+    });
+    const sparkPlug = await createInventoryItem({
+      name: 'Iridium Spark Plug',
+      sku: 'SPK-IR-004',
+      category: 'Ignition',
+      location: 'Rack D2',
+      qty: 24,
+      threshold: 12,
+      cost: 2500,
+      supplier_id: supplierB.id,
+    });
+
+    const customers = [];
+    customers.push({
+      customer: await createCustomer({
+        first_name: 'Ibrahim',
+        last_name: 'Garba',
+        email: 'ibrahim.garba@example.com',
+        phone: '08034561234',
+        address: 'Barnawa, Kaduna',
+        notes: 'Prefers WhatsApp updates before pickup.',
+      }),
+      vehicle: null,
+    });
+    customers.push({
+      customer: await createCustomer({
+        first_name: 'Zainab',
+        last_name: 'Bello',
+        email: 'zainab.bello@example.com',
+        phone: '08051234567',
+        address: 'Ungwan Rimi, Kaduna',
+        notes: 'Requests weekend service slots when possible.',
+      }),
+      vehicle: null,
+    });
+    customers.push({
+      customer: await createCustomer({
+        first_name: 'Samuel',
+        last_name: 'John',
+        email: 'samuel.john@example.com',
+        phone: '08067891234',
+        address: 'Kawo, Kaduna',
+        notes: 'Fleet owner with recurring maintenance jobs.',
+      }),
+      vehicle: null,
+    });
+    customers.push({
+      customer: await createCustomer({
+        first_name: 'Aisha',
+        last_name: 'Hassan',
+        email: 'aisha.hassan@example.com',
+        phone: '08025678901',
+        address: 'Sabon Tasha, Kaduna',
+        notes: 'Asks for cost approval before extra work is started.',
+      }),
+      vehicle: null,
+    });
+
+    customers[0].vehicle = await createVehicle({
+      customer_id: customers[0].customer.id,
+      make: 'Toyota',
+      model: 'Camry',
+      year: 2014,
+      vin: '4T1BF1FK7EU123456',
+      plate: 'KAD-432-AA',
+      color: 'Silver',
+      mileage: 182340,
+    });
+    customers[1].vehicle = await createVehicle({
+      customer_id: customers[1].customer.id,
+      make: 'Toyota',
+      model: 'Corolla',
+      year: 2011,
+      vin: '2T1BU4EE5BC654321',
+      plate: 'KAD-118-BB',
+      color: 'Black',
+      mileage: 214020,
+    });
+    customers[2].vehicle = await createVehicle({
+      customer_id: customers[2].customer.id,
+      make: 'Toyota',
+      model: 'Hilux',
+      year: 2018,
+      vin: 'MR0HA3CD100987654',
+      plate: 'ABJ-902-TR',
+      color: 'White',
+      mileage: 146880,
+    });
+    customers[3].vehicle = await createVehicle({
+      customer_id: customers[3].customer.id,
+      make: 'Hyundai',
+      model: 'Elantra',
+      year: 2016,
+      vin: 'KMHDH4AE6GU112233',
+      plate: 'KAD-771-DD',
+      color: 'Blue',
+      mileage: 129450,
+    });
+
+    const woOpen = await createWorkOrder({
+      customer_id: customers[0].customer.id,
+      vehicle_id: customers[0].vehicle.id,
+      mechanic_id: mechanic?.id || null,
+      fault: 'Brake pedal squeals and steering shudders when slowing down from highway speed.',
+      labor_hours: 2.5,
+      notes: 'Inspect front rotors before machining and confirm pad wear.',
+    });
+    await addPartToWorkOrder(woOpen.id, brakePads.id, 1, brakePads.cost || 35000);
+
+    const woPaid = await createWorkOrder({
+      customer_id: customers[1].customer.id,
+      vehicle_id: customers[1].vehicle.id,
+      mechanic_id: mechanic?.id || null,
+      fault: 'Routine service due: engine oil, filter change and spark plug inspection.',
+      labor_hours: 1.5,
+      notes: 'Customer approved same-day pickup once service is complete.',
+    });
+    await addPartToWorkOrder(woPaid.id, engineOil.id, 1, engineOil.cost || 18000);
+    await addPartToWorkOrder(woPaid.id, oilFilter.id, 1, oilFilter.cost || 6500);
+    await updateWorkOrder(woPaid.id, { status: 'In Progress' });
+    await updateWorkOrder(woPaid.id, { status: 'Completed' });
+    const paidInvoice = await generateInvoiceFromWO(woPaid.id);
+    await markInvoicePaid(paidInvoice.id, 'Transfer');
+
+    const woAwaiting = await createWorkOrder({
+      customer_id: customers[2].customer.id,
+      vehicle_id: customers[2].vehicle.id,
+      mechanic_id: mechanic?.id || null,
+      fault: 'Front hub noise above 60 km/h and slight play on the left side.',
+      labor_hours: 3,
+      notes: 'Wheel bearing is below stock threshold and has been added to the next supplier order.',
+    });
+    await updateWorkOrder(woAwaiting.id, { status: 'Awaiting Parts' });
+
+    const woUnpaid = await createWorkOrder({
+      customer_id: customers[3].customer.id,
+      vehicle_id: customers[3].vehicle.id,
+      mechanic_id: mechanic?.id || null,
+      fault: 'AC not cooling well and cabin airflow is weak on full fan speed.',
+      labor_hours: 4,
+      notes: 'Initial diagnostics completed. Waiting for customer approval to replace cabin filter if needed.',
+    });
+    await updateWorkOrder(woUnpaid.id, { status: 'Completed' });
+    await generateInvoiceFromWO(woUnpaid.id);
+
+    const draftPO = await createPurchaseOrder(
+      supplierA.id,
+      [{ part_id: wheelBearing.id, qty: 4, unit_cost: wheelBearing.cost || 42000 }],
+      'Urgent replenishment for low-stock wheel bearings.',
+      dateOffset(5),
+    );
+    await updatePOStatus(draftPO.id, 'Sent');
+
+    const receivedPO = await createPurchaseOrder(
+      supplierB.id,
+      [
+        { part_id: engineOil.id, qty: 6, unit_cost: engineOil.cost || 18000 },
+        { part_id: sparkPlug.id, qty: 12, unit_cost: sparkPlug.cost || 2500 },
+      ],
+      'Monthly consumables restock for routine servicing jobs.',
+      dateOffset(-2),
+    );
+    await updatePOStatus(receivedPO.id, 'Sent');
+    for (const item of receivedPO.purchase_order_items || []) {
+      await receivePOItem(item.id, item.qty || 0);
+    }
+    await updatePOStatus(receivedPO.id, 'Received');
+
+    const tomorrowAppointment = await createAppointment({
+      customer_id: customers[0].customer.id,
+      vehicle_id: customers[0].vehicle.id,
+      service: 'Brake Inspection',
+      appt_date: dateOffset(1),
+      appt_time: timeValue(9, 0),
+      mechanic_id: mechanic?.id || null,
+      status: 'Confirmed',
+      notes: 'Customer asked for same-day estimate before any part replacement.',
+    });
+    const followUpAppointment = await createAppointment({
+      customer_id: customers[2].customer.id,
+      vehicle_id: customers[2].vehicle.id,
+      service: 'Suspension Inspection',
+      appt_date: dateOffset(3),
+      appt_time: timeValue(11, 30),
+      mechanic_id: mechanic?.id || null,
+      status: 'Pending',
+      notes: 'Follow-up visit after parts arrival.',
+    });
+
+    await createNotification({
+      type: 'low_stock',
+      title: 'Wheel Bearing Stock Low',
+      body: 'Front Wheel Bearing is below its reorder threshold and has been added to an active purchase order.',
+      related_id: wheelBearing.id,
+      related_type: 'inventory',
+    });
+    await createNotification({
+      type: 'booking_request',
+      title: 'Upcoming Demo Booking',
+      body: `Brake Inspection booked for ${customers[0].customer.first_name} ${customers[0].customer.last_name} tomorrow at 09:00.`,
+      related_id: tomorrowAppointment.id,
+      related_type: 'appointment',
+    });
+    await createNotification({
+      type: 'wo_update',
+      title: `Work Order ${woAwaiting.ref || ''} Awaiting Parts`,
+      body: 'A customer repair job is waiting on replacement stock from the latest supplier order.',
+      related_id: woAwaiting.id,
+      related_type: 'work_order',
+    });
+
+    const summary = {
+      suppliers: 2,
+      inventory: 5,
+      customers: customers.length,
+      vehicles: customers.length,
+      work_orders: 4,
+      invoices: 2,
+      appointments: 2,
+      purchase_orders: 2,
+      notifications: 3,
+    };
+
+    await _audit('shops', sid, 'RESET_DEMO_DATA', summary);
+    return summary;
+  }
+
   /* ---------------------------------------------------------------
      PUBLIC API
      --------------------------------------------------------------- */
@@ -1895,7 +2301,7 @@ const GS = (() => {
     getRevenueMonthly, getRevenueWeekly,
     getStaff, updateProfile,
     getShopActivity, logPageView, logActivity,
-    getSettings, updateSettings,
+    getSettings, updateSettings, resetDemoData,
   };
 })();
 

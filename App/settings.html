@@ -634,7 +634,7 @@
                 </div>
                 <div style="background:var(--app-surface);border:1px solid rgba(181,43,30,.25);border-radius:var(--r-sm);padding:18px 20px;display:flex;align-items:center;justify-content:space-between">
                   <div><div style="font-size:13px;font-weight:700;color:var(--app-text)">Reset Demo Data</div><div style="font-size:12px;color:var(--app-muted);margin-top:3px">Wipe all data and reload the original sample dataset.</div></div>
-                  <button class="app-btn app-btn-danger app-btn-sm" onclick="confirmReset()">Reset Data</button>
+                  <button class="app-btn app-btn-danger app-btn-sm" id="openResetDemoBtn" onclick="openResetDemoModal()">Reset Data</button>
                 </div>
                 <div style="background:var(--app-surface);border:1px solid rgba(181,43,30,.4);border-radius:var(--r-sm);padding:18px 20px;display:flex;align-items:center;justify-content:space-between">
                   <div><div style="font-size:13px;font-weight:700;color:var(--danger)">Delete Account</div><div style="font-size:12px;color:var(--app-muted);margin-top:3px">Permanently delete your GearShift account and all associated data.</div></div>
@@ -668,6 +668,34 @@
     <div class="modal-footer">
       <button class="app-btn app-btn-ghost" onclick="Modal.close('inviteModal')">Cancel</button>
       <button class="app-btn app-btn-primary" onclick="sendInvite()">Send Invite</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESET DEMO DATA MODAL -->
+<div class="modal-backdrop" id="resetDemoModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title" style="color:var(--danger)">&#x26A0; RESET DEMO DATA</span>
+      <button class="modal-close" onclick="Modal.close('resetDemoModal')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:rgba(181,43,30,0.1);border:1px solid rgba(181,43,30,0.3);border-radius:var(--r-sm);padding:14px 16px;margin-bottom:20px;font-size:13px;color:#fca5a5;line-height:1.7">
+        <strong>This will wipe your current operational records and replace them with a clean demo dataset.</strong><br>
+        Your shop account, team members, plan, billing setup, and payout account will stay intact.
+      </div>
+      <div class="app-form-group">
+        <label class="app-label">Type <strong style="color:var(--danger)">RESET</strong> to confirm</label>
+        <input class="app-input" type="text" id="resetDemoConfirmText" placeholder="Type RESET here"
+          oninput="checkResetDemoConfirm()" style="border-color:rgba(181,43,30,0.4)">
+      </div>
+      <div id="resetDemoError" style="display:none;background:rgba(181,43,30,0.1);border:1px solid rgba(181,43,30,0.3);color:#fca5a5;padding:10px 14px;border-radius:var(--r-sm);font-size:12px;margin-top:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('resetDemoModal')">Cancel</button>
+      <button class="app-btn app-btn-danger" id="resetDemoBtn" onclick="executeResetDemoData()" disabled>
+        Reset Demo Data
+      </button>
     </div>
   </div>
 </div>
@@ -1591,6 +1619,57 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+/* ── RESET DEMO DATA ───────────────────────────────────── */
+function openResetDemoModal() {
+  document.getElementById('resetDemoConfirmText').value = '';
+  document.getElementById('resetDemoBtn').disabled = true;
+  var e = document.getElementById('resetDemoError');
+  if (e) {
+    e.textContent = '';
+    e.style.display = 'none';
+  }
+  Modal.open('resetDemoModal');
+}
+
+function checkResetDemoConfirm() {
+  document.getElementById('resetDemoBtn').disabled =
+    document.getElementById('resetDemoConfirmText').value !== 'RESET';
+}
+
+async function executeResetDemoData() {
+  var confirmText = document.getElementById('resetDemoConfirmText').value;
+  var errEl       = document.getElementById('resetDemoError');
+  var btn         = document.getElementById('resetDemoBtn');
+  errEl.style.display = 'none';
+
+  if (confirmText !== 'RESET') {
+    errEl.textContent = 'Please type RESET exactly.';
+    errEl.style.display = 'block'; return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Resetting…';
+
+  try {
+    var summary = await GS.resetDemoData();
+    Modal.close('resetDemoModal');
+    Toast.show(
+      'Demo data reset complete — '
+      + (summary.customers || 0) + ' customers · '
+      + (summary.work_orders || 0) + ' work orders · '
+      + (summary.invoices || 0) + ' invoices',
+      'success',
+      7000
+    );
+  } catch(e) {
+    errEl.textContent = e.message || 'Could not reset demo data right now.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Reset Demo Data';
+  }
+}
+
 /* ── DELETE ACCOUNT ─────────────────────────────────────── */
 function openDeleteAccountModal() {
   document.getElementById('deleteConfirmText').value     = '';
@@ -1636,33 +1715,25 @@ async function executeDeleteAccount() {
 
     btn.textContent = 'Deleting…';
 
-    // Step 2: get fresh token
-    var freshSession = await sb.auth.getSession();
-    var token = freshSession?.data?.session?.access_token;
-    if (!token) {
-      var refreshed = await sb.auth.refreshSession();
-      token = refreshed?.data?.session?.access_token;
+    // Step 2: call Edge Function through the authenticated Supabase client
+    var invokeResult = await sb.functions.invoke('delete-account', { body: {} });
+    if (invokeResult.error) {
+      var msg = invokeResult.error.message || 'Deletion failed. Please try again.';
+      try {
+        var errBody = await invokeResult.error.context?.json?.();
+        if (errBody?.error) msg = errBody.error;
+      } catch(_) {}
+      throw new Error(msg);
     }
-    if (!token) throw new Error('Could not get auth token. Please log out and back in.');
+    if (!invokeResult.data?.success) {
+      throw new Error(invokeResult.data?.error || 'Deletion failed. Please try again.');
+    }
 
-    // Step 3: call Edge Function
-    var res = await fetch(
-      'https://tqwwnmgcvaqeigpodirc.supabase.co/functions/v1/delete-account',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': 'Bearer ' + token,
-          'apikey':        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRxd3dubWdjdmFxZWlncG9kaXJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzk4MDM1NDQsImV4cCI6MjA1NTM3OTU0NH0.ixWKcqGiGHiGmFSZCBv4hbCjzOEStlhfCLuNT_Xzs4M',
-        }
-      }
-    );
-
-    var result = await res.json();
-    if (!res.ok || !result.success) throw new Error(result.error || 'Deletion failed. Please try again.');
-
-    // Step 4: sign out and redirect
-    await sb.auth.signOut();
+    // Step 3: sign out and redirect
+    try { await Auth.signOut(); }
+    catch(_) {
+      try { await sb.auth.signOut(); } catch(__) {}
+    }
     window.location.href = '../index.html?deleted=1';
 
   } catch(e) {

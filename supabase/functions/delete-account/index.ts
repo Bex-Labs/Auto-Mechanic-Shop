@@ -34,6 +34,9 @@ Deno.serve(async (req) => {
     const shopId  = profile.shop_id;
 
     if (isAdmin && shopId) {
+      const { data: staffProfiles } = await adminClient.from('profiles').select('id').eq('shop_id', shopId);
+      const staffIds = (staffProfiles || []).map((p) => p.id).filter(Boolean);
+
       const { data: pos } = await adminClient.from('purchase_orders').select('id').eq('shop_id', shopId);
       const poIds = (pos || []).map((p) => p.id);
       if (poIds.length) await adminClient.from('purchase_order_items').delete().in('po_id', poIds);
@@ -66,12 +69,17 @@ Deno.serve(async (req) => {
       await adminClient.from('billing_transactions').delete().eq('shop_id', shopId);
       await adminClient.from('subscriptions').delete().eq('shop_id', shopId);
       await adminClient.from('shop_settings').delete().eq('shop_id', shopId);
+      if (staffIds.length) {
+        await adminClient.from('audit_logs').delete().in('changed_by', staffIds);
+      }
       await adminClient.from('profiles').delete().eq('shop_id', shopId);
 
       const { error: shopErr } = await adminClient.from('shops').delete().eq('id', shopId);
       if (shopErr) return new Response(JSON.stringify({ error: 'Failed to delete shop: ' + shopErr.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
     } else {
+      await adminClient.from('notifications').delete().eq('for_user_id', user.id);
+      await adminClient.from('audit_logs').delete().eq('changed_by', user.id);
       await adminClient.from('profiles').delete().eq('id', user.id);
     }
 
