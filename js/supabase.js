@@ -1149,6 +1149,29 @@ const GS = (() => {
     return wo;
   }
 
+  async function markCustomerNotified(id) {
+    const sid = await _shopId();
+    const now = new Date().toISOString();
+    const { data, error } = await sb.from('work_orders')
+      .update({
+        customer_notified_at: now,
+        updated_at: now,
+      })
+      .eq('id', id)
+      .eq('shop_id', sid)
+      .select()
+      .single();
+    if (error) throw error;
+
+    await _audit('work_orders', id, 'CUSTOMER_NOTIFY', {
+      ref: data?.ref || null,
+      customer_notified_at: now,
+      channel: 'WhatsApp',
+    });
+
+    return data;
+  }
+
   async function getWOStatusHistory(workOrderId) {
     const { data, error } = await sb.from('wo_status_history')
       .select('id, status, changed_at, changed_by')
@@ -2287,7 +2310,7 @@ const GS = (() => {
   return {
     getCustomers, getCustomer, createCustomer, updateCustomer, deleteCustomer, getAuditLog,
     getVehicles, createVehicle, updateVehicle, deleteVehicle,
-    getWorkOrders, getWorkOrder, createWorkOrder, updateWorkOrder, getWOStatusHistory,
+    getWorkOrders, getWorkOrder, createWorkOrder, updateWorkOrder, markCustomerNotified, getWOStatusHistory,
     addPartToWorkOrder, removePartFromWorkOrder, getAllWorkOrderParts,
     getInventory, getInventoryItem, createInventoryItem, updateInventoryItem,
     adjustStock, getLowStockItems,
