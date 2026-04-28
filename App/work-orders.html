@@ -424,6 +424,8 @@ async function loadWorkOrders() {
     woData = await GS.getWorkOrders();
     renderKanban();
     renderWOTable();
+    renderActiveJobs();
+    renderPartsRequests();
   } catch (err) {
     console.error(err);
     Toast.show('Failed to load work orders', 'error');
@@ -561,6 +563,84 @@ function renderKanban() {
   });
 }
 
+function getActiveWorkOrders() {
+  return woData
+    .filter(w => ['Open', 'In Progress', 'Awaiting Parts'].includes(w.status))
+    .sort((a, b) => {
+      const statusDiff = STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status);
+      if (statusDiff !== 0) return statusDiff;
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    });
+}
+
+function getPartsRequestSummary(wo) {
+  const note = (wo.notes || '').trim();
+  if (note) return note.length > 80 ? note.slice(0, 77) + '…' : note;
+  return 'Parts not specified yet — review the diagnosis and attach required parts.';
+}
+
+function renderActiveJobs() {
+  const tbody = document.getElementById('activeJobsBody');
+  if (!tbody) return;
+
+  const jobs = getActiveWorkOrders();
+  if (!jobs.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--app-muted)">No active jobs right now</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = jobs.map(w => `
+    <tr>
+      <td class="td-mono td-bold">${w.ref || '—'}</td>
+      <td>${w.customer_name || '—'}</td>
+      <td class="td-muted">${w.vehicle_label || '—'}</td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${w.fault || '—'}</td>
+      <td class="td-muted">${w.mechanic_name || 'Unassigned'}</td>
+      <td>${makeBadge(w.status)}</td>
+      <td class="td-mono">${w.labor_hours ?? 0}</td>
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="app-btn app-btn-ghost app-btn-sm" onclick="openWODetail('${w.id}')">View</button>
+          ${!['Mechanic','Parts Manager'].includes(_user?.role || '')
+            ? `<button class="app-btn app-btn-ghost app-btn-sm" onclick="openEditWO('${w.id}')">Edit</button>`
+            : ''}
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderPartsRequests() {
+  const tbody = document.getElementById('partsReqBody');
+  if (!tbody) return;
+
+  const jobs = woData
+    .filter(w => w.status === 'Awaiting Parts')
+    .sort((a, b) => new Date(b.status_changed_at || b.updated_at || b.created_at || 0) - new Date(a.status_changed_at || a.updated_at || a.created_at || 0));
+
+  if (!jobs.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--app-muted)">No work orders are currently awaiting parts</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = jobs.map(w => `
+    <tr>
+      <td class="td-mono td-bold">${w.ref || '—'}</td>
+      <td>${w.customer_name || '—'}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${w.fault || '—'}</td>
+      <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${getPartsRequestSummary(w)}</td>
+      <td class="td-muted">${w.mechanic_name || 'Unassigned'}</td>
+      <td class="td-mono" style="font-size:11px">${formatDate(w.status_changed_at || w.updated_at || w.created_at)}</td>
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="app-btn app-btn-ghost app-btn-sm" onclick="openWODetail('${w.id}')">View</button>
+          <a href="supply-chain.html" class="app-btn app-btn-primary app-btn-sm">Create PO</a>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
 window._dndId     = null;
 window._dndStatus = null;
 window._dndActive = false;
@@ -568,8 +648,14 @@ window._dndActive = false;
 async function kbMoveTo(woId, newStatus, oldStatus) {
   // Update local data immediately so the card appears in the new column
   var wo = woData.find(function(w){ return w.id === woId; });
-  if (wo) wo.status = newStatus;
-  renderKanban();   // was incorrectly calling renderBoard() — fixed
+  var oldStatusChangedAt = wo ? wo.status_changed_at : null;
+  if (wo) {
+    wo.status = newStatus;
+    wo.status_changed_at = new Date().toISOString();
+  }
+  renderKanban();
+  renderActiveJobs();
+  renderPartsRequests();
 
   // Persist to database
   try {
@@ -584,8 +670,13 @@ async function kbMoveTo(woId, newStatus, oldStatus) {
   } catch(e) {
     Toast.show('Could not move card: ' + (e.message||'error'), 'error');
     // Roll back the optimistic update
-    if (wo) wo.status = oldStatus;
+    if (wo) {
+      wo.status = oldStatus;
+      wo.status_changed_at = oldStatusChangedAt;
+    }
     renderKanban();
+    renderActiveJobs();
+    renderPartsRequests();
   }
 }
 
