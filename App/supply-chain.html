@@ -728,6 +728,10 @@ function generatePOPdf(po) {
   const items     = po.purchase_order_items || [];
   const total     = items.reduce((s,i) => s + (i.unit_cost||0)*(i.qty||0), 0);
   const dateStr   = new Date().toLocaleDateString('en-NG', { day:'numeric', month:'long', year:'numeric' });
+  const formatPdfCurrency = value => 'NGN ' + Number(value || 0).toLocaleString('en-NG', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
   // ── Header bar
   doc.setFillColor(201, 75, 30); // --rust
@@ -796,11 +800,11 @@ function generatePOPdf(po) {
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  const COL = { item:16, sku:95, qty:125, unit:145, total:175 };
+  const COL = { item:16, sku:94, qty:128, unit:166, total:194 };
   doc.text('ITEM / DESCRIPTION', COL.item, y + 6);
   doc.text('SKU',                 COL.sku,  y + 6);
-  doc.text('QTY',                 COL.qty,  y + 6);
-  doc.text('UNIT COST',           COL.unit, y + 6);
+  doc.text('QTY',                 COL.qty,  y + 6, { align:'right' });
+  doc.text('UNIT COST',           COL.unit, y + 6, { align:'right' });
   doc.text('TOTAL',               COL.total,y + 6, { align:'right' });
 
   y += 9;
@@ -824,9 +828,9 @@ function generatePOPdf(po) {
     const nameDisplay = name.length > 45 ? name.slice(0,44) + '…' : name;
     doc.text(nameDisplay,                 COL.item, y + 6);
     doc.text(sku,                         COL.sku,  y + 6);
-    doc.text(String(item.qty||0),         COL.qty,  y + 6);
-    doc.text(formatCurrency(item.unit_cost||0), COL.unit, y + 6);
-    doc.text(formatCurrency(lineTotal),   COL.total, y + 6, { align:'right' });
+    doc.text(String(item.qty||0),         COL.qty,  y + 6, { align:'right' });
+    doc.text(formatPdfCurrency(item.unit_cost||0), COL.unit, y + 6, { align:'right' });
+    doc.text(formatPdfCurrency(lineTotal), COL.total, y + 6, { align:'right' });
 
     y += 9;
     if (y > 260) { doc.addPage(); y = 20; }
@@ -844,7 +848,7 @@ function generatePOPdf(po) {
   doc.setTextColor(30, 30, 30);
   doc.text('ORDER TOTAL:', 124, y + 7.5);
   doc.setTextColor(201, 75, 30);
-  doc.text(formatCurrency(total), 194, y + 7.5, { align:'right' });
+  doc.text(formatPdfCurrency(total), 194, y + 7.5, { align:'right' });
 
   // ── Notes
   if (po.notes) {
