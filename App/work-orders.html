@@ -673,7 +673,12 @@ async function kbMoveTo(woId, newStatus, oldStatus) {
 
     // When dragged to Completed: generate invoice + open WhatsApp
     if (newStatus === 'Completed') {
-      try { await GS.generateInvoiceFromWO(woId); } catch(e) { console.warn('Invoice gen:', e.message); }
+      try {
+        await GS.generateInvoiceFromWO(woId);
+        Toast.show('Invoice created as unpaid — record payment after you confirm the payment method.', 'info', 5000);
+      } catch(e) {
+        console.warn('Invoice gen:', e.message);
+      }
       setTimeout(function(){ openWAModal(woId); }, 300);
     }
   } catch(e) {
@@ -936,7 +941,9 @@ async function quickStatus(id, status) {
   const proceed = () => _doStatusChange(id, status);
   if (confirmNeeded) {
     confirmAction(
-      `Mark this work order as "${status}"? This action will notify the customer.`,
+      status === 'Completed'
+        ? 'Mark this work order as "Completed"? This will generate an unpaid invoice. Payment will only be recorded later after you confirm the payment method.'
+        : `Mark this work order as "${status}"? This action will notify the customer.`,
       proceed
     );
   } else {
@@ -954,6 +961,7 @@ async function _doStatusChange(id, status) {
       // Auto-generate (or refresh) the invoice
       try {
         await GS.generateInvoiceFromWO(id);
+        Toast.show('Invoice created as unpaid — record payment after you confirm the payment method.', 'info', 5000);
       } catch(e) {
         console.warn('Invoice generation warning:', e.message);
       }

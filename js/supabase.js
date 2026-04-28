@@ -1527,6 +1527,7 @@ const GS = (() => {
     const { data: inv, error: invErr } = await sb.from('invoices').insert({
       shop_id: sid, work_order_id: workOrderId, customer_id: wo.customer_id,
       ref: '', status: 'Unpaid', invoice_date: new Date().toISOString().split('T')[0],
+      payment_method: null, paid_at: null,
       labor_amount: laborAmount, parts_amount: partsAmount, tax_amount: taxAmount, total_amount: total,
     }).select().single();
     if (invErr) throw invErr;
@@ -1561,18 +1562,20 @@ const GS = (() => {
       wo_ref: inv.work_orders?.ref || '—', parts, shop: shop || {} };
   }
 
-  async function markInvoicePaid(id, method = 'Card') {
+  async function markInvoicePaid(id, method = '') {
     const sid = await _shopId();
+    const paymentMethod = String(method || '').trim();
+    if (!paymentMethod) throw new Error('Please confirm the payment method before recording payment');
     const { data, error } = await sb.from('invoices')
       .update({
-        status: 'Paid', payment_method: method,
+        status: 'Paid', payment_method: paymentMethod,
         paid_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       })
       .eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
     await _audit('invoices', id, 'MARK_PAID', {
       ref: data?.ref || null,
-      payment_method: method,
+      payment_method: paymentMethod,
       total_amount: data?.total_amount ?? null,
     });
     return data;
