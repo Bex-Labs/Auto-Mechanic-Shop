@@ -168,9 +168,13 @@
       <div id="payInfo" style="font-size:13px;color:var(--app-muted);margin-bottom:16px;font-family:var(--ff-mono)"></div>
       <div class="app-form-group">
         <label class="app-label">Payment Method</label>
-        <select class="app-input" id="pay-method">
-          <option>Card</option><option>Cash</option><option>Bank Transfer</option><option>Check</option>
+        <select class="app-input" id="pay-method" onchange="toggleCustomPaymentMethod()">
+          <option>Card</option><option>Cash</option><option>Bank Transfer</option><option>POS</option><option>Other</option>
         </select>
+      </div>
+      <div class="app-form-group" id="pay-method-other-group" style="display:none">
+        <label class="app-label">Custom Payment Method</label>
+        <input class="app-input" id="pay-method-other" placeholder="e.g. Mobile Money, USSD, Internal Transfer">
       </div>
       <div class="app-form-group">
         <label class="app-label">Amount Paid</label>
@@ -269,13 +273,32 @@ async function markPaid(id) {
   document.getElementById('pay-amount').value = inv.total_amount || '';
   document.getElementById('pay-date').value   = new Date().toISOString().split('T')[0];
   document.getElementById('pay-method').value = 'Card';
+  document.getElementById('pay-method-other').value = '';
+  toggleCustomPaymentMethod();
   _payingInvoiceId = id;
   Modal.open('paymentModal');
 }
 
+function toggleCustomPaymentMethod() {
+  const method = document.getElementById('pay-method')?.value || 'Card';
+  const group = document.getElementById('pay-method-other-group');
+  const input = document.getElementById('pay-method-other');
+  if (!group || !input) return;
+  const showCustom = method === 'Other';
+  group.style.display = showCustom ? 'block' : 'none';
+  if (!showCustom) input.value = '';
+}
+
 async function recordPayment() {
-  const method = document.getElementById('pay-method')?.value || 'Cash';
+  const selectedMethod = document.getElementById('pay-method')?.value || 'Cash';
+  const customMethod = document.getElementById('pay-method-other')?.value?.trim() || '';
+  const method = selectedMethod === 'Other' ? customMethod : selectedMethod;
   const amount = parseFloat(document.getElementById('pay-amount')?.value) || 0;
+  if (selectedMethod === 'Other' && !customMethod) {
+    Toast.show('Please enter the custom payment method', 'error');
+    document.getElementById('pay-method-other')?.focus();
+    return;
+  }
   if (!amount) { Toast.show('Please enter the payment amount', 'error'); return; }
   const btn = document.querySelector('#paymentModal .modal-footer .app-btn-primary');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
