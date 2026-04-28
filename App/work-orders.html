@@ -307,7 +307,7 @@
     <div class="modal-footer">
       <button class="app-btn app-btn-ghost" onclick="Modal.close('waModal')">Skip for Now</button>
       <button class="app-btn app-btn-ghost app-btn-sm" onclick="resetWAMessage()">↺ Reset</button>
-      <button class="app-btn app-btn-primary" onclick="sendWAMessage()"
+      <button class="app-btn app-btn-primary" id="waSendBtn" onclick="sendWAMessage()"
         style="background:#25D366;border-color:#25D366;display:flex;align-items:center;gap:6px">
         <svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.121.554 4.11 1.526 5.836L0 24l6.338-1.503A11.953 11.953 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/></svg>
         Send via WhatsApp
@@ -345,6 +345,15 @@ function formatDateTime(iso) {
   const d = new Date(iso);
   return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })
     + ' ' + d.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
+}
+
+function normalizeWhatsAppPhone(raw) {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('234')) return digits;
+  if (digits.startsWith('0') && digits.length === 11) return '234' + digits.slice(1);
+  if (digits.length >= 10 && digits.length <= 15) return digits;
+  return '';
 }
 
 // ── INIT ──────────────────────────────────────────────────────────
@@ -1153,10 +1162,8 @@ async function openWAModal(woId) {
       if (shop?.name) shopName = shop.name;
     } catch(e) {}
 
-    // Normalise Nigerian phone number
-    let phone = (wo.customer_phone || '').replace(/[\s\-().+]/g, '');
-    if (phone.startsWith('0'))         phone = '234' + phone.slice(1);
-    else if (phone.startsWith('+234')) phone = phone.slice(1);
+    const phone = normalizeWhatsAppPhone(wo.customer_phone);
+    const sendBtn = document.getElementById('waSendBtn');
 
     // Build parts summary
     const partsSummary = (wo.parts || []).length
@@ -1182,11 +1189,16 @@ async function openWAModal(woId) {
 
     // Fill the modal
     document.getElementById('waModalName').textContent  = wo.customer_name;
-    document.getElementById('waModalPhone').textContent = phone ? '+' + phone : 'No phone on file';
+    document.getElementById('waModalPhone').textContent = phone ? '+' + phone : 'No valid customer phone on file';
     document.getElementById('waMessage').value          = msg;
     document.getElementById('waModal').dataset.woId     = woId;
     document.getElementById('waModal').dataset.phone    = phone;
     document.getElementById('waModal').dataset.origMsg  = msg;
+    if (sendBtn) {
+      sendBtn.disabled = !phone;
+      sendBtn.style.opacity = phone ? '1' : '0.6';
+      sendBtn.title = phone ? '' : 'Add a valid customer phone number before sending via WhatsApp';
+    }
     Modal.open('waModal');
   } catch(e) {
     Toast.show('Could not load work order for notification', 'error');
@@ -1199,10 +1211,12 @@ async function sendWAMessage() {
   const phone   = modal.dataset.phone;
   const message = document.getElementById('waMessage').value.trim();
   if (!message) return;
+  if (!phone) {
+    Toast.show('This customer does not have a valid phone number for WhatsApp', 'error');
+    return;
+  }
 
-  const url = phone
-    ? 'https://wa.me/' + phone + '?text=' + encodeURIComponent(message)
-    : 'https://wa.me/?text='             + encodeURIComponent(message);
+  const url = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(message);
 
   window.open(url, '_blank');
 

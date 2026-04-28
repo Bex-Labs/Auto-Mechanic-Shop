@@ -1046,7 +1046,7 @@ const GS = (() => {
     if (!wo) throw new Error('Work order not found');
 
     const [custRes, vehRes, mechRes, partsRes] = await Promise.all([
-      wo.customer_id ? sb.from('customers').select('id,first_name,last_name').eq('id', wo.customer_id).limit(1) : { data: [] },
+      wo.customer_id ? sb.from('customers').select('id,first_name,last_name,phone').eq('id', wo.customer_id).limit(1) : { data: [] },
       wo.vehicle_id  ? sb.from('vehicles').select('id,year,make,model,vin,plate,mileage').eq('id', wo.vehicle_id).limit(1) : { data: [] },
       wo.mechanic_id ? sb.from('profiles').select('id,full_name').eq('id', wo.mechanic_id).limit(1) : { data: [] },
       sb.from('work_order_parts').select('id,qty,unit_cost,part_id').eq('work_order_id', id),
@@ -1064,6 +1064,7 @@ const GS = (() => {
     return {
       ...wo,
       customer_name: cust ? `${cust.first_name} ${cust.last_name}` : '—',
+      customer_phone: cust?.phone || wo.customer_phone || null,
       vehicle_label: veh  ? `${veh.year||''} ${veh.make} ${veh.model}`.trim() : '—',
       vehicle:       veh  || null,
       mechanic_name: mech?.full_name || null,
