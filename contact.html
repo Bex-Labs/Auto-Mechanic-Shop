@@ -128,7 +128,7 @@
             <div class="contact-item-icon">📧</div>
             <div>
               <div class="contact-item-label">General</div>
-              <div class="contact-item-val">hello@gearshift.app</div>
+              <div class="contact-item-val">general@gearshift.app</div>
               <div class="contact-item-sub">For general inquiries and partnerships</div>
             </div>
           </div>
@@ -170,7 +170,7 @@
             <div class="dept-card-icon">🔧</div>
             <div>
               <div class="dept-card-title">Technical Support</div>
-              <div class="dept-card-email">support@gearshift.app →</div>
+              <div class="dept-card-email">technical@gearshift.app →</div>
             </div>
           </div>
           <div class="dept-card" onclick="switchContactTab('billing')">
@@ -187,16 +187,16 @@
       <div>
         <div class="contact-form-box">
           <div class="contact-tabs">
-            <button class="contact-tab active" data-tab="general"  onclick="switchContactTab('general',this)">General</button>
-            <button class="contact-tab"        data-tab="demo"     onclick="switchContactTab('demo',this)">Book Demo</button>
-            <button class="contact-tab"        data-tab="support"  onclick="switchContactTab('support',this)">Support</button>
-            <button class="contact-tab"        data-tab="billing"  onclick="switchContactTab('billing',this)">Billing</button>
+            <button type="button" class="contact-tab active" data-tab="general"  onclick="switchContactTab('general',this)">General</button>
+            <button type="button" class="contact-tab"        data-tab="demo"     onclick="switchContactTab('demo',this)">Book Demo</button>
+            <button type="button" class="contact-tab"        data-tab="support"  onclick="switchContactTab('support',this)">Support</button>
+            <button type="button" class="contact-tab"        data-tab="billing"  onclick="switchContactTab('billing',this)">Billing</button>
           </div>
 
           <!-- GENERAL -->
           <div class="contact-form-pane active" id="tab-general">
             <div class="form-section-title">SEND A MESSAGE</div>
-            <form id="contactForm" onsubmit="handleContact(event,'general')">
+            <form id="contactForm" method="POST" action="https://formsubmit.co/abbassani94@gmail.com" onsubmit="handleContact(event,'general')">
               <div class="form-row">
                 <div class="form-group"><label class="form-label">First Name</label><input class="form-input" type="text" name="fname" placeholder="Jane" required></div>
                 <div class="form-group"><label class="form-label">Last Name</label><input class="form-input" type="text" name="lname" placeholder="Smith" required></div>
@@ -216,48 +216,48 @@
               </div>
               <div class="form-group"><label class="form-label">Message</label><textarea class="form-input" name="message" placeholder="Tell us about your shop and what you're looking for..." required></textarea></div>
               <button type="submit" class="submit-btn" id="submitBtn">Send Message →</button>
-              <p class="form-note">We respond within 1 business day. We never share your information.</p>
+              <p class="form-note">We respond within 1 business day. Messages are currently routed to our temporary inbox at abbassani94@gmail.com.</p>
             </form>
           </div>
 
           <!-- DEMO -->
           <div class="contact-form-pane" id="tab-demo">
             <div class="form-section-title">BOOK A DEMO</div>
-            <form onsubmit="handleContact(event,'demo')">
+            <form method="POST" action="https://formsubmit.co/abbassani94@gmail.com" onsubmit="handleContact(event,'demo')">
               <div class="form-row">
-                <div class="form-group"><label class="form-label">First Name</label><input class="form-input" type="text" placeholder="Jane" required></div>
-                <div class="form-group"><label class="form-label">Last Name</label><input class="form-input" type="text" placeholder="Smith" required></div>
+                <div class="form-group"><label class="form-label">First Name</label><input class="form-input" type="text" name="first_name" placeholder="Jane" required></div>
+                <div class="form-group"><label class="form-label">Last Name</label><input class="form-input" type="text" name="last_name" placeholder="Smith" required></div>
               </div>
-              <div class="form-group"><label class="form-label">Work Email</label><input class="form-input" type="email" placeholder="jane@shop.com" required></div>
+              <div class="form-group"><label class="form-label">Work Email</label><input class="form-input" type="email" name="email" placeholder="jane@shop.com" required></div>
               <div class="form-row">
-                <div class="form-group"><label class="form-label">Shop Name</label><input class="form-input" type="text" placeholder="Jane's Auto" required></div>
-                <div class="form-group"><label class="form-label">Number of Bays</label><select class="form-input"><option>1–2</option><option>3–5</option><option>6–10</option><option>10+</option></select></div>
+                <div class="form-group"><label class="form-label">Shop Name</label><input class="form-input" type="text" name="shop_name" placeholder="Jane's Auto" required></div>
+                <div class="form-group"><label class="form-label">Number of Bays</label><select class="form-input" name="bay_count"><option>1–2</option><option>3–5</option><option>6–10</option><option>10+</option></select></div>
               </div>
               <div class="form-row">
-                <div class="form-group"><label class="form-label">Preferred Date</label><input class="form-input" type="date"></div>
+                <div class="form-group"><label class="form-label">Preferred Date</label><input class="form-input" type="date" name="preferred_date"></div>
                 <div class="form-group">
                   <label class="form-label">Preferred Time (EST)</label>
-                  <select class="form-input">
+                  <select class="form-input" name="preferred_time">
                     <option>9:00 AM</option><option>10:00 AM</option><option>11:00 AM</option>
                     <option>1:00 PM</option><option>2:00 PM</option><option>3:00 PM</option>
                   </select>
                 </div>
               </div>
-              <div class="form-group"><label class="form-label">What are you most interested in?</label><textarea class="form-input" placeholder="e.g. supply chain automation, invoicing, scheduling..."></textarea></div>
+              <div class="form-group"><label class="form-label">What are you most interested in?</label><textarea class="form-input" name="interest_area" placeholder="e.g. supply chain automation, invoicing, scheduling..."></textarea></div>
               <button type="submit" class="submit-btn">Request Demo →</button>
-              <p class="form-note">A GearShift team member will confirm your slot within 24 hours.</p>
+              <p class="form-note">A GearShift team member will confirm your slot within 24 hours using abbassani94@gmail.com for now.</p>
             </form>
           </div>
 
           <!-- SUPPORT -->
           <div class="contact-form-pane" id="tab-support">
             <div class="form-section-title">TECHNICAL SUPPORT</div>
-            <div class="alert alert-info" style="margin-bottom:24px;">For urgent issues, email <strong>support@gearshift.app</strong> directly for the fastest response.</div>
-            <form onsubmit="handleContact(event,'support')">
-              <div class="form-group"><label class="form-label">Your Email</label><input class="form-input" type="email" placeholder="jane@shop.com" required></div>
+            <div class="alert alert-info" style="margin-bottom:24px;">For urgent issues, email <strong>abbassani94@gmail.com</strong> directly for the fastest response.</div>
+            <form method="POST" action="https://formsubmit.co/abbassani94@gmail.com" onsubmit="handleContact(event,'support')">
+              <div class="form-group"><label class="form-label">Your Email</label><input class="form-input" type="email" name="email" placeholder="jane@shop.com" required></div>
               <div class="form-group">
                 <label class="form-label">Issue Category</label>
-                <select class="form-input">
+                <select class="form-input" name="issue_category">
                   <option>Can't log in</option>
                   <option>Work orders not saving</option>
                   <option>Inventory not updating</option>
@@ -270,13 +270,13 @@
               </div>
               <div class="form-group">
                 <label class="form-label">Priority</label>
-                <select class="form-input">
+                <select class="form-input" name="priority">
                   <option>Low — general question</option>
                   <option>Medium — affecting some workflows</option>
                   <option>High — blocking shop operations</option>
                 </select>
               </div>
-              <div class="form-group"><label class="form-label">Describe the Issue</label><textarea class="form-input" placeholder="What happened? What did you expect? Steps to reproduce..." required></textarea></div>
+              <div class="form-group"><label class="form-label">Describe the Issue</label><textarea class="form-input" name="issue_details" placeholder="What happened? What did you expect? Steps to reproduce..." required></textarea></div>
               <button type="submit" class="submit-btn">Submit Ticket →</button>
             </form>
           </div>
@@ -284,11 +284,11 @@
           <!-- BILLING -->
           <div class="contact-form-pane" id="tab-billing">
             <div class="form-section-title">BILLING & ACCOUNTS</div>
-            <form onsubmit="handleContact(event,'billing')">
-              <div class="form-group"><label class="form-label">Account Email</label><input class="form-input" type="email" placeholder="jane@shop.com" required></div>
+            <form method="POST" action="https://formsubmit.co/abbassani94@gmail.com" onsubmit="handleContact(event,'billing')">
+              <div class="form-group"><label class="form-label">Account Email</label><input class="form-input" type="email" name="email" placeholder="jane@shop.com" required></div>
               <div class="form-group">
                 <label class="form-label">Billing Topic</label>
-                <select class="form-input">
+                <select class="form-input" name="billing_topic">
                   <option>Upgrade / Downgrade plan</option>
                   <option>Invoice or receipt request</option>
                   <option>Payment method change</option>
@@ -298,7 +298,7 @@
                   <option>Other billing issue</option>
                 </select>
               </div>
-              <div class="form-group"><label class="form-label">Details</label><textarea class="form-input" placeholder="Please provide as much detail as possible..." required></textarea></div>
+              <div class="form-group"><label class="form-label">Details</label><textarea class="form-input" name="details" placeholder="Please provide as much detail as possible..." required></textarea></div>
               <button type="submit" class="submit-btn">Submit Request →</button>
               <p class="form-note">Billing requests are handled within 1–2 business days.</p>
             </form>
@@ -348,6 +348,15 @@
 <div class="toast-container" id="toastContainer"></div>
 <script src="js/main.js"></script>
 <script>
+const CONTACT_EMAIL = 'abbassani94@gmail.com';
+const CONTACT_ENDPOINT = `https://formsubmit.co/ajax/${CONTACT_EMAIL}`;
+const CONTACT_SUBJECTS = {
+  general: 'GearShift Website Contact - General Inquiry',
+  demo: 'GearShift Website Contact - Demo Request',
+  support: 'GearShift Website Contact - Support Request',
+  billing: 'GearShift Website Contact - Billing Request',
+};
+
 function switchContactTab(id, btn) {
   document.querySelectorAll('.contact-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.contact-form-pane').forEach(p => p.classList.remove('active'));
@@ -361,13 +370,63 @@ function switchContactTab(id, btn) {
   if (pane) pane.classList.add('active');
 }
 
-function handleContact(e, type) {
+function buildContactPayload(form, type) {
+  const formData = new FormData(form);
+  const email = String(formData.get('email') || '').trim();
+
+  formData.set('_subject', CONTACT_SUBJECTS[type] || 'GearShift Website Contact');
+  formData.set('_template', 'table');
+  formData.set('_captcha', 'false');
+  formData.set('_honey', '');
+  formData.set('contact_type', type);
+  formData.set('submitted_from', window.location.href);
+  formData.set('submitted_at', new Date().toLocaleString());
+
+  if (email) formData.set('_replyto', email);
+
+  return formData;
+}
+
+function openMailtoFallback(type, formData) {
+  const fields = [];
+  formData.forEach((value, key) => {
+    if (!value || String(key).startsWith('_')) return;
+    fields.push(`${key.replace(/_/g, ' ')}: ${value}`);
+  });
+
+  const subject = encodeURIComponent(CONTACT_SUBJECTS[type] || 'GearShift Website Contact');
+  const body = encodeURIComponent(fields.join('\n'));
+  window.location.href = `mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`;
+}
+
+async function handleContact(e, type) {
   e.preventDefault();
-  const btn = e.target.querySelector('button[type=submit]');
+  const form = e.target;
+  const btn = form.querySelector('button[type=submit]');
   const orig = btn.textContent;
+  const formData = buildContactPayload(form, type);
+
   btn.textContent = 'Sending...';
   btn.disabled = true;
-  setTimeout(() => {
+
+  try {
+    const response = await fetch(CONTACT_ENDPOINT, {
+      method: 'POST',
+      body: formData,
+      headers: { Accept: 'application/json' },
+    });
+
+    let result = null;
+    try {
+      result = await response.json();
+    } catch (parseError) {
+      result = null;
+    }
+
+    if (!response.ok || (result && result.success === false)) {
+      throw new Error((result && result.message) || 'Unable to submit form right now.');
+    }
+
     const msgs = {
       general: 'Message sent! We\'ll respond within 1 business day.',
       demo:    'Demo request received! We\'ll confirm your slot within 24 hours.',
@@ -375,10 +434,15 @@ function handleContact(e, type) {
       billing: 'Billing request received. We\'ll handle it within 1–2 business days.',
     };
     Toast.show(msgs[type] || 'Submitted successfully.', 'success', 4500);
-    e.target.reset();
+    form.reset();
+  } catch (error) {
+    console.error('Contact form submission failed:', error);
+    openMailtoFallback(type, formData);
+    Toast.show('Direct send was unavailable, so we opened your email app as a fallback.', 'warn', 6500);
+  } finally {
     btn.textContent = orig;
     btn.disabled = false;
-  }, 1200);
+  }
 }
 </script>
 </body>
