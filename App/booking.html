@@ -896,6 +896,126 @@ function buildSummary() {
   document.getElementById('summaryBody').innerHTML = html;
 }
 
+function buildVehicleInfo(year, make, model, plate) {
+  var details = [year, make, model].filter(Boolean).join(' ').trim();
+  return details ? details + (plate ? ' — ' + plate : '') : '';
+}
+
+async function findExistingBookingCustomer(phone, email) {
+  if (!SHOP_ID) return null;
+
+  if (phone) {
+    var byPhone = await sb.from('customers')
+      .select('id,first_name,last_name,phone,email')
+      .eq('shop_id', SHOP_ID)
+      .eq('phone', phone)
+      .limit(1);
+    if (byPhone.error) throw byPhone.error;
+    if (byPhone.data && byPhone.data[0]) return byPhone.data[0];
+  }
+
+  if (email) {
+    var byEmail = await sb.from('customers')
+      .select('id,first_name,last_name,phone,email')
+      .eq('shop_id', SHOP_ID)
+      .eq('email', email)
+      .limit(1);
+    if (byEmail.error) throw byEmail.error;
+    if (byEmail.data && byEmail.data[0]) return byEmail.data[0];
+  }
+
+  return null;
+}
+
+async function ensureBookingVehicle(customerId, vehicle) {
+  if (!customerId) return null;
+
+  var vin = String(vehicle.vin || '').trim().toUpperCase();
+  var plate = String(vehicle.plate || '').trim().toUpperCase();
+  var make = String(vehicle.make || '').trim();
+  var model = String(vehicle.model || '').trim();
+  var year = vehicle.year ? parseInt(vehicle.year, 10) : null;
+
+  if (vin) {
+    var byVin = await sb.from('vehicles')
+      .select('id')
+      .eq('customer_id', customerId)
+      .eq('vin', vin)
+      .limit(1);
+    if (byVin.error) throw byVin.error;
+    if (byVin.data && byVin.data[0]) return byVin.data[0].id;
+  }
+
+  if (plate) {
+    var byPlate = await sb.from('vehicles')
+      .select('id')
+      .eq('customer_id', customerId)
+      .eq('plate', plate)
+      .limit(1);
+    if (byPlate.error) throw byPlate.error;
+    if (byPlate.data && byPlate.data[0]) return byPlate.data[0].id;
+  }
+
+  if (!make && !model && !year && !vin && !plate) return null;
+
+  var created = await sb.from('vehicles')
+    .insert({
+      customer_id: customerId,
+      make: make || null,
+      model: model || null,
+      year: year || null,
+      vin: vin || null,
+      plate: plate || null,
+    })
+    .select('id')
+    .single();
+  if (created.error) throw created.error;
+  return created.data ? created.data.id : null;
+}
+
+async function linkBookingCustomer(apptId, details) {
+  try {
+    var nameParts = String(details.fullName || '').trim().split(/\s+/).filter(Boolean);
+    var firstName = nameParts[0] || 'Guest';
+    var lastName = nameParts.slice(1).join(' ') || '-';
+    var phone = String(details.phone || '').trim() || null;
+    var email = String(details.email || '').trim() || null;
+
+    var customer = await findExistingBookingCustomer(phone, email);
+    if (!customer) {
+      var createdCustomer = await sb.from('customers')
+        .insert({
+          shop_id: SHOP_ID,
+          first_name: firstName,
+          last_name: lastName,
+          phone: phone,
+          email: email,
+        })
+        .select('id,first_name,last_name,phone,email')
+        .single();
+      if (createdCustomer.error) throw createdCustomer.error;
+      customer = createdCustomer.data;
+    }
+
+    var vehicleId = await ensureBookingVehicle(customer.id, details.vehicle || {});
+
+    var updatePayload = { customer_id: customer.id };
+    if (vehicleId) updatePayload.vehicle_id = vehicleId;
+
+    var linked = await sb.from('appointments')
+      .update(updatePayload)
+      .eq('id', apptId)
+      .select('id')
+      .single();
+    if (linked.error) throw linked.error;
+
+    return { customerId: customer.id, vehicleId: vehicleId };
+  } catch (err) {
+    console.warn('Could not auto-link booking customer:', err.message || err);
+    return { customerId: null, vehicleId: null };
+  }
+}
+
 /* ---- SUBMIT ---- */
 async function submitBooking() {
   hideError('p4-error');
@@ -907,6 +1027,7 @@ async function submitBooking() {
   var last    = document.getElementById('f-lastname').value.trim();
   var phone   = document.getElementById('f-phone').value.trim();
   var email   = document.getElementById('f-email').value.trim();
+  var vin     = document.getElementById('f-vin').value.trim().toUpperCase();
   var year    = document.getElementById('f-year').value.trim();
   var make    = document.getElementById('f-make').value.trim();
   var model   = document.getElementById('f-model').value.trim();
@@ -932,14 +1053,14 @@ async function submitBooking() {
       return;
     }
 
-    var vehicleInfo = year + ' ' + make + ' ' + model + (plate ? ' — ' + plate : '');
+    var vehicleInfo = buildVehicleInfo(year, make, model, plate);
 
     var payload = {
       shop_id:      SHOP_ID,
       guest_name:   first + ' ' + last,
       guest_phone:  phone,
       guest_email:  email || null,
-      vehicle_info: vehicleInfo,
+      vehicle_info: vehicleInfo || null,
       service:      service,
       appt_date:    date,
       appt_time:    selectedSlot + ':00',
@@ -952,6 +1073,18 @@ async function submitBooking() {
     if (res.error) throw res.error;
 
     var appt = res.data;
+    await linkBookingCustomer(appt.id, {
+      fullName: first + ' ' + last,
+      phone: phone,
+      email: email,
+      vehicle: {
+        year: year,
+        make: make,
+        model: model,
+        vin: vin,
+        plate: plate,
+      },
+    });
 
     // Show success screen
     var d = new Date(date + 'T12:00:00');
@@ -960,7 +1093,7 @@ async function submitBooking() {
     document.getElementById('successRef').textContent = appt.ref || 'Booking Received';
     document.getElementById('successDetails').innerHTML =
       '<div class="summary-row"><span class="summary-label">Name</span><span class="summary-value">' + first + ' ' + last + '</span></div>' +
-      '<div class="summary-row"><span class="summary-label">Vehicle</span><span class="summary-value">' + vehicleInfo + '</span></div>' +
+      '<div class="summary-row"><span class="summary-label">Vehicle</span><span class="summary-value">' + (vehicleInfo || '—') + '</span></div>' +
       '<div class="summary-row"><span class="summary-label">Service</span><span class="summary-value">' + service + '</span></div>' +
       '<div class="summary-row"><span class="summary-label">Date</span><span class="summary-value">' + dateLabel + '</span></div>' +
       '<div class="summary-row"><span class="summary-label">Time</span><span class="summary-value">' + selectedSlot + '</span></div>' +

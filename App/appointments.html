@@ -386,6 +386,7 @@ let apptData   = [];
 let staffList  = [];
 let custList   = [];   // all customers for the booking dropdown
 let vehCache   = {};   // custId → vehicles[]
+let guestSyncInFlight = false;
 
 // ── INIT ──────────────────────────────────────────────────────────
 async function initPage() {
@@ -400,7 +401,13 @@ async function initPage() {
   custList  = custs;
   staffList = staff;
 
-  populateCustomerSelect(custs);
+  if (await syncGuestAppointmentsToCustomers()) {
+    const refreshed = await Promise.all([GS.getAppointments(), GS.getCustomers()]);
+    apptData = refreshed[0];
+    custList = refreshed[1];
+  }
+
+  populateCustomerSelect(custList);
   populateTechFilter(staff);
   renderCalendar();
   renderApptList();
@@ -424,6 +431,12 @@ async function initPage() {
 
 async function loadAppointments() {
   apptData = await GS.getAppointments();
+  if (await syncGuestAppointmentsToCustomers()) {
+    const refreshed = await Promise.all([GS.getAppointments(), GS.getCustomers()]);
+    apptData = refreshed[0];
+    custList = refreshed[1];
+    populateCustomerSelect(custList);
+  }
   renderCalendar(); renderApptList(); renderRequests(); updatePendingBadge();
 }
 
@@ -607,8 +620,30 @@ async function confirmAppt(id) {
   } catch(err) { Toast.show(err.message, 'error'); }
 }
 
-async function autoCreateCustomer(appt) {
+async function syncGuestAppointmentsToCustomers() {
+  if (guestSyncInFlight) return false;
+
+  const pendingGuestAppts = apptData.filter(a =>
+    !a.customer_id && a.guest_name && ['Pending', 'Confirmed'].includes(a.status)
+  );
+  if (!pendingGuestAppts.length) return false;
+
+  guestSyncInFlight = true;
+  let changed = false;
   try {
+    for (const appt of pendingGuestAppts) {
+      const created = await autoCreateCustomer(appt, { silent: true });
+      if (created) changed = true;
+    }
+  } finally {
+    guestSyncInFlight = false;
+  }
+  return changed;
+}
+
+async function autoCreateCustomer(appt, options = {}) {
+  try {
+    const silent = options.silent === true;
     const parts     = (appt.guest_name||'').trim().split(' ');
     const firstName = parts[0] || 'Guest';
     const lastName  = parts.slice(1).join(' ') || '-';
@@ -622,10 +657,13 @@ async function autoCreateCustomer(appt) {
     );
     if (existing) {
       customerId = existing.id;
-      Toast.show('Linked to existing customer: ' + existing.first_name + ' ' + existing.last_name, 'info', 3000);
+      if (!silent) {
+        Toast.show('Linked to existing customer: ' + existing.first_name + ' ' + existing.last_name, 'info', 3000);
+      }
     } else {
       const customer = await GS.createCustomer({ first_name: firstName, last_name: lastName, phone, email });
       customerId = customer.id;
+      custList.push(customer);
       // Create vehicle if vehicle_info present
       if (appt.vehicle_info && customerId) {
         const vParts = appt.vehicle_info.split(' ');
@@ -635,10 +673,19 @@ async function autoCreateCustomer(appt) {
         const plate  = appt.vehicle_info.includes('—') ? appt.vehicle_info.split('—')[1].trim() : null;
         if (make) await GS.createVehicle({ customer_id: customerId, year, make, model, plate });
       }
-      Toast.show('Customer created: ' + firstName + ' ' + lastName, 'success', 3000);
+      if (!silent) {
+        Toast.show('Customer created: ' + firstName + ' ' + lastName, 'success', 3000);
+      }
     }
     await GS.updateAppointment(appt.id, { customer_id: customerId });
-  } catch(e) { console.warn('Auto-create customer failed:', e.message); }
+    const idx = apptData.findIndex(x => x.id === appt.id);
+    if (idx >= 0) apptData[idx] = { ...apptData[idx], customer_id: customerId };
+    return true;
+  } catch(e) {
+    console.warn('Auto-create customer failed:', e.message);
+    if (!options.silent) Toast.show('Could not link this booking to a customer automatically.', 'warn', 3500);
+    return false;
+  }
 }
 
 function openEditAppt(id) {
