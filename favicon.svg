@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="GearShift favicon">
+  <defs>
+    <linearGradient id="bg" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e8a020"/>
+      <stop offset="0.45" stop-color="#c94b1e"/>
+      <stop offset="1" stop-color="#8f2f12"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="16" y1="12" x2="46" y2="38" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#bg)"/>
+  <path d="M17 18h30l-5 8H22v12h18l-4.5 8H17z" fill="#ffffff" opacity="0.16"/>
+  <path d="M22.5 19.5h19.5l-2.6 4.3H27.7v4.8h10.7v4.2H27.7v6.1h15.1L40 43.5H22.5z" fill="#ffffff"/>
+  <path d="M45.2 19.5h5.3v9.7l6-9.7H60l-7 11.1L60 43.5h-3.9l-5.6-10v10h-5.3z" fill="#0e0f0f"/>
+  <path d="M12 12c7-6.4 17.8-8.7 27.5-5.6 2.8 0.9 5.5 2.2 8 3.8-8.3-2.4-17.4-1.4-24.8 3.1-1.6 1-3.1 2.1-4.4 3.4z" fill="url(#shine)"/>
+</svg>
