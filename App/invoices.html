@@ -207,6 +207,7 @@ let _payingInvoiceId = null;
 let _completedWOs  = [];
 let _shopSettings  = null;
 let _billingStatus = null;
+let _currentInvoicePreview = null;
 
 // ── INIT ─────────────────────────────────────────────────────────
 async function initPage() {
@@ -251,6 +252,29 @@ function canUseOnlinePayments() {
 
 function showOnlinePaymentUpgrade() {
   Toast.show('Online invoice payments are available on Pro. Upgrade from Settings → Plan & Billing to enable Paystack checkout.', 'info', 7000);
+}
+
+function escapeInvoiceHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[ch]));
+}
+
+function getInvoiceShopLabel(inv) {
+  const shopName = String(inv?.shop?.name || '').trim();
+  if (!shopName) return 'Auto Shop';
+  return /auto\s+shop$/i.test(shopName) ? shopName : `${shopName} Auto Shop`;
+}
+
+function getInvoiceShopLogoMarkup(inv) {
+  const label = getInvoiceShopLabel(inv);
+  const match = label.match(/^(.*?)(\s+AUTO SHOP)$/i);
+  if (!match) return escapeInvoiceHtml(label.toUpperCase());
+  return `${escapeInvoiceHtml(match[1].trim().toUpperCase())} <span>${escapeInvoiceHtml(match[2].trim().toUpperCase())}</span>`;
 }
 
 function renderOnlinePaymentAction(inv) {
@@ -549,10 +573,13 @@ async function openInvoice(invoiceId) {
 }
 
 function renderInvoicePreview(inv) {
+  _currentInvoicePreview = inv;
   document.getElementById('invModalTitle').textContent = `Invoice ${inv.ref || ''}`;
 
   const fmtC = n => '₦' + Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits:2, maximumFractionDigits:2 });
   const fmtD = iso => iso ? new Date(iso).toLocaleDateString('en-NG', { day:'numeric', month:'long', year:'numeric' }) : '—';
+  const shopLabel = getInvoiceShopLabel(inv);
+  const shopLogoMarkup = getInvoiceShopLogoMarkup(inv);
 
   const partsRows = (inv.parts || []).map(p => `
     <tr>
@@ -576,9 +603,9 @@ function renderInvoicePreview(inv) {
     <div class="inv-preview" id="inv-print-area">
       <div class="inv-preview-header">
         <div>
-          <div class="inv-preview-logo">GEAR<span>SHIFT</span></div>
+          <div class="inv-preview-logo">${shopLogoMarkup}</div>
           <div style="font-size:12px;color:#666;margin-top:6px;line-height:1.8">
-            ${inv.shop?.name || ''}<br>
+            ${shopLabel}<br>
             ${inv.shop?.phone || ''}<br>
             ${inv.shop?.email || ''}<br>
             ${inv.shop?.address || ''}
@@ -630,7 +657,7 @@ function renderInvoicePreview(inv) {
       </div>
 
       <div class="inv-footer-note">
-        Thank you for choosing ${inv.shop?.name || 'GearShift'}. Please make payment within 7 days of invoice date.
+        Thank you for choosing ${shopLabel}. Please make payment within 7 days of invoice date.
       </div>
     </div>
   `;
@@ -651,12 +678,13 @@ function renderInvoicePreview(inv) {
 function printInvoice() {
   const printArea = document.getElementById('inv-print-area');
   if (!printArea) return;
+  const shopLabel = getInvoiceShopLabel(_currentInvoicePreview);
   const win = window.open('', '_blank');
   win.document.write(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Invoice \u2014 GearShift<\/title>
+  <title>${escapeInvoiceHtml(`Invoice — ${shopLabel}`)}<\/title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -689,9 +717,10 @@ function printInvoice() {
 
 // ── EMAIL ─────────────────────────────────────────────────────────
 function emailInvoice(invoiceId, customerName) {
-  const subject = encodeURIComponent('Your Invoice from GearShift');
+  const shopLabel = getInvoiceShopLabel(_currentInvoicePreview);
+  const subject = encodeURIComponent(`Your Invoice from ${shopLabel}`);
   const body    = encodeURIComponent(
-    'Dear ' + (customerName || 'Customer') + ',\n\nPlease find your invoice attached.\n\nThank you for choosing GearShift.\n\nBest regards,\nGearShift Team'
+    'Dear ' + (customerName || 'Customer') + ',\n\nPlease find your invoice attached.\n\nThank you for choosing ' + shopLabel + '.\n\nBest regards,\n' + shopLabel
   );
   window.location.href = 'mailto:?subject=' + subject + '&body=' + body;
 }
