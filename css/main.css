@@ -100,9 +100,19 @@ html.light-mode .app-input {
   color: var(--app-text);
   border-color: var(--app-border);
 }
+html.light-mode .app-input:focus {
+  background-color: var(--app-surface);
+  color: var(--app-text);
+}
 html.light-mode .app-input::placeholder { color: var(--app-muted); }
 html.light-mode select.app-input {
+  background-color: var(--app-surface);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2357606a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+html.light-mode select.app-input option,
+html.light-mode .filter-select option {
+  background: #ffffff;
+  color: var(--app-text);
 }
 html.light-mode .sidebar-logo-text { color: var(--app-text); }
 html.light-mode .sidebar-back { color: var(--app-muted); }
@@ -116,6 +126,7 @@ html.light-mode .toast { background: var(--app-surface); border-color: var(--app
 html.light-mode .inv-preview { background: var(--app-surface); color: var(--app-text); }
 html.light-mode .search-box { background: var(--app-surface); color: var(--app-text); }
 html.light-mode .filter-select { background: var(--app-surface); color: var(--app-text); }
+html.light-mode .filter-select:focus { background-color: var(--app-surface); color: var(--app-text); }
 
 
 /* -----------------------------------------------------------------

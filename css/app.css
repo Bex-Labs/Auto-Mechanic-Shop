@@ -231,7 +231,7 @@
   color:var(--app-text); font-family:var(--ff-body); font-size:13px;
   transition:border-color var(--t-fast), background var(--t-fast); outline:none;
 }
-.app-input:focus { border-color:var(--amber); background:#263140; }
+.app-input:focus { border-color:var(--amber); background-color:#263140; }
 .app-input::placeholder { color:var(--app-muted); }
 textarea.app-input { resize:vertical; min-height:90px; }
 select.app-input {
