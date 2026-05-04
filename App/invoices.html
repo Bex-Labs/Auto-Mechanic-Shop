@@ -271,10 +271,7 @@ function getInvoiceShopLabel(inv) {
 }
 
 function getInvoiceShopLogoMarkup(inv) {
-  const label = getInvoiceShopLabel(inv);
-  const match = label.match(/^(.*?)(\s+AUTO SHOP)$/i);
-  if (!match) return escapeInvoiceHtml(label.toUpperCase());
-  return `${escapeInvoiceHtml(match[1].trim().toUpperCase())} <span>${escapeInvoiceHtml(match[2].trim().toUpperCase())}</span>`;
+  return escapeInvoiceHtml(getInvoiceShopLabel(inv).toUpperCase());
 }
 
 function renderOnlinePaymentAction(inv) {
@@ -605,7 +602,6 @@ function renderInvoicePreview(inv) {
         <div>
           <div class="inv-preview-logo">${shopLogoMarkup}</div>
           <div style="font-size:12px;color:#666;margin-top:6px;line-height:1.8">
-            ${shopLabel}<br>
             ${inv.shop?.phone || ''}<br>
             ${inv.shop?.email || ''}<br>
             ${inv.shop?.address || ''}

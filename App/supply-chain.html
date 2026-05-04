@@ -483,6 +483,7 @@ let inventoryData = [];
 let selectedSuppId = null;
 let editingSuppId  = null;
 let currentRating  = 3;
+let currentShopName = 'Auto Shop';
 const PO_CUSTOM_ITEM_VALUE = '__custom__';
 
 /* ════════════════════════════════════════════════════════════
@@ -491,6 +492,7 @@ const PO_CUSTOM_ITEM_VALUE = '__custom__';
 async function initPage() {
   const user = await RBAC.guardPage('supply-chain');
   if (!user) return;
+  currentShopName = getSupplyChainShopLabel(user);
   await RBAC.initSidebar('supply-chain');
   await loadAll();
 
@@ -518,6 +520,33 @@ async function loadAll() {
   populatePOSupplierDropdown();
 
   if (selectedSuppId) renderSupplierProfile(selectedSuppId);
+}
+
+function getSupplyChainShopLabel(userLike) {
+  const shopName = String(userLike?.shop_name || '').trim();
+  if (!shopName) return 'Auto Shop';
+  return /auto\s+shop$/i.test(shopName) ? shopName : `${shopName} Auto Shop`;
+}
+
+function getSupplyChainShopHeaderText() {
+  return getSupplyChainShopLabel({ shop_name: currentShopName }).toUpperCase();
+}
+
+function getSupplyChainShopFilenameBase() {
+  return getSupplyChainShopLabel({ shop_name: currentShopName })
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase() || 'auto-shop';
+}
+
+function fitPdfHeaderText(doc, text, maxWidth, baseSize = 18, minSize = 10) {
+  let size = baseSize;
+  doc.setFontSize(size);
+  while (size > minSize && doc.getTextWidth(text) > maxWidth) {
+    size -= 1;
+    doc.setFontSize(size);
+  }
+  return size;
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -864,7 +893,7 @@ async function sendPO(id) {
   const total    = items.reduce((s,i) => s + (i.unit_cost||0)*(i.qty||0), 0);
 
   const waMsg    = buildPOMessage(po, true);
-  const subject  = 'Purchase Order ' + (po.ref||'') + ' — GearShift Auto Shop';
+  const subject  = 'Purchase Order ' + (po.ref||'') + ' — ' + getSupplyChainShopLabel({ shop_name: currentShopName });
 
   // Store on modal dataset
   const modal = document.getElementById('sendPOModal');
@@ -909,6 +938,8 @@ function generatePOPdf(po) {
   const items     = po.purchase_order_items || [];
   const total     = items.reduce((s,i) => s + (i.unit_cost||0)*(i.qty||0), 0);
   const dateStr   = new Date().toLocaleDateString('en-NG', { day:'numeric', month:'long', year:'numeric' });
+  const shopLabel = getSupplyChainShopLabel({ shop_name: currentShopName });
+  const shopHeader = getSupplyChainShopHeaderText();
   const formatPdfCurrency = value => 'NGN ' + Number(value || 0).toLocaleString('en-NG', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -919,11 +950,8 @@ function generatePOPdf(po) {
   doc.rect(0, 0, 210, 22, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  doc.text('GEARSHIFT', 14, 14);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text('AUTO SHOP', 14, 19);
+  fitPdfHeaderText(doc, shopHeader, 110, 17, 10);
+  doc.text(shopHeader, 14, 14);
 
   // PO title right side
   doc.setFont('helvetica', 'bold');
@@ -1050,11 +1078,11 @@ function generatePOPdf(po) {
   doc.setTextColor(160, 160, 160);
   doc.setFont('helvetica', 'normal');
   doc.text('Please confirm receipt of this PO by replying via WhatsApp or email.', 14, 284);
-  doc.text('GearShift Auto Shop  ·  Generated ' + dateStr, 196, 284, { align:'right' });
+  doc.text(shopLabel + '  ·  Generated ' + dateStr, 196, 284, { align:'right' });
   doc.setDrawColor(220, 220, 220);
   doc.line(14, 280, 196, 280);
 
-  const filename = (po.ref || 'PO') + '-GearShift.pdf';
+  const filename = (po.ref || 'PO') + '-' + getSupplyChainShopFilenameBase() + '.pdf';
   doc.save(filename);
   return filename;
 }
@@ -1100,7 +1128,7 @@ function buildPOMessage(po, forWhatsApp) {
   msg += `A PDF copy of this order has been attached for your records.\n\n`;
   msg += `Please confirm this order by replying to this message.\n\n`;
   msg += `Thank you for your continued partnership.\n`;
-  msg += `GearShift Auto Shop`;
+  msg += getSupplyChainShopLabel({ shop_name: currentShopName });
   return msg;
 }
 
