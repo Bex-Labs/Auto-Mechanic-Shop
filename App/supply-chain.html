@@ -25,10 +25,29 @@
 
 /* ── PO LINE ITEM ROW ── */
 .po-line {
-  display:flex; align-items:center; gap:10px;
+  display:flex; flex-wrap:wrap; align-items:flex-start; gap:10px;
   padding:9px 0; border-bottom:1px solid rgba(48,54,61,.5); font-size:13px;
 }
 .po-line:last-child { border-bottom:none; }
+.po-line-main {
+  display:flex; align-items:center; gap:10px; width:100%;
+}
+.po-line-main .po-part-select { flex:2; }
+.po-line-custom {
+  display:none; width:100%;
+  grid-template-columns:minmax(220px, 2fr) minmax(150px, 1fr);
+  gap:10px; padding-left:0;
+}
+.po-line.custom-active .po-line-custom { display:grid; }
+.po-line-helper {
+  grid-column:1 / -1;
+  font-size:11px; color:var(--app-muted); line-height:1.5;
+}
+@media (max-width: 720px) {
+  .po-line-main { flex-wrap:wrap; }
+  .po-line-main .po-part-select { flex:1 1 100%; }
+  .po-line-custom { grid-template-columns:1fr; }
+}
 
 /* ── STAR RATING ── */
 .stars { display:inline-flex; gap:2px; font-size:14px; }
@@ -318,6 +337,7 @@
         </div>
       </div>
       <div style="font-family:var(--ff-display);font-size:15px;letter-spacing:1px;color:var(--app-text);margin:16px 0 10px">LINE ITEMS</div>
+      <div style="font-size:12px;color:var(--app-muted);margin-bottom:10px">Choose an inventory part or use <strong style="color:var(--amber)">+ Custom Item</strong> to create a new stock item from this PO.</div>
       <div id="poLineItems" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
       <button class="app-btn app-btn-ghost app-btn-sm" onclick="addPOLine()">+ Add Line Item</button>
       <div class="divider-dark"></div>
@@ -463,6 +483,7 @@ let inventoryData = [];
 let selectedSuppId = null;
 let editingSuppId  = null;
 let currentRating  = 3;
+const PO_CUSTOM_ITEM_VALUE = '__custom__';
 
 /* ════════════════════════════════════════════════════════════
    INIT
@@ -604,36 +625,109 @@ function openNewPOForSupplier(suppId) {
   setTimeout(() => { document.getElementById('po-supp').value = suppId; }, 50);
 }
 
+function escapePOHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[ch]));
+}
+
+function normalizePOSku(value) {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 32);
+}
+
+function buildPOPartOptions(selectedId = '') {
+  const options = [`<option value="">— Select Part —</option>`];
+  options.push(`<option value="${PO_CUSTOM_ITEM_VALUE}" ${selectedId === PO_CUSTOM_ITEM_VALUE ? 'selected' : ''}>+ Custom Item</option>`);
+  inventoryData.forEach(part => {
+    const value = String(part.id || '');
+    const selected = selectedId === value ? 'selected' : '';
+    const label = `${part.name || 'Unnamed Part'}${part.sku ? ' (' + part.sku + ')' : ''}`;
+    options.push(
+      `<option value="${escapePOHtml(value)}" data-cost="${Number(part.cost || 0)}" ${selected}>${escapePOHtml(label)}</option>`
+    );
+  });
+  return options.join('');
+}
+
+function updateCustomPOLineState(select) {
+  const row = select.closest('.po-line');
+  if (!row) return;
+  const isCustom = select.value === PO_CUSTOM_ITEM_VALUE;
+  row.classList.toggle('custom-active', isCustom);
+  const nameInput = row.querySelector('[data-role="custom-name"]');
+  const skuInput = row.querySelector('[data-role="custom-sku"]');
+  if (!isCustom) {
+    if (nameInput) nameInput.value = '';
+    if (skuInput) skuInput.value = '';
+  } else if (nameInput && !nameInput.value.trim()) {
+    setTimeout(() => nameInput.focus(), 0);
+  }
+}
+
+function buildPOGeneratedSku(name, reservedSkus = new Set()) {
+  const base = normalizePOSku(name).replace(/-/g, '');
+  const trunk = (base || 'CUSTOMPART').slice(0, 12);
+  let sku = `PO-${trunk}`;
+  let counter = 2;
+  while (reservedSkus.has(sku)) {
+    const suffix = `-${counter}`;
+    sku = `PO-${trunk.slice(0, Math.max(4, 12 - suffix.length))}${suffix}`;
+    counter += 1;
+  }
+  return sku;
+}
+
 function addPOLine() {
   const div = document.createElement('div');
   div.className = 'po-line';
   div.innerHTML = `
-    <select class="app-input" style="flex:2" onchange="autofillCost(this)">
-      <option value="">— Select Part —</option>
-      ${inventoryData.map(p => `<option value="${p.id}" data-cost="${p.cost||0}">${p.name}${p.sku?' ('+p.sku+')':''}</option>`).join('')}
-    </select>
-    <input class="app-input" type="number" min="1" value="1" style="width:70px;text-align:center" placeholder="Qty" oninput="updatePOTotal()">
-    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-      <span style="font-family:var(--ff-mono);font-size:13px;color:var(--app-muted)">₦</span>
-      <input class="app-input" type="number" min="0" step="0.01" style="width:110px" placeholder="Unit cost" oninput="updatePOTotal()">
+    <div class="po-line-main">
+      <select class="app-input po-part-select" data-role="part-select" onchange="autofillCost(this)">
+        ${buildPOPartOptions()}
+      </select>
+      <input class="app-input" data-role="qty-input" type="number" min="1" value="1" style="width:70px;text-align:center" placeholder="Qty" oninput="updatePOTotal()">
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <span style="font-family:var(--ff-mono);font-size:13px;color:var(--app-muted)">₦</span>
+        <input class="app-input" data-role="cost-input" type="number" min="0" step="0.01" style="width:110px" placeholder="Unit cost" oninput="updatePOTotal()">
+      </div>
+      <button class="app-btn app-btn-ghost app-btn-sm" style="color:var(--danger);flex-shrink:0"
+        onclick="this.closest('.po-line').remove();updatePOTotal()">✕</button>
     </div>
-    <button class="app-btn app-btn-ghost app-btn-sm" style="color:var(--danger);flex-shrink:0"
-      onclick="this.closest('.po-line').remove();updatePOTotal()">✕</button>`;
+    <div class="po-line-custom">
+      <input class="app-input" data-role="custom-name" placeholder="New inventory item name">
+      <input class="app-input" data-role="custom-sku" placeholder="SKU (optional, auto-generated if blank)" oninput="this.value = this.value.toUpperCase()">
+      <div class="po-line-helper">Custom items are saved to inventory with zero starting stock. Stock will still increase only when this PO is received.</div>
+    </div>`;
   document.getElementById('poLineItems').appendChild(div);
 }
 
 function autofillCost(sel) {
+  updateCustomPOLineState(sel);
+  const row = sel.closest('.po-line');
+  const costInput = row?.querySelector('[data-role="cost-input"]');
   const cost = sel.options[sel.selectedIndex]?.dataset.cost;
-  const row  = sel.closest('.po-line');
-  if (cost && row) row.querySelectorAll('input[type=number]')[1].value = cost;
+  if (costInput && sel.value && sel.value !== PO_CUSTOM_ITEM_VALUE) {
+    costInput.value = Number(cost || 0);
+  }
   updatePOTotal();
 }
 
 function updatePOTotal() {
   let total = 0;
   document.querySelectorAll('#poLineItems .po-line').forEach(row => {
-    const inputs = row.querySelectorAll('input[type=number]');
-    total += (parseFloat(inputs[0]?.value)||0) * (parseFloat(inputs[1]?.value)||0);
+    const qty = parseFloat(row.querySelector('[data-role="qty-input"]')?.value) || 0;
+    const cost = parseFloat(row.querySelector('[data-role="cost-input"]')?.value) || 0;
+    total += qty * cost;
   });
   document.getElementById('poSubtotal').textContent = formatCurrency(total);
 }
@@ -645,17 +739,103 @@ async function savePO(status) {
   if (!suppId) { Toast.show('Please select a supplier', 'error'); return; }
 
   const lines = [];
-  document.querySelectorAll('#poLineItems .po-line').forEach(row => {
-    const sel    = row.querySelector('select');
-    const inputs = row.querySelectorAll('input[type=number]');
-    const qty    = parseInt(inputs[0]?.value) || 0;
-    const cost   = parseFloat(inputs[1]?.value) || 0;
-    if (sel?.value && qty > 0) lines.push({ part_id: sel.value, qty, unit_cost: cost });
+  const customRows = [];
+  const rows = [...document.querySelectorAll('#poLineItems .po-line')];
+  rows.forEach((row, index) => {
+    const select = row.querySelector('[data-role="part-select"]');
+    const qty = parseInt(row.querySelector('[data-role="qty-input"]')?.value, 10) || 0;
+    const cost = parseFloat(row.querySelector('[data-role="cost-input"]')?.value) || 0;
+    if (!select?.value || qty <= 0) return;
+    if (select.value === PO_CUSTOM_ITEM_VALUE) {
+      customRows.push({ row, index, qty, cost });
+      return;
+    }
+    lines.push({ part_id: select.value, qty, unit_cost: cost });
   });
-  if (!lines.length) { Toast.show('Add at least one line item', 'error'); return; }
+  if (!lines.length && !customRows.length) { Toast.show('Add at least one line item', 'error'); return; }
 
   try {
+    const reservedSkus = new Set(
+      inventoryData
+        .map(item => normalizePOSku(item.sku))
+        .filter(Boolean)
+    );
+    const customCache = new Map();
+    let createdCount = 0;
+
+    for (const entry of customRows) {
+      const { row, index, qty, cost } = entry;
+      const nameInput = row.querySelector('[data-role="custom-name"]');
+      const skuInput = row.querySelector('[data-role="custom-sku"]');
+      const rawName = nameInput?.value.trim() || '';
+      const typedSku = normalizePOSku(skuInput?.value);
+
+      if (!rawName) {
+        Toast.show(`Custom item name is required for line ${index + 1}`, 'error');
+        nameInput?.focus();
+        return;
+      }
+
+      const nameKey = rawName.toLowerCase();
+      const cacheKey = typedSku ? `sku:${typedSku}` : `name:${nameKey}`;
+      let part = customCache.get(cacheKey) || null;
+
+      if (!part && typedSku) {
+        const skuMatch = inventoryData.find(item => normalizePOSku(item.sku) === typedSku);
+        if (skuMatch) {
+          if ((skuMatch.name || '').trim().toLowerCase() !== nameKey) {
+            Toast.show(`SKU ${typedSku} already belongs to "${skuMatch.name}". Choose that part or use a different SKU.`, 'error');
+            skuInput?.focus();
+            return;
+          }
+          part = skuMatch;
+        }
+      }
+
+      if (!part && !typedSku) {
+        part = inventoryData.find(item => (item.name || '').trim().toLowerCase() === nameKey) || null;
+      }
+
+      if (!part) {
+        const finalSku = typedSku || buildPOGeneratedSku(rawName, reservedSkus);
+        reservedSkus.add(finalSku);
+        const payload = {
+          name: rawName,
+          sku: finalSku,
+          category: 'Other',
+          location: '',
+          qty: 0,
+          threshold: 0,
+          cost,
+          supplier_id: suppId || null,
+        };
+        part = await GS.createInventoryItem(payload);
+        inventoryData.push(part);
+        customCache.set(`sku:${normalizePOSku(part.sku)}`, part);
+        customCache.set(`name:${nameKey}`, part);
+        createdCount += 1;
+      }
+
+      if (part) {
+        customCache.set(`sku:${normalizePOSku(part.sku)}`, part);
+        customCache.set(`name:${nameKey}`, part);
+      }
+
+      lines.push({ part_id: part.id, qty, unit_cost: cost });
+    }
+
+    if (!lines.length) { Toast.show('Add at least one line item', 'error'); return; }
+
     const po = await GS.createPurchaseOrder(suppId, lines, notes, delivery || null);
+
+    if (createdCount) {
+      Toast.show(
+        createdCount === 1
+          ? '1 new inventory item was created from this PO'
+          : `${createdCount} new inventory items were created from this PO`,
+        'success'
+      );
+    }
 
     if (status === 'Sent') {
       // Close PO create modal and open send modal
