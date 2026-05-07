@@ -482,12 +482,16 @@ function showRegister() {
 }
 
 async function showApp(session) {
+  const profile = await RBAC.getCurrentUser();
+  if (RBAC.isPlatformOwner(profile)) {
+    window.location.href = 'platform-admin.html';
+    return;
+  }
+
   document.getElementById('loginScreen').style.display    = 'none';
   document.getElementById('registerScreen').style.display = 'none';
   document.getElementById('appShell').style.display       = 'block';
 
-  // Get profile
-  const profile = await RBAC.getCurrentUser();
   const name = profile?.full_name || session.user.email.split('@')[0];
 
   // Sidebar user

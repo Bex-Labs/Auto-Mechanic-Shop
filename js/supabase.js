@@ -29,6 +29,30 @@ const SESSION_ID_STORAGE_KEY = 'gs_device_session_id';
 const SESSION_STARTED_STORAGE_KEY = 'gs_device_session_started';
 const SESSION_HEARTBEAT_INTERVAL_MS = 60 * 1000;
 const SESSION_ACTIVE_WINDOW_MS = 3 * 60 * 1000;
+const PLATFORM_OWNER_EMAILS = ['abbassani94@gmail.com'];
+
+function _normalizedOwnerEmails() {
+  return PLATFORM_OWNER_EMAILS
+    .map(email => String(email || '').trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function _isPlatformOwnerRecord(sessionUser, profile = null) {
+  const email = String(sessionUser?.email || profile?.email || '').trim().toLowerCase();
+  const role = String(profile?.role || sessionUser?.user_metadata?.role || '').trim();
+  return (email && _normalizedOwnerEmails().includes(email)) || role === 'Owner';
+}
+
+function _decoratePlatformOwner(profile, sessionUser) {
+  if (!_isPlatformOwnerRecord(sessionUser, profile)) return profile;
+  return {
+    ...profile,
+    original_role: profile?.role || sessionUser?.user_metadata?.role || null,
+    role: 'Owner',
+    is_platform_owner: true,
+    email: profile?.email || sessionUser?.email || null,
+  };
+}
 
 function _authSessionStorage() {
   return {
@@ -683,13 +707,13 @@ const Auth = (() => {
 
     const profile = rows?.[0] || null;
     if (error || !profile) {
-      return {
+      return _decoratePlatformOwner({
         id: session.user.id,
         full_name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
         role: session.user.user_metadata?.role || 'Admin',
         shop_id: null,
         email: session.user.email,
-      };
+      }, session.user);
     }
 
     if (profile.shop_id) {
@@ -699,7 +723,7 @@ const Auth = (() => {
       profile.shop_name = shop?.name || null;
     }
 
-    return profile;
+    return _decoratePlatformOwner(profile, session.user);
   }
 
   async function resetPassword(email) {
@@ -743,6 +767,7 @@ const Auth = (() => {
     signIn, signInWithGoogle, signUp, signOut,
     getSession, getUser, resetPassword,
     requireAuth, requireRole, onAuthChange,
+    isPlatformOwner: user => _isPlatformOwnerRecord(user, user),
     listSessions: SessionRegistry.list,
     revokeSession: SessionRegistry.revoke,
     getCurrentSessionId: SessionRegistry.currentSessionId,
@@ -2309,6 +2334,45 @@ const GS = (() => {
   }
 
   /* ---------------------------------------------------------------
+     PLATFORM ADMIN (OWNER ONLY)
+     --------------------------------------------------------------- */
+  async function _invokePlatformAdmin(action, payload = {}) {
+    const { data, error } = await sb.functions.invoke('platform-admin', {
+      body: { action, ...payload },
+    });
+    if (error) {
+      try {
+        if (error.context && typeof error.context.json === 'function') {
+          const details = await error.context.json();
+          if (details?.error) throw new Error(details.error);
+        }
+      } catch (parsed) {
+        if (parsed instanceof Error && parsed.message && parsed.message !== error.message) throw parsed;
+      }
+      throw error;
+    }
+    if (data?.error) throw new Error(data.error);
+    return data;
+  }
+
+  async function getPlatformAdminOverview() {
+    return _invokePlatformAdmin('overview');
+  }
+
+  async function setPlatformUserActive(userId, active) {
+    return _invokePlatformAdmin('set_user_active', {
+      user_id: userId,
+      active: !!active,
+    });
+  }
+
+  async function revokePlatformUserSessions(userId) {
+    return _invokePlatformAdmin('revoke_user_sessions', {
+      user_id: userId,
+    });
+  }
+
+  /* ---------------------------------------------------------------
      PUBLIC API
      --------------------------------------------------------------- */
   return {
@@ -2329,6 +2393,7 @@ const GS = (() => {
     getStaff, updateProfile,
     getShopActivity, logPageView, logActivity,
     getSettings, updateSettings, resetDemoData,
+    getPlatformAdminOverview, setPlatformUserActive, revokePlatformUserSessions,
   };
 })();
 

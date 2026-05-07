@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<title>Platform Admin — GearShift</title>
+<link rel="stylesheet" href="../css/main.css">
+<link rel="stylesheet" href="../css/app.css">
+<style>
+.owner-shell {
+  display:grid; gap:18px;
+}
+.owner-pane {
+  display:none;
+}
+.owner-pane.active {
+  display:grid;
+  gap:18px;
+}
+.owner-hero {
+  display:flex; justify-content:space-between; gap:18px; align-items:flex-end; flex-wrap:wrap;
+  padding:22px 24px;
+  border:1px solid var(--app-border);
+  border-radius:var(--r-md);
+  background:linear-gradient(135deg, rgba(201,75,30,0.14), rgba(14,15,15,0.06));
+}
+.owner-eyebrow {
+  font-size:11px; color:var(--amber); font-family:var(--ff-mono); letter-spacing:.18em; text-transform:uppercase;
+}
+.owner-title {
+  margin-top:10px; font-size:30px; line-height:1.1; color:var(--app-text); font-family:var(--ff-display); letter-spacing:.06em;
+}
+.owner-copy {
+  margin-top:10px; max-width:720px; color:var(--app-muted); font-size:14px; line-height:1.7;
+}
+.owner-generated {
+  display:inline-flex; align-items:center; gap:8px;
+  padding:9px 12px; border-radius:999px;
+  border:1px solid var(--app-border);
+  background:rgba(255,255,255,0.02);
+  color:var(--app-muted); font-size:11px; font-family:var(--ff-mono); letter-spacing:.08em; text-transform:uppercase;
+}
+.owner-stat-grid {
+  display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px;
+}
+.owner-stat {
+  border:1px solid var(--app-border);
+  border-radius:var(--r-md);
+  padding:18px 18px 16px;
+  background:var(--app-surface);
+}
+.owner-stat-label {
+  font-size:11px; color:var(--app-muted); text-transform:uppercase; letter-spacing:.12em;
+}
+.owner-stat-value {
+  margin-top:10px; font-size:28px; font-weight:800; color:var(--app-text);
+}
+.owner-stat-sub {
+  margin-top:8px; font-size:12px; color:var(--app-muted);
+}
+.owner-panels {
+  display:grid; grid-template-columns:1.45fr 1fr; gap:16px;
+}
+.owner-panel {
+  border:1px solid var(--app-border);
+  border-radius:var(--r-md);
+  background:var(--app-surface);
+  overflow:hidden;
+}
+.owner-panel-head {
+  display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;
+  padding:16px 18px; border-bottom:1px solid rgba(48,54,61,0.5);
+}
+.owner-panel-title {
+  font-size:15px; color:var(--app-text); font-family:var(--ff-display); letter-spacing:.08em;
+}
+.owner-panel-sub {
+  margin-top:4px; color:var(--app-muted); font-size:12px;
+}
+.owner-feed {
+  display:flex; flex-direction:column;
+}
+.owner-feed-item {
+  display:flex; justify-content:space-between; gap:14px; align-items:flex-start;
+  padding:14px 18px; border-bottom:1px solid rgba(48,54,61,0.45);
+}
+.owner-feed-item:last-child { border-bottom:none; }
+.owner-feed-name {
+  color:var(--app-text); font-size:13px; font-weight:700;
+}
+.owner-feed-meta {
+  margin-top:5px; color:var(--app-muted); font-size:11px; font-family:var(--ff-mono); line-height:1.6;
+}
+.owner-feed-time {
+  color:var(--amber); font-size:11px; font-family:var(--ff-mono); white-space:nowrap;
+}
+.owner-toolbar {
+  display:grid; grid-template-columns:1.5fr repeat(2, minmax(180px, .7fr)) auto; gap:12px; align-items:end;
+}
+.owner-table-wrap {
+  overflow:auto;
+}
+.owner-table {
+  width:100%; border-collapse:collapse; min-width:920px;
+}
+.owner-table th {
+  text-align:left; padding:12px 14px; font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--app-muted); font-family:var(--ff-mono); background:rgba(255,255,255,0.02);
+  border-bottom:1px solid rgba(48,54,61,0.55);
+}
+.owner-table td {
+  padding:14px; border-bottom:1px solid rgba(48,54,61,0.4); vertical-align:top; font-size:13px; color:var(--app-text);
+}
+.owner-table tr:hover td {
+  background:rgba(255,255,255,0.015);
+}
+.owner-user-name {
+  font-weight:700; color:var(--app-text);
+}
+.owner-user-meta {
+  margin-top:5px; font-size:11px; color:var(--app-muted); font-family:var(--ff-mono); line-height:1.55;
+}
+.owner-actions {
+  display:flex; gap:8px; flex-wrap:wrap;
+}
+.owner-badge {
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:5px 10px; border-radius:999px; font-size:10px; font-weight:700;
+  letter-spacing:.12em; text-transform:uppercase; white-space:nowrap;
+  border:1px solid transparent;
+}
+.owner-badge-active {
+  background:rgba(34,197,94,0.12); color:#4ade80; border-color:rgba(34,197,94,0.24);
+}
+.owner-badge-inactive {
+  background:rgba(239,68,68,0.12); color:#f87171; border-color:rgba(239,68,68,0.24);
+}
+.owner-badge-pro {
+  background:rgba(232,160,32,0.12); color:var(--amber); border-color:rgba(232,160,32,0.26);
+}
+.owner-badge-starter {
+  background:rgba(96,165,250,0.12); color:#93c5fd; border-color:rgba(96,165,250,0.24);
+}
+.owner-badge-owner {
+  background:rgba(167,139,250,0.12); color:#c4b5fd; border-color:rgba(167,139,250,0.24);
+}
+.owner-muted {
+  color:var(--app-muted);
+}
+.owner-empty {
+  padding:34px 20px; text-align:center; color:var(--app-muted); font-size:14px;
+}
+.owner-protected {
+  color:var(--app-muted); font-size:11px; font-family:var(--ff-mono); letter-spacing:.08em; text-transform:uppercase;
+}
+.owner-error {
+  display:none; padding:14px 16px; border-radius:var(--r-sm);
+  border:1px solid rgba(239,68,68,0.35); background:rgba(239,68,68,0.1);
+  color:#fca5a5; font-size:13px; line-height:1.6;
+}
+.owner-mobile-nav {
+  display:none; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px;
+}
+.owner-mobile-link {
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:10px 12px; border-radius:var(--r-sm);
+  border:1px solid var(--app-border); background:var(--app-surface);
+  color:var(--app-muted); font-family:var(--ff-mono); font-size:11px;
+  letter-spacing:.08em; text-transform:uppercase; text-decoration:none;
+}
+.owner-mobile-link.active {
+  color:var(--amber); border-color:rgba(232,160,32,0.35);
+  background:rgba(232,160,32,0.08);
+}
+@media (max-width: 1200px) {
+  .owner-stat-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .owner-panels { grid-template-columns:1fr; }
+}
+@media (max-width: 900px) {
+  .owner-toolbar { grid-template-columns:1fr 1fr; }
+}
+@media (max-width: 640px) {
+  .owner-title { font-size:24px; }
+  .owner-stat-grid, .owner-toolbar { grid-template-columns:1fr; }
+  .owner-mobile-nav { display:grid; }
+}
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="app-sidebar">
+    <div class="sidebar-logo">
+      <span class="sidebar-logo-text">GEAR<span>SHIFT</span></span>
+      <a href="../index.html" class="sidebar-back">← Site</a>
+    </div>
+    <nav class="sidebar-nav"><!-- populated by RBAC.initSidebar --></nav>
+    <div class="sidebar-footer">
+      <div class="theme-toggle">
+        <span class="theme-toggle-label">☾ Dark</span>
+        <button class="theme-toggle-switch" onclick="Theme.toggle()" aria-label="Switch theme"></button>
+      </div>
+      <div class="sidebar-user">
+        <div class="user-avatar" id="userAvatar">?</div>
+        <div>
+          <div class="user-name" id="userName">Loading…</div>
+          <div class="user-role" id="userRole">—</div>
+        </div>
+      </div>
+      <button class="btn-logout" onclick="RBAC.clearCache();Auth.signOut().then(()=>window.location='dashboard.html')">Sign Out</button>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <div class="app-topbar">
+      <span class="topbar-title">PLATFORM ADMIN</span>
+      <div class="topbar-actions">
+        <button class="app-btn app-btn-ghost app-btn-sm" onclick="loadPlatformData()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10"/><path d="M20.49 15a9 9 0 01-14.13 3.36L1 14"/></svg>
+          Refresh
+        </button>
+      </div>
+    </div>
+
+    <div class="owner-shell">
+      <div class="owner-mobile-nav" id="ownerMobileNav">
+        <a href="#overview" class="owner-mobile-link" data-owner-pane="overview">Overview</a>
+        <a href="#users" class="owner-mobile-link" data-owner-pane="users">Users</a>
+        <a href="#shops" class="owner-mobile-link" data-owner-pane="shops">Shops</a>
+      </div>
+
+      <section class="owner-hero">
+        <div>
+          <div class="owner-eyebrow">Owner Control Room</div>
+          <div class="owner-title">Monitor every shop, user, and plan from one place.</div>
+          <div class="owner-copy">
+            This page is reserved for the SaaS owner. Use it to track registrations across the platform, review shop growth, deactivate risky accounts, and force sign-outs when needed.
+          </div>
+        </div>
+        <div class="owner-generated" id="generatedAt">Last sync —</div>
+      </section>
+
+      <div class="owner-error" id="platformAdminError"></div>
+
+      <section class="owner-pane active" id="ownerPaneOverview" data-owner-pane-section="overview">
+        <section class="owner-stat-grid" id="ownerStats"></section>
+
+        <section class="owner-panels">
+          <div class="owner-panel">
+            <div class="owner-panel-head">
+              <div>
+                <div class="owner-panel-title">Recent Registrations</div>
+                <div class="owner-panel-sub">Newest users across all shops and plans.</div>
+              </div>
+            </div>
+            <div class="owner-feed" id="recentSignups"></div>
+          </div>
+
+          <div class="owner-panel">
+            <div class="owner-panel-head">
+              <div>
+                <div class="owner-panel-title">Platform Snapshot</div>
+                <div class="owner-panel-sub">Quick health check for your SaaS right now.</div>
+              </div>
+            </div>
+            <div class="owner-feed" id="platformSnapshot"></div>
+          </div>
+        </section>
+      </section>
+
+      <section class="owner-pane" id="ownerPaneUsers" data-owner-pane-section="users">
+      <section class="owner-panel">
+        <div class="owner-panel-head">
+          <div>
+            <div class="owner-panel-title">All Users</div>
+            <div class="owner-panel-sub">Search, filter, deactivate, reactivate, or force sign-out.</div>
+          </div>
+          <div class="owner-toolbar">
+            <div>
+              <label class="app-label">Search</label>
+              <input class="search-box" id="ownerUserSearch" placeholder="Search name, email, shop…" oninput="renderUserTable()">
+            </div>
+            <div>
+              <label class="app-label">Status</label>
+              <select class="app-input" id="ownerStatusFilter" onchange="renderUserTable()">
+                <option value="">All statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="owner">Owner only</option>
+              </select>
+            </div>
+            <div>
+              <label class="app-label">Plan</label>
+              <select class="app-input" id="ownerPlanFilter" onchange="renderUserTable()">
+                <option value="">All plans</option>
+                <option value="free">Starter</option>
+                <option value="pro">Pro</option>
+              </select>
+            </div>
+            <div style="display:flex;align-items:flex-end">
+              <button class="app-btn app-btn-ghost" onclick="resetOwnerFilters()">Clear Filters</button>
+            </div>
+          </div>
+        </div>
+        <div class="owner-table-wrap">
+          <table class="owner-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Role</th>
+                <th>Shop</th>
+                <th>Plan</th>
+                <th>Status</th>
+                <th>Sessions</th>
+                <th>Registered</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="ownerUserTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+      </section>
+
+      <section class="owner-pane" id="ownerPaneShops" data-owner-pane-section="shops">
+      <section class="owner-panel">
+        <div class="owner-panel-head">
+          <div>
+            <div class="owner-panel-title">All Shops</div>
+            <div class="owner-panel-sub">Plan mix, user counts, and tenant growth overview.</div>
+          </div>
+        </div>
+        <div class="owner-table-wrap">
+          <table class="owner-table">
+            <thead>
+              <tr>
+                <th>Shop</th>
+                <th>Plan</th>
+                <th>Total Users</th>
+                <th>Active Users</th>
+                <th>Inactive Users</th>
+                <th>Admins</th>
+                <th>Registered</th>
+                <th>Plan Expires</th>
+              </tr>
+            </thead>
+            <tbody id="ownerShopTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/theme.js"></script>
+<script src="../js/main.js"></script>
+<script src="../js/supabase.js"></script>
+<script src="../js/rbac.js"></script>
+<script>
+let ownerSummary = null;
+let ownerUsers = [];
+let ownerShops = [];
+let ownerGeneratedAt = null;
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[ch]));
+}
+
+function fmtDate(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function fmtDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('en-NG', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
+function fmtRelative(value) {
+  if (!value) return '—';
+  const ms = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(ms)) return '—';
+  const mins = Math.round(ms / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
+
+function planLabel(plan) {
+  return String(plan || 'free').toLowerCase() === 'pro' ? 'Pro' : 'Starter';
+}
+
+function planBadge(plan) {
+  return `<span class="owner-badge ${String(plan || 'free').toLowerCase() === 'pro' ? 'owner-badge-pro' : 'owner-badge-starter'}">${escapeHtml(planLabel(plan))}</span>`;
+}
+
+function statusBadge(active, isOwner) {
+  if (isOwner) return '<span class="owner-badge owner-badge-owner">Owner</span>';
+  return `<span class="owner-badge ${active ? 'owner-badge-active' : 'owner-badge-inactive'}">${active ? 'Active' : 'Inactive'}</span>`;
+}
+
+function setPlatformError(message) {
+  const el = document.getElementById('platformAdminError');
+  if (!el) return;
+  if (!message) {
+    el.style.display = 'none';
+    el.textContent = '';
+    return;
+  }
+  el.innerHTML = `${escapeHtml(message)}<br><span style="opacity:.85">If this is your first time opening this page, deploy the <strong>platform-admin</strong> Supabase Edge Function so the owner dashboard can read platform-wide data.</span>`;
+  el.style.display = 'block';
+}
+
+function getOwnerPaneFromHash() {
+  const pane = (window.location.hash || '#overview').replace('#', '').trim().toLowerCase();
+  return ['overview', 'users', 'shops'].includes(pane) ? pane : 'overview';
+}
+
+function updateOwnerPaneNav() {
+  const pane = getOwnerPaneFromHash();
+  document.querySelectorAll('[data-owner-pane-section]').forEach(section => {
+    section.classList.toggle('active', section.dataset.ownerPaneSection === pane);
+  });
+  document.querySelectorAll('[data-owner-pane]').forEach(link => {
+    link.classList.toggle('active', link.dataset.ownerPane === pane);
+  });
+}
+
+async function initPage() {
+  const user = await RBAC.guardPage('platform-admin');
+  if (!user) return;
+  await RBAC.initSidebar('platform-admin');
+  if (!window.location.hash) {
+    window.location.hash = '#overview';
+  }
+  updateOwnerPaneNav();
+  window.addEventListener('hashchange', updateOwnerPaneNav);
+  await loadPlatformData();
+}
+
+async function loadPlatformData(silent = false) {
+  if (!silent) setPlatformError('');
+  try {
+    const data = await GS.getPlatformAdminOverview();
+    ownerSummary = data.summary || null;
+    ownerUsers = data.users || [];
+    ownerShops = data.shops || [];
+    ownerGeneratedAt = data.generated_at || new Date().toISOString();
+    renderOverview();
+  } catch (err) {
+    const message = err?.message || 'Could not load platform admin data.';
+    setPlatformError(message);
+    if (!silent) Toast.show(message, 'error');
+  }
+}
+
+function renderOverview() {
+  renderStats();
+  renderRecentSignups();
+  renderSnapshot();
+  renderUserTable();
+  renderShopTable();
+  const generatedEl = document.getElementById('generatedAt');
+  if (generatedEl) generatedEl.textContent = `Last sync ${fmtDateTime(ownerGeneratedAt)}`;
+}
+
+function renderStats() {
+  const summary = ownerSummary || {};
+  const cards = [
+    ['Shop Admins', summary.total_shop_admins || 0, `${summary.total_shops || 0} total shops on the platform`],
+    ['Active Shops', summary.active_shops || 0, `${summary.inactive_or_empty_shops || 0} inactive or empty shops`],
+    ['Paid Shops', summary.paid_shops || 0, `${summary.starter_shops || 0} still on Starter`],
+    ['Staff Accounts', summary.total_staff_accounts || 0, `${summary.active_sessions || 0} live sessions right now`],
+  ];
+  document.getElementById('ownerStats').innerHTML = cards.map(([label, value, sub]) => `
+    <div class="owner-stat">
+      <div class="owner-stat-label">${escapeHtml(label)}</div>
+      <div class="owner-stat-value">${escapeHtml(value)}</div>
+      <div class="owner-stat-sub">${escapeHtml(sub)}</div>
+    </div>
+  `).join('');
+}
+
+function renderRecentSignups() {
+  const list = ownerSummary?.recent_signups || [];
+  const root = document.getElementById('recentSignups');
+  if (!list.length) {
+    root.innerHTML = '<div class="owner-empty">No registrations found yet.</div>';
+    return;
+  }
+
+  root.innerHTML = list.map(user => `
+    <div class="owner-feed-item">
+      <div>
+        <div class="owner-feed-name">${escapeHtml(user.full_name || user.email || 'Unknown User')}</div>
+        <div class="owner-feed-meta">
+          ${escapeHtml(user.email || 'No email')}<br>
+          ${escapeHtml(user.shop_name || 'No shop linked yet')} · ${escapeHtml(planLabel(user.plan))}
+        </div>
+      </div>
+      <div class="owner-feed-time">${escapeHtml(fmtRelative(user.created_at))}</div>
+    </div>
+  `).join('');
+}
+
+function renderSnapshot() {
+  const summary = ownerSummary || {};
+  const rows = [
+    ['Registered users', summary.total_users || 0],
+    ['Active users', summary.active_users || 0],
+    ['Inactive users', summary.inactive_users || 0],
+    ['Owner accounts', summary.owner_users || 0],
+  ];
+  document.getElementById('platformSnapshot').innerHTML = rows.map(([label, value]) => `
+    <div class="owner-feed-item">
+      <div>
+        <div class="owner-feed-name">${escapeHtml(label)}</div>
+        <div class="owner-feed-meta">Platform-wide count</div>
+      </div>
+      <div class="owner-feed-time">${escapeHtml(value)}</div>
+    </div>
+  `).join('');
+}
+
+function getFilteredUsers() {
+  const q = (document.getElementById('ownerUserSearch')?.value || '').trim().toLowerCase();
+  const status = document.getElementById('ownerStatusFilter')?.value || '';
+  const plan = document.getElementById('ownerPlanFilter')?.value || '';
+
+  return ownerUsers.filter(user => {
+    const matchesSearch = !q || [
+      user.full_name,
+      user.email,
+      user.shop_name,
+      user.role,
+    ].join(' ').toLowerCase().includes(q);
+
+    const matchesStatus = !status
+      || (status === 'owner' && user.is_owner)
+      || (status === 'active' && user.active && !user.is_owner)
+      || (status === 'inactive' && !user.active && !user.is_owner);
+
+    const matchesPlan = !plan || String(user.plan || 'free').toLowerCase() === plan.toLowerCase();
+    return matchesSearch && matchesStatus && matchesPlan;
+  });
+}
+
+function renderUserTable() {
+  const rows = getFilteredUsers();
+  const tbody = document.getElementById('ownerUserTableBody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="owner-empty">No users match the current filters.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(user => {
+    const actions = user.is_owner
+      ? '<span class="owner-protected">Owner protected</span>'
+      : `
+        <div class="owner-actions">
+          ${user.active
+            ? `<button class="app-btn app-btn-danger app-btn-xs" onclick="togglePlatformUser('${escapeHtml(user.id)}', false, this)">Deactivate</button>`
+            : `<button class="app-btn app-btn-primary app-btn-xs" onclick="togglePlatformUser('${escapeHtml(user.id)}', true, this)">Reactivate</button>`}
+          <button class="app-btn app-btn-ghost app-btn-xs" onclick="forcePlatformSignOut('${escapeHtml(user.id)}', this)">Force Sign Out</button>
+        </div>`;
+
+    return `
+      <tr>
+        <td>
+          <div class="owner-user-name">${escapeHtml(user.full_name || user.email || 'Unknown User')}</div>
+          <div class="owner-user-meta">${escapeHtml(user.email || 'No email')}<br>${escapeHtml(user.last_sign_in_at ? 'Last sign in ' + fmtDateTime(user.last_sign_in_at) : 'No sign-in recorded')}</div>
+        </td>
+        <td>${escapeHtml(user.role || '—')}</td>
+        <td>${escapeHtml(user.shop_name || 'No shop linked')}</td>
+        <td>${planBadge(user.plan)}</td>
+        <td>${statusBadge(!!user.active, !!user.is_owner)}</td>
+        <td>${escapeHtml(user.session_count || 0)}</td>
+        <td>${escapeHtml(fmtDateTime(user.created_at))}</td>
+        <td>${actions}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderShopTable() {
+  const tbody = document.getElementById('ownerShopTableBody');
+  if (!ownerShops.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="owner-empty">No shops registered yet.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = ownerShops.map(shop => `
+    <tr>
+      <td>
+        <div class="owner-user-name">${escapeHtml(shop.name || 'Unnamed Shop')}</div>
+        <div class="owner-user-meta">${escapeHtml(shop.id || '')}</div>
+      </td>
+      <td>${planBadge(shop.plan)}</td>
+      <td>${escapeHtml(shop.total_users || 0)}</td>
+      <td>${escapeHtml(shop.active_users || 0)}</td>
+      <td>${escapeHtml(shop.inactive_users || 0)}</td>
+      <td>${escapeHtml(shop.admin_users || 0)}</td>
+      <td>${escapeHtml(fmtDate(shop.created_at))}</td>
+      <td>${escapeHtml(shop.plan_expires_at ? fmtDate(shop.plan_expires_at) : '—')}</td>
+    </tr>
+  `).join('');
+}
+
+function resetOwnerFilters() {
+  document.getElementById('ownerUserSearch').value = '';
+  document.getElementById('ownerStatusFilter').value = '';
+  document.getElementById('ownerPlanFilter').value = '';
+  renderUserTable();
+}
+
+async function togglePlatformUser(userId, active, buttonEl) {
+  const label = active ? 'Reactivate' : 'Deactivate';
+  const original = buttonEl?.textContent || label;
+  if (buttonEl) {
+    buttonEl.disabled = true;
+    buttonEl.textContent = active ? 'Reactivating…' : 'Deactivating…';
+  }
+  try {
+    const result = await GS.setPlatformUserActive(userId, active);
+    Toast.show(
+      active
+        ? 'User reactivated successfully'
+        : `User deactivated${result?.revoked_sessions ? ` and ${result.revoked_sessions} session${result.revoked_sessions === 1 ? '' : 's'} revoked` : ''}`,
+      'success'
+    );
+    await loadPlatformData(true);
+  } catch (err) {
+    Toast.show(err.message || `Could not ${label.toLowerCase()} user`, 'error');
+    if (buttonEl) {
+      buttonEl.disabled = false;
+      buttonEl.textContent = original;
+    }
+    return;
+  }
+  if (buttonEl) {
+    buttonEl.disabled = false;
+    buttonEl.textContent = original;
+  }
+}
+
+async function forcePlatformSignOut(userId, buttonEl) {
+  const original = buttonEl?.textContent || 'Force Sign Out';
+  if (buttonEl) {
+    buttonEl.disabled = true;
+    buttonEl.textContent = 'Revoking…';
+  }
+  try {
+    const result = await GS.revokePlatformUserSessions(userId);
+    const count = Number(result?.revoked_sessions || 0);
+    Toast.show(
+      count > 0
+        ? `${count} session${count === 1 ? '' : 's'} revoked`
+        : 'No active sessions found for that user',
+      'success'
+    );
+    await loadPlatformData(true);
+  } catch (err) {
+    Toast.show(err.message || 'Could not revoke sessions', 'error');
+    if (buttonEl) {
+      buttonEl.disabled = false;
+      buttonEl.textContent = original;
+    }
+    return;
+  }
+  if (buttonEl) {
+    buttonEl.disabled = false;
+    buttonEl.textContent = original;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initPage);
+</script>
+</body>
+</html>

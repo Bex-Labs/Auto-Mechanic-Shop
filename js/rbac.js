@@ -15,6 +15,7 @@ const RBAC = (() => {
      false   = no access, nav item greyed + page redirects
      --------------------------------------------------------------- */
   const PERMISSIONS = {
+    'platform-admin': { Owner: 'full' },
     dashboard:    { Admin: 'full', 'Service Advisor': 'full', Mechanic: 'read', 'Parts Manager': 'read' },
     appointments: { Admin: 'full', 'Service Advisor': 'full', Mechanic: 'read', 'Parts Manager': false  },
     customers:    { Admin: 'full', 'Service Advisor': 'full', Mechanic: false,  'Parts Manager': false  },
@@ -33,6 +34,10 @@ const RBAC = (() => {
      --------------------------------------------------------------- */
   let _currentUser = null;
 
+  function isPlatformOwner(user) {
+    return !!(user?.is_platform_owner || user?.role === 'Owner' || (typeof Auth !== 'undefined' && typeof Auth.isPlatformOwner === 'function' && Auth.isPlatformOwner(user)));
+  }
+
   async function getCurrentUser() {
     if (_currentUser) return _currentUser;
     _currentUser = await Auth.getUser();
@@ -46,6 +51,7 @@ const RBAC = (() => {
      PERMISSION CHECKS
      --------------------------------------------------------------- */
   function can(role, section) {
+    if (role === 'Owner') return section === 'platform-admin' ? 'full' : false;
     const sectionPerms = PERMISSIONS[section];
     if (!sectionPerms) return 'full'; // unknown section — allow
     return sectionPerms[role] ?? false;
@@ -78,6 +84,11 @@ const RBAC = (() => {
     if (user.active === false) {
       await Auth.signOut();
       window.location.href = 'dashboard.html?deactivated=1';
+      return null;
+    }
+
+    if (isPlatformOwner(user) && section !== 'platform-admin') {
+      window.location.href = 'platform-admin.html';
       return null;
     }
 
@@ -145,6 +156,27 @@ const RBAC = (() => {
      that greys out inaccessible links with a lock icon
      --------------------------------------------------------------- */
   function renderNav(role, activePage) {
+    if (role === 'Owner') {
+      const nav = document.querySelector('.sidebar-nav');
+      if (!nav) return;
+      const currentHash = (window.location.hash || '#overview').replace('#', '');
+      const items = [
+        { pane: 'overview', label: 'Overview', icon: '<path d="M3 3h18v18H3z"/><path d="M7 8h10"/><path d="M7 12h10"/><path d="M7 16h6"/>' },
+        { pane: 'users', label: 'All Users', icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>' },
+        { pane: 'shops', label: 'All Shops', icon: '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h6"/><path d="M9 13h6"/>' },
+      ];
+      nav.innerHTML = `
+        <div class="nav-group-label">Platform</div>
+        ${items.map(item => `
+          <a href="platform-admin.html#${item.pane}" class="nav-item${activePage === 'platform-admin' && currentHash === item.pane ? ' active' : ''}" data-owner-pane="${item.pane}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${item.icon}</svg>
+            ${item.label}
+          </a>
+        `).join('')}
+      `;
+      return;
+    }
+
     const navItems = [
       { section: 'dashboard',     label: 'Dashboard',     href: 'dashboard.html',    icon: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>' },
       { section: 'notifications', label: 'Notifications', href: 'notifications.html', icon: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>', badge: true },
@@ -227,7 +259,7 @@ const RBAC = (() => {
     const avatarEl = document.getElementById('userAvatar');
     const name = user.full_name || 'User';
     if (nameEl)   nameEl.textContent   = name;
-    if (roleEl)   roleEl.textContent   = user.role || '—';
+    if (roleEl)   roleEl.textContent   = isPlatformOwner(user) ? 'Platform Owner' : (user.role || '—');
     if (avatarEl) {
       if (typeof renderAvatar === 'function') renderAvatar(avatarEl, name, user.avatar_url);
       else avatarEl.textContent = (typeof getInitials === 'function' ? getInitials(name) : name[0].toUpperCase());
@@ -458,6 +490,7 @@ const RBAC = (() => {
     createShop, acceptInvite, inviteStaff,
     getInviteByToken, getShopInvites, getShopStaff,
     updateStaffRole, deactivateStaff, reactivateStaff, getShop, getShopId,
+    isPlatformOwner,
     // Constants
     PERMISSIONS,
   };
