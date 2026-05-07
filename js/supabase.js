@@ -173,21 +173,30 @@ async function _getShopStatus(shopId, force = false) {
     .select('action, changes, created_at')
     .eq('table_name', 'shops')
     .eq('record_id', normalizedId)
-    .in('action', [SHOP_SUSPEND_ACTION, SHOP_UNSUSPEND_ACTION])
+    .eq('action', 'UPDATE')
     .order('created_at', { ascending: false })
-    .limit(1);
+    .limit(25);
 
   if (error) throw error;
 
-  const row = data?.[0] || null;
+  const row = (data || []).find(entry => {
+    try {
+      const parsed = typeof entry?.changes === 'object' ? entry.changes : JSON.parse(entry?.changes || '{}');
+      const semanticAction = String(parsed?.owner_action || entry?.action || '');
+      return semanticAction === SHOP_SUSPEND_ACTION || semanticAction === SHOP_UNSUSPEND_ACTION;
+    } catch {
+      return false;
+    }
+  }) || null;
   const parsed = row ? (() => {
     try { return typeof row.changes === 'object' ? row.changes : JSON.parse(row.changes || '{}'); }
     catch { return {}; }
   })() : {};
+  const semanticAction = String(parsed?.owner_action || row?.action || '');
 
   const state = {
-    suspended: !!row && row.action === SHOP_SUSPEND_ACTION,
-    action: row?.action || null,
+    suspended: !!row && semanticAction === SHOP_SUSPEND_ACTION,
+    action: semanticAction || null,
     updated_at: row?.created_at || null,
     reason: parsed?.reason ? String(parsed.reason) : null,
   };
@@ -315,6 +324,8 @@ const SessionRegistry = (() => {
   const ACTION_END = 'SESSION_END';
   const ACTION_REVOKE = 'SESSION_REVOKE';
   const ACTIVE_ACTIONS = new Set([ACTION_START, ACTION_HEARTBEAT, ACTION_END]);
+  const AUDIT_CREATE = 'CREATE';
+  const AUDIT_UPDATE = 'UPDATE';
   let _started = false;
   let _heartbeatId = null;
   let _startedUserId = null;
@@ -459,12 +470,15 @@ const SessionRegistry = (() => {
     const { data: { session } } = await sb.auth.getSession();
     const actorId = userId || session?.user?.id || _startedUserId || null;
     if (!actorId) return;
+    const parsedChanges = changes && typeof changes === 'object' ? { ...changes } : {};
+    parsedChanges.session_event = action;
+    const baseAction = action === ACTION_START ? AUDIT_CREATE : AUDIT_UPDATE;
     const { error } = await sb.from('audit_logs').insert({
       table_name: SESSION_TABLE,
       record_id: _sessionId(),
-      action,
+      action: baseAction,
       changed_by: actorId,
-      changes: typeof changes === 'string' ? changes : JSON.stringify(changes),
+      changes: typeof changes === 'string' ? changes : JSON.stringify(parsedChanges),
     });
     if (error) throw error;
   }
@@ -484,14 +498,16 @@ const SessionRegistry = (() => {
   async function _checkRevoked() {
     if (!_started) return false;
     const { data, error } = await sb.from('audit_logs')
-      .select('id, created_at')
+      .select('id, created_at, changes')
       .eq('table_name', SESSION_TABLE)
       .eq('record_id', _sessionId())
-      .eq('action', ACTION_REVOKE)
       .order('created_at', { ascending: false })
-      .limit(1);
+      .limit(20);
     if (error) return false;
-    return !!data?.length;
+    return !!(data || []).find(row => {
+      const changes = _readChanges(row.changes);
+      return String(changes?.session_event || '') === ACTION_REVOKE;
+    });
   }
 
   async function _tick() {
@@ -623,15 +639,16 @@ const SessionRegistry = (() => {
     (data || []).forEach(row => {
       const sessionId = row.record_id || row.id;
       const changes = _readChanges(row.changes);
+      const sessionEvent = changes.session_event || row.action;
       if (!grouped.has(sessionId)) {
         grouped.set(sessionId, {
           id: sessionId,
           current: sessionId === _sessionId(),
           latestAt: row.created_at,
-          latestAction: row.action,
-          lastActiveAt: ACTIVE_ACTIONS.has(row.action) ? row.created_at : null,
-          startedAt: row.action === ACTION_START ? row.created_at : null,
-          revokedAt: row.action === ACTION_REVOKE ? row.created_at : null,
+          latestAction: sessionEvent,
+          lastActiveAt: ACTIVE_ACTIONS.has(sessionEvent) ? row.created_at : null,
+          startedAt: sessionEvent === ACTION_START ? row.created_at : null,
+          revokedAt: sessionEvent === ACTION_REVOKE ? row.created_at : null,
           deviceLabel: changes.device_label || 'Browser session',
           locationLabel: changes.location_label || changes.timezone || 'Unknown location',
           browser: changes.browser || null,
@@ -642,9 +659,9 @@ const SessionRegistry = (() => {
       }
 
       const item = grouped.get(sessionId);
-      if (!item.lastActiveAt && ACTIVE_ACTIONS.has(row.action)) item.lastActiveAt = row.created_at;
-      if (!item.startedAt && row.action === ACTION_START) item.startedAt = row.created_at;
-      if (!item.revokedAt && row.action === ACTION_REVOKE) item.revokedAt = row.created_at;
+      if (!item.lastActiveAt && ACTIVE_ACTIONS.has(sessionEvent)) item.lastActiveAt = row.created_at;
+      if (!item.startedAt && sessionEvent === ACTION_START) item.startedAt = row.created_at;
+      if (!item.revokedAt && sessionEvent === ACTION_REVOKE) item.revokedAt = row.created_at;
       if (!item.deviceLabel && changes.device_label) item.deviceLabel = changes.device_label;
       if ((!item.locationLabel || item.locationLabel === 'Unknown location') && (changes.location_label || changes.timezone)) {
         item.locationLabel = changes.location_label || changes.timezone;
@@ -706,9 +723,10 @@ const SessionRegistry = (() => {
     await sb.from('audit_logs').insert({
       table_name: SESSION_TABLE,
       record_id: sessionId,
-      action: ACTION_REVOKE,
+      action: AUDIT_UPDATE,
       changed_by: userId,
       changes: JSON.stringify({
+        session_event: ACTION_REVOKE,
         revoked_at: new Date().toISOString(),
         revoked_by_session_id: _sessionId(),
         ..._sessionMetadata(),

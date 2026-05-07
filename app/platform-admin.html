@@ -206,7 +206,7 @@
   color:#fca5a5; font-size:13px; line-height:1.6;
 }
 .owner-mobile-nav {
-  display:none; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px;
+  display:none; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:10px;
 }
 .owner-mobile-link {
   display:inline-flex; align-items:center; justify-content:center;
@@ -340,6 +340,8 @@
         <a href="#overview" class="owner-mobile-link" data-owner-pane="overview">Overview</a>
         <a href="#users" class="owner-mobile-link" data-owner-pane="users">Users</a>
         <a href="#shops" class="owner-mobile-link" data-owner-pane="shops">Shops</a>
+        <a href="#risk" class="owner-mobile-link" data-owner-pane="risk">Risk</a>
+        <a href="#broadcast" class="owner-mobile-link" data-owner-pane="broadcast">Broadcast</a>
       </div>
 
       <section class="owner-hero">
@@ -380,87 +382,14 @@
           </div>
         </section>
 
-        <section class="owner-panels">
-          <div class="owner-panel">
-            <div class="owner-panel-head">
-              <div>
-                <div class="owner-panel-title">Billing & Growth Metrics</div>
-                <div class="owner-panel-sub">Live SaaS signals for plan revenue, growth, and conversions.</div>
-              </div>
-            </div>
-            <div class="owner-kpi-grid" id="billingGrowthGrid"></div>
-          </div>
-
-          <div class="owner-panel">
-            <div class="owner-panel-head">
-              <div>
-                <div class="owner-panel-title">Risk Watchlist</div>
-                <div class="owner-panel-sub">Shops that need owner attention soon.</div>
-              </div>
-            </div>
-            <div class="owner-feed" id="riskAlerts"></div>
-          </div>
-        </section>
-
-        <section class="owner-panels">
-          <div class="owner-panel">
-            <div class="owner-panel-head">
-              <div>
-                <div class="owner-panel-title">Broadcast Notice Tool</div>
-                <div class="owner-panel-sub">Send an in-app platform notice to one shop or a whole audience at once.</div>
-              </div>
-            </div>
-            <div class="owner-stack">
-              <div class="owner-field-grid">
-                <div>
-                  <label class="app-label">Audience</label>
-                  <select class="app-input" id="broadcastAudience" onchange="syncBroadcastAudienceControls()">
-                    <option value="all_shops">All Shops</option>
-                    <option value="paid_shops">Paid Shops</option>
-                    <option value="starter_shops">Starter Shops</option>
-                    <option value="suspended_shops">Suspended Shops</option>
-                    <option value="single_shop">Single Shop</option>
-                  </select>
-                </div>
-                <div id="broadcastShopWrap" style="display:none">
-                  <label class="app-label">Target Shop</label>
-                  <select class="app-input" id="broadcastShopSelect"></select>
-                </div>
-              </div>
-              <div>
-                <label class="app-label">Notice Title</label>
-                <input class="app-input" id="broadcastTitle" maxlength="120" placeholder="Planned maintenance, billing reminder, feature release…">
-              </div>
-              <div>
-                <label class="app-label">Message</label>
-                <textarea class="app-input" id="broadcastBody" rows="5" placeholder="Write the notice that shops should see inside their app notifications."></textarea>
-              </div>
-              <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
-                <div class="owner-helper">Notices are sent as in-app notifications and will also appear in your owner audit log.</div>
-                <button class="app-btn app-btn-primary" onclick="sendOwnerBroadcast(this)">Send Notice</button>
-              </div>
+        <section class="owner-panel">
+          <div class="owner-panel-head">
+            <div>
+              <div class="owner-panel-title">Billing & Growth Metrics</div>
+              <div class="owner-panel-sub">Live SaaS signals for plan revenue, growth, and conversions.</div>
             </div>
           </div>
-
-          <div class="owner-panel">
-            <div class="owner-panel-head">
-              <div>
-                <div class="owner-panel-title">Export Center</div>
-                <div class="owner-panel-sub">Download owner-side CSVs for reporting, review, or offline analysis.</div>
-              </div>
-            </div>
-            <div class="owner-stack">
-              <div class="owner-export-grid">
-                <button class="app-btn app-btn-ghost" onclick="exportOwnerUsersCsv()">Export Users CSV</button>
-                <button class="app-btn app-btn-ghost" onclick="exportOwnerShopsCsv()">Export Shops CSV</button>
-                <button class="app-btn app-btn-ghost" onclick="exportSignedInUsersCsv()">Export Signed-In CSV</button>
-                <button class="app-btn app-btn-ghost" onclick="exportRecentRegistrationsCsv()">Export Recent Registrations CSV</button>
-                <button class="app-btn app-btn-ghost" onclick="exportRiskAlertsCsv()">Export Risk Watchlist CSV</button>
-                <button class="app-btn app-btn-ghost" onclick="exportOwnerAuditCsv()">Export Owner Audit Log CSV</button>
-              </div>
-              <div class="owner-helper">User and shop exports respect the current filters/search where applicable. Signed-in, risk, and audit exports use the live owner dashboard data now on screen.</div>
-            </div>
-          </div>
+          <div class="owner-kpi-grid" id="billingGrowthGrid"></div>
         </section>
 
         <section class="owner-panel">
@@ -588,6 +517,81 @@
             </thead>
             <tbody id="ownerShopTableBody"></tbody>
           </table>
+        </div>
+      </section>
+      </section>
+
+      <section class="owner-pane" id="ownerPaneRisk" data-owner-pane-section="risk">
+      <section class="owner-panel">
+        <div class="owner-panel-head">
+          <div>
+            <div class="owner-panel-title">Risk Watchlist</div>
+            <div class="owner-panel-sub">Shops that need owner attention soon.</div>
+          </div>
+        </div>
+        <div class="owner-feed" id="riskAlerts"></div>
+      </section>
+      </section>
+
+      <section class="owner-pane" id="ownerPaneBroadcast" data-owner-pane-section="broadcast">
+      <section class="owner-panels">
+        <div class="owner-panel">
+          <div class="owner-panel-head">
+            <div>
+              <div class="owner-panel-title">Broadcast Notice Tool</div>
+              <div class="owner-panel-sub">Send an in-app platform notice to one shop or a whole audience at once.</div>
+            </div>
+          </div>
+          <div class="owner-stack">
+            <div class="owner-field-grid">
+              <div>
+                <label class="app-label">Audience</label>
+                <select class="app-input" id="broadcastAudience" onchange="syncBroadcastAudienceControls()">
+                  <option value="all_shops">All Shops</option>
+                  <option value="paid_shops">Paid Shops</option>
+                  <option value="starter_shops">Starter Shops</option>
+                  <option value="suspended_shops">Suspended Shops</option>
+                  <option value="single_shop">Single Shop</option>
+                </select>
+              </div>
+              <div id="broadcastShopWrap" style="display:none">
+                <label class="app-label">Target Shop</label>
+                <select class="app-input" id="broadcastShopSelect"></select>
+              </div>
+            </div>
+            <div>
+              <label class="app-label">Notice Title</label>
+              <input class="app-input" id="broadcastTitle" maxlength="120" placeholder="Planned maintenance, billing reminder, feature release…">
+            </div>
+            <div>
+              <label class="app-label">Message</label>
+              <textarea class="app-input" id="broadcastBody" rows="5" placeholder="Write the notice that shops should see inside their app notifications."></textarea>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
+              <div class="owner-helper">Notices are sent as in-app notifications and will also appear in your owner audit log.</div>
+              <button class="app-btn app-btn-primary" onclick="sendOwnerBroadcast(this)">Send Notice</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="owner-panel">
+          <div class="owner-panel-head">
+            <div>
+              <div class="owner-panel-title">Export Center</div>
+              <div class="owner-panel-sub">Download owner-side CSVs for reporting, review, or offline analysis.</div>
+            </div>
+          </div>
+          <div class="owner-stack">
+            <div class="owner-export-grid">
+              <button class="app-btn app-btn-ghost" onclick="exportOwnerUsersCsv()">Export Users CSV</button>
+              <button class="app-btn app-btn-ghost" onclick="exportOwnerShopsCsv()">Export Shops CSV</button>
+              <button class="app-btn app-btn-ghost" onclick="exportSignedInUsersCsv()">Export Signed-In CSV</button>
+              <button class="app-btn app-btn-ghost" onclick="exportRecentRegistrationsCsv()">Export Recent Registrations CSV</button>
+              <button class="app-btn app-btn-ghost" onclick="exportRiskAlertsCsv()">Export Risk Watchlist CSV</button>
+              <button class="app-btn app-btn-ghost" onclick="exportOwnerAuditCsv()">Export Owner Audit Log CSV</button>
+            </div>
+            <div class="owner-helper">User and shop exports respect the current filters/search where applicable. Signed-in, risk, and audit exports use the live owner dashboard data now on screen.</div>
+          </div>
         </div>
       </section>
       </section>
@@ -745,7 +749,7 @@ function setPlatformError(message) {
 
 function getOwnerPaneFromHash() {
   const pane = (window.location.hash || '#overview').replace('#', '').trim().toLowerCase();
-  return ['overview', 'users', 'shops'].includes(pane) ? pane : 'overview';
+  return ['overview', 'users', 'shops', 'risk', 'broadcast'].includes(pane) ? pane : 'overview';
 }
 
 function updateOwnerPaneNav() {

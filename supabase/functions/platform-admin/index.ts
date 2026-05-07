@@ -28,6 +28,9 @@ const PLATFORM_REVOKE_USER_SESSIONS_ACTION = 'PLATFORM_REVOKE_USER_SESSIONS';
 const SHOP_PLAN_UPDATE_ACTION = 'SHOP_PLAN_UPDATE';
 const SHOP_PLAN_EXTEND_ACTION = 'SHOP_PLAN_EXTEND';
 const PLATFORM_BROADCAST_ACTION = 'PLATFORM_BROADCAST';
+const AUDIT_CREATE = 'CREATE';
+const AUDIT_UPDATE = 'UPDATE';
+const AUDIT_DELETE = 'DELETE';
 
 function json(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -131,7 +134,8 @@ function buildSessionStates(rows: Array<Record<string, unknown>>): EnrichedSessi
     const action = String(row.action || '');
     const createdAt = String(row.created_at || '');
     const changedBy = row.changed_by ? String(row.changed_by) : null;
-    const changes = parseChanges(row.changes);
+    const changes = parseChanges(row.changes) as Record<string, unknown>;
+    const sessionEvent = String(changes?.session_event || action || '');
 
     const current = sessionMap.get(sessionId) || {
       sessionId,
@@ -143,17 +147,17 @@ function buildSessionStates(rows: Array<Record<string, unknown>>): EnrichedSessi
       locationLabel: null,
     };
 
-    if (ACTIVE_ACTIONS.has(action)) {
+    if (ACTIVE_ACTIONS.has(sessionEvent)) {
       if (!current.userId && changedBy) current.userId = changedBy;
       if (!current.latestAt || new Date(createdAt).getTime() > new Date(current.latestAt).getTime()) {
         current.latestAt = createdAt;
-        current.lastAction = action;
+        current.lastAction = sessionEvent;
         current.deviceLabel = String((changes as Record<string, unknown>).device_label || current.deviceLabel || '');
         current.locationLabel = String((changes as Record<string, unknown>).location_label || current.locationLabel || '');
       }
     }
 
-    if (action === ACTION_REVOKE) {
+    if (sessionEvent === ACTION_REVOKE) {
       if (!current.revokedAt || new Date(createdAt).getTime() > new Date(current.revokedAt).getTime()) {
         current.revokedAt = createdAt;
       }
@@ -226,9 +230,11 @@ function buildShopSuspensionMap(rows: Array<Record<string, unknown>>) {
     const shopId = String(row.record_id || '').trim();
     if (!shopId || latestByShop.has(shopId)) continue;
     const changes = parseChanges(row.changes) as Record<string, unknown>;
+    const ownerAction = String(changes?.owner_action || row.action || '');
+    if (![SHOP_SUSPEND_ACTION, SHOP_UNSUSPEND_ACTION].includes(ownerAction)) continue;
     latestByShop.set(shopId, {
-      suspended: String(row.action || '') === SHOP_SUSPEND_ACTION,
-      action: row.action ? String(row.action) : null,
+      suspended: ownerAction === SHOP_SUSPEND_ACTION,
+      action: ownerAction || null,
       updated_at: row.created_at ? String(row.created_at) : null,
       changed_by: row.changed_by ? String(row.changed_by) : null,
       reason: changes?.reason ? String(changes.reason) : null,
@@ -314,7 +320,7 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
     adminClient.from('audit_logs')
       .select('record_id, changed_by, action, created_at, changes')
       .eq('table_name', 'shops')
-      .in('action', [SHOP_SUSPEND_ACTION, SHOP_UNSUSPEND_ACTION])
+      .eq('action', AUDIT_UPDATE)
       .order('created_at', { ascending: false }),
     adminClient.from('audit_logs')
       .select('id, record_id, changed_by, action, created_at, changes')
@@ -574,6 +580,7 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
   };
   const ownerAuditLog = (ownerAuditLogsRes.data || []).map(row => {
     const changes = parseChanges(row.changes) as Record<string, unknown>;
+    const semanticAction = String(changes?.owner_action || row.action || '');
     const targetType = changes?.target_type ? String(changes.target_type) : null;
     const targetId = changes?.target_id ? String(changes.target_id) : String(row.record_id || '');
     const resolvedShopId = changes?.shop_id
@@ -588,8 +595,8 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
 
     return {
       id: row.id,
-      action: String(row.action || ''),
-      action_label: actionLabel(String(row.action || '')),
+      action: semanticAction,
+      action_label: actionLabel(semanticAction),
       created_at: row.created_at ? String(row.created_at) : null,
       actor_id: row.changed_by ? String(row.changed_by) : null,
       actor_name: row.changed_by ? (userNameById.get(String(row.changed_by)) || 'Platform Owner') : 'Platform Owner',
@@ -659,9 +666,10 @@ async function revokeActiveSessions(adminClient: ReturnType<typeof createClient>
   await insertAuditRows(adminClient, targetSessionIds.map(sessionId => ({
     table_name: SESSION_TABLE,
     record_id: sessionId,
-    action: ACTION_REVOKE,
+    action: AUDIT_UPDATE,
     changed_by: ownerId,
     changes: JSON.stringify({
+      session_event: ACTION_REVOKE,
       revoked_at: new Date().toISOString(),
       revoked_by_owner: true,
     }),
@@ -674,9 +682,12 @@ async function logOwnerAction(adminClient: ReturnType<typeof createClient>, owne
   await insertAuditRows(adminClient, [{
     table_name: PLATFORM_AUDIT_TABLE,
     record_id: recordId,
-    action,
+    action: AUDIT_CREATE,
     changed_by: ownerId,
-    changes: JSON.stringify(changes),
+    changes: JSON.stringify({
+      ...changes,
+      owner_action: action,
+    }),
   }]);
 }
 
@@ -769,9 +780,12 @@ async function setShopSuspended(adminClient: ReturnType<typeof createClient>, ow
   await insertAuditRows(adminClient, [{
     table_name: 'shops',
     record_id: shopId,
-    action,
+    action: AUDIT_UPDATE,
     changed_by: ownerId,
-    changes: JSON.stringify(changes),
+    changes: JSON.stringify({
+      ...changes,
+      owner_action: action,
+    }),
   }]);
 
   await logOwnerAction(adminClient, ownerId, action, shopId, changes);
@@ -916,7 +930,7 @@ async function sendPlatformBroadcast(
     adminClient.from('audit_logs')
       .select('record_id, changed_by, action, created_at, changes')
       .eq('table_name', 'shops')
-      .in('action', [SHOP_SUSPEND_ACTION, SHOP_UNSUSPEND_ACTION])
+      .eq('action', AUDIT_UPDATE)
       .order('created_at', { ascending: false }),
   ]);
 
@@ -1013,7 +1027,7 @@ async function getShopDetail(adminClient: ReturnType<typeof createClient>, shopI
       .select('record_id, changed_by, action, created_at, changes')
       .eq('table_name', 'shops')
       .eq('record_id', shopId)
-      .in('action', [SHOP_SUSPEND_ACTION, SHOP_UNSUSPEND_ACTION])
+      .eq('action', AUDIT_UPDATE)
       .order('created_at', { ascending: false }),
     adminClient.from('audit_logs')
       .select('record_id, changed_by, action, created_at, changes')
@@ -1103,12 +1117,13 @@ async function getShopDetail(adminClient: ReturnType<typeof createClient>, shopI
   const recentOwnerActions = (recentOwnerActionsRes.data || [])
     .map(row => {
       const changes = parseChanges(row.changes) as Record<string, unknown>;
+      const semanticAction = String(changes?.owner_action || row.action || '');
       const targetShopId = changes?.shop_id ? String(changes.shop_id) : (changes?.target_type === 'shop' ? String(changes?.target_id || row.record_id || '') : null);
       if (targetShopId !== shopId) return null;
       return {
         id: row.id,
-        action: String(row.action || ''),
-        action_label: actionLabel(String(row.action || '')),
+        action: semanticAction,
+        action_label: actionLabel(semanticAction),
         created_at: row.created_at ? String(row.created_at) : null,
         actor_id: row.changed_by ? String(row.changed_by) : null,
         actor_name: row.changed_by ? (userNameById.get(String(row.changed_by)) || 'Platform Owner') : 'Platform Owner',
