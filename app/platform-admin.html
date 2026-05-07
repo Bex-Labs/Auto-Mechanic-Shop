@@ -423,6 +423,15 @@
             <div class="owner-panel-title">All Shops</div>
             <div class="owner-panel-sub">Plan mix, user counts, and tenant growth overview.</div>
           </div>
+          <div class="owner-toolbar" style="grid-template-columns:minmax(280px,1fr) auto;">
+            <div>
+              <label class="app-label">Search</label>
+              <input class="search-box" id="ownerShopSearch" placeholder="Search shop name, ID, plan, or status…" oninput="renderShopTable()">
+            </div>
+            <div style="display:flex;align-items:flex-end">
+              <button class="app-btn app-btn-ghost" onclick="resetShopFilters()">Clear Search</button>
+            </div>
+          </div>
         </div>
         <div class="owner-table-wrap">
           <table class="owner-table">
@@ -778,6 +787,19 @@ function renderUserTable() {
   }).join('');
 }
 
+function getFilteredShops() {
+  const q = (document.getElementById('ownerShopSearch')?.value || '').trim().toLowerCase();
+  if (!q) return ownerShops;
+
+  return ownerShops.filter(shop => [
+    shop.name,
+    shop.id,
+    planLabel(shop.plan),
+    shop.suspended ? 'suspended' : 'live',
+    shop.suspension_reason,
+  ].join(' ').toLowerCase().includes(q));
+}
+
 function renderShopTable() {
   const tbody = document.getElementById('ownerShopTableBody');
   if (!ownerShops.length) {
@@ -785,7 +807,13 @@ function renderShopTable() {
     return;
   }
 
-  tbody.innerHTML = ownerShops.map(shop => `
+  const rows = getFilteredShops();
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="owner-empty">No shops match the current search.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(shop => `
     <tr>
       <td>
         <div class="owner-user-name">${escapeHtml(shop.name || 'Unnamed Shop')}</div>
@@ -930,6 +958,11 @@ function renderShopDetail() {
       ? `<button class="app-btn app-btn-primary" onclick="togglePlatformShopSuspended('${escapeHtml(shop.id)}', false, this)">Unsuspend Shop</button>`
       : `<button class="app-btn app-btn-danger" onclick="togglePlatformShopSuspended('${escapeHtml(shop.id)}', true, this)">Suspend Shop</button>`}
   `;
+}
+
+function resetShopFilters() {
+  document.getElementById('ownerShopSearch').value = '';
+  renderShopTable();
 }
 
 async function openShopDetail(shopId) {
