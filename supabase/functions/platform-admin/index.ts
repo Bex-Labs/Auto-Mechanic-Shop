@@ -11,11 +11,22 @@ const PLATFORM_AUDIT_TABLE = 'platform_admin';
 const ACTION_REVOKE = 'SESSION_REVOKE';
 const ACTIVE_ACTIONS = new Set(['SESSION_START', 'SESSION_HEARTBEAT', 'SESSION_END']);
 const ACTIVE_SESSION_WINDOW_MS = 35 * 60 * 1000;
+const RECENT_GROWTH_WINDOW_DAYS = 30;
+const RECENT_SIGNUP_WINDOW_DAYS = 7;
+const PLAN_EXPIRY_WARNING_DAYS = 7;
+const INACTIVE_PAID_SHOP_DAYS = 14;
+const HIGH_SESSION_ALERT_THRESHOLD = 4;
+const STARTER_STAFF_LIMIT = 5;
+const PRO_STAFF_LIMIT = 25;
+const PRO_MONTHLY_PRICE_NAIRA = 10500;
+const PRO_ANNUAL_PRICE_NAIRA = 90000;
 const SHOP_SUSPEND_ACTION = 'SHOP_SUSPEND';
 const SHOP_UNSUSPEND_ACTION = 'SHOP_UNSUSPEND';
 const PLATFORM_USER_DEACTIVATE_ACTION = 'PLATFORM_USER_DEACTIVATE';
 const PLATFORM_USER_REACTIVATE_ACTION = 'PLATFORM_USER_REACTIVATE';
 const PLATFORM_REVOKE_USER_SESSIONS_ACTION = 'PLATFORM_REVOKE_USER_SESSIONS';
+const SHOP_PLAN_UPDATE_ACTION = 'SHOP_PLAN_UPDATE';
+const SHOP_PLAN_EXTEND_ACTION = 'SHOP_PLAN_EXTEND';
 
 function json(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -239,15 +250,64 @@ function actionLabel(action: string) {
     case PLATFORM_USER_DEACTIVATE_ACTION: return 'Deactivated user';
     case PLATFORM_USER_REACTIVATE_ACTION: return 'Reactivated user';
     case PLATFORM_REVOKE_USER_SESSIONS_ACTION: return 'Forced sign-out';
+    case SHOP_PLAN_UPDATE_ACTION: return 'Updated shop plan';
+    case SHOP_PLAN_EXTEND_ACTION: return 'Extended plan expiry';
     default: return action.replace(/_/g, ' ').toLowerCase();
   }
 }
 
+function isActiveProShop(shop: Record<string, unknown> | null) {
+  if (!shop || String(shop.plan || 'free') !== 'pro') return false;
+  if (!shop.plan_expires_at) return true;
+  return new Date(String(shop.plan_expires_at)).getTime() > Date.now();
+}
+
+function planStaffLimit(plan: string | null | undefined) {
+  return String(plan || 'free').toLowerCase() === 'pro' ? PRO_STAFF_LIMIT : STARTER_STAFF_LIMIT;
+}
+
+function severityRank(value: string) {
+  if (value === 'high') return 0;
+  if (value === 'medium') return 1;
+  return 2;
+}
+
+function normalizePlan(value: unknown) {
+  return String(value || 'free').trim().toLowerCase() === 'pro' ? 'pro' : 'free';
+}
+
+function normalizeBillingCycle(value: unknown) {
+  return String(value || 'monthly').trim().toLowerCase() === 'annual' ? 'annual' : 'monthly';
+}
+
+function addBillingCycle(baseDate: Date, cycle: string) {
+  const next = new Date(baseDate);
+  if (cycle === 'annual') {
+    next.setFullYear(next.getFullYear() + 1);
+  } else {
+    next.setMonth(next.getMonth() + 1);
+  }
+  return next;
+}
+
+function addDays(baseDate: Date, days: number) {
+  const next = new Date(baseDate);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function positiveWholeNumber(value: unknown) {
+  const parsed = Number.parseInt(String(value || ''), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
 async function getOverview(adminClient: ReturnType<typeof createClient>) {
-  const [authUsers, profilesRes, shopsRes, sessionLogsRes, shopStatusLogsRes, ownerAuditLogsRes] = await Promise.all([
+  const recentActivitySince = new Date(Date.now() - (90 * 24 * 60 * 60 * 1000)).toISOString();
+
+  const [authUsers, profilesRes, shopsRes, sessionLogsRes, shopStatusLogsRes, ownerAuditLogsRes, billingTransactionsRes, recentActivityLogsRes] = await Promise.all([
     listAllAuthUsers(adminClient),
     adminClient.from('profiles').select('id, full_name, role, email, shop_id, active'),
-    adminClient.from('shops').select('id, name, plan, created_at, plan_expires_at').order('created_at', { ascending: false }),
+    adminClient.from('shops').select('id, name, plan, plan_billing_cycle, created_at, plan_expires_at').order('created_at', { ascending: false }),
     adminClient.from('audit_logs').select('record_id, changed_by, action, created_at, changes').eq('table_name', SESSION_TABLE).order('created_at', { ascending: false }),
     adminClient.from('audit_logs')
       .select('record_id, changed_by, action, created_at, changes')
@@ -259,6 +319,16 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
       .eq('table_name', PLATFORM_AUDIT_TABLE)
       .order('created_at', { ascending: false })
       .limit(12),
+    adminClient.from('billing_transactions')
+      .select('shop_id, type, status, plan_cycle, gross_amount, created_at')
+      .eq('type', 'subscription')
+      .eq('status', 'success')
+      .order('created_at', { ascending: true }),
+    adminClient.from('audit_logs')
+      .select('changed_by, table_name, created_at')
+      .neq('table_name', SESSION_TABLE)
+      .gte('created_at', recentActivitySince)
+      .order('created_at', { ascending: false }),
   ]);
 
   if (profilesRes.error) throw new Error(profilesRes.error.message);
@@ -266,16 +336,31 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
   if (sessionLogsRes.error) throw new Error(sessionLogsRes.error.message);
   if (shopStatusLogsRes.error) throw new Error(shopStatusLogsRes.error.message);
   if (ownerAuditLogsRes.error) throw new Error(ownerAuditLogsRes.error.message);
+  if (billingTransactionsRes.error) throw new Error(billingTransactionsRes.error.message);
+  if (recentActivityLogsRes.error) throw new Error(recentActivityLogsRes.error.message);
 
   const profiles = profilesRes.data || [];
   const shops = shopsRes.data || [];
   const sessionStates = buildSessionStates(sessionLogsRes.data || []);
   const activeSessionSummaryByUser = buildActiveSessionSummaryByUser(sessionStates);
   const suspensionByShopId = buildShopSuspensionMap(shopStatusLogsRes.data || []);
+  const billingTransactions = billingTransactionsRes.data || [];
 
   const profileById = new Map(profiles.map(profile => [profile.id, profile]));
   const shopById = new Map(shops.map(shop => [shop.id, shop]));
   const authUserIds = new Set(authUsers.map(user => user.id));
+  const liveUserCountByShop = new Map<string, number>();
+  const liveSessionCountByShop = new Map<string, number>();
+  const lastActivityByShop = new Map<string, string>();
+
+  (recentActivityLogsRes.data || []).forEach(row => {
+    const actorId = row.changed_by ? String(row.changed_by) : '';
+    if (!actorId) return;
+    const profile = profileById.get(actorId);
+    const shopId = profile?.shop_id ? String(profile.shop_id) : '';
+    if (!shopId || lastActivityByShop.has(shopId)) return;
+    if (row.created_at) lastActivityByShop.set(shopId, String(row.created_at));
+  });
 
   const users = authUsers.map(user => {
     const profile = profileById.get(user.id) || null;
@@ -346,21 +431,31 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
     if (user.active) current.active_users += 1;
     else current.inactive_users += 1;
     if (user.role === 'Admin') current.admin_users += 1;
+    if ((user.session_count || 0) > 0) {
+      liveUserCountByShop.set(user.shop_id, (liveUserCountByShop.get(user.shop_id) || 0) + 1);
+      liveSessionCountByShop.set(user.shop_id, (liveSessionCountByShop.get(user.shop_id) || 0) + Number(user.session_count || 0));
+    }
     shopUserStats.set(user.shop_id, current);
   });
 
   const shopRows = shops.map(shop => {
     const suspension = suspensionByShopId.get(shop.id);
+    const paid = isActiveProShop(shop);
     return {
       id: shop.id,
       name: shop.name || 'Unnamed Shop',
       plan: shop.plan || 'free',
+      plan_billing_cycle: shop.plan_billing_cycle || null,
       created_at: shop.created_at || null,
       plan_expires_at: shop.plan_expires_at || null,
       total_users: shopUserStats.get(shop.id)?.total_users || 0,
       active_users: shopUserStats.get(shop.id)?.active_users || 0,
       inactive_users: shopUserStats.get(shop.id)?.inactive_users || 0,
       admin_users: shopUserStats.get(shop.id)?.admin_users || 0,
+      live_users: liveUserCountByShop.get(shop.id) || 0,
+      live_sessions: liveSessionCountByShop.get(shop.id) || 0,
+      last_activity_at: lastActivityByShop.get(shop.id) || null,
+      paid,
       suspended: !!suspension?.suspended,
       suspended_at: suspension?.updated_at || null,
       suspension_reason: suspension?.reason || null,
@@ -372,15 +467,109 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
   const nonOwnerUsers = users.filter(user => !user.is_owner);
   const shopAdminUsers = nonOwnerUsers.filter(user => user.role === 'Admin' && user.shop_id);
   const staffAccounts = nonOwnerUsers.filter(user => ['Mechanic', 'Service Advisor', 'Parts Manager'].includes(String(user.role || '')));
-  const paidShops = shopRows.filter(shop => shop.plan === 'pro');
+  const paidShops = shopRows.filter(shop => shop.paid);
   const suspendedShops = shopRows.filter(shop => shop.suspended);
   const activeShops = shopRows.filter(shop => shop.active_users > 0 && !shop.suspended);
   const inactiveOrEmptyShops = shopRows.filter(shop => shop.active_users === 0 || shop.suspended);
   const totalActiveSessions = sessionStates.filter(session => session.active).length;
   const activeUsers = users.filter(user => user.active).length;
   const inactiveUsers = users.length - activeUsers;
-  const starterShops = shopRows.filter(shop => (shop.plan || 'free') !== 'pro').length;
-  const proShops = shopRows.filter(shop => shop.plan === 'pro').length;
+  const starterShops = shopRows.length - paidShops.length;
+  const proShops = paidShops.length;
+  const nowMs = Date.now();
+  const sevenDaysMs = PLAN_EXPIRY_WARNING_DAYS * 24 * 60 * 60 * 1000;
+  const growthWindowMs = RECENT_GROWTH_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  const signupWindowMs = RECENT_SIGNUP_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  const inactivePaidWindowMs = INACTIVE_PAID_SHOP_DAYS * 24 * 60 * 60 * 1000;
+  const proMonthlyShops = paidShops.filter(shop => String(shop.plan_billing_cycle || 'monthly') === 'monthly');
+  const proAnnualShops = paidShops.filter(shop => String(shop.plan_billing_cycle || '') === 'annual');
+  const estimatedMrr = (proMonthlyShops.length * PRO_MONTHLY_PRICE_NAIRA) + (proAnnualShops.length * (PRO_ANNUAL_PRICE_NAIRA / 12));
+  const estimatedArr = (proMonthlyShops.length * PRO_MONTHLY_PRICE_NAIRA * 12) + (proAnnualShops.length * PRO_ANNUAL_PRICE_NAIRA);
+  const newShops7d = shopRows.filter(shop => shop.created_at && (nowMs - new Date(shop.created_at).getTime()) <= signupWindowMs);
+  const newShops30d = shopRows.filter(shop => shop.created_at && (nowMs - new Date(shop.created_at).getTime()) <= growthWindowMs);
+  const expiringPaidShops = paidShops.filter(shop => {
+    if (!shop.plan_expires_at) return false;
+    const expiryMs = new Date(shop.plan_expires_at).getTime();
+    return expiryMs >= nowMs && expiryMs <= nowMs + sevenDaysMs;
+  });
+  const inactivePaidShops = paidShops.filter(shop => {
+    if (shop.suspended) return true;
+    if ((shop.live_users || 0) > 0) return false;
+    if (!shop.last_activity_at) return true;
+    return (nowMs - new Date(shop.last_activity_at).getTime()) > inactivePaidWindowMs;
+  });
+  const seatLimitShops = shopRows.filter(shop => (shop.active_users || 0) >= planStaffLimit(String(shop.plan || 'free')));
+  const noAdminShops = shopRows.filter(shop => (shop.admin_users || 0) === 0);
+  const highSessionShops = shopRows.filter(shop => (shop.live_sessions || 0) >= HIGH_SESSION_ALERT_THRESHOLD);
+  const firstSubscriptionByShop = new Map<string, string>();
+  billingTransactions.forEach(tx => {
+    const shopId = tx.shop_id ? String(tx.shop_id) : '';
+    const createdAt = tx.created_at ? String(tx.created_at) : '';
+    if (!shopId || !createdAt || firstSubscriptionByShop.has(shopId)) return;
+    firstSubscriptionByShop.set(shopId, createdAt);
+  });
+  const proConversions30d = [...firstSubscriptionByShop.values()].filter(createdAt => (nowMs - new Date(createdAt).getTime()) <= growthWindowMs).length;
+  const subscriptionEvents30d = billingTransactions.filter(tx => tx.created_at && (nowMs - new Date(String(tx.created_at)).getTime()) <= growthWindowMs).length;
+  const conversionRate = shopRows.length ? Math.round((paidShops.length / shopRows.length) * 100) : 0;
+  const alerts = [
+    ...expiringPaidShops.map(shop => ({
+      type: 'plan_expiry',
+      severity: 'high',
+      shop_id: shop.id,
+      shop_name: shop.name,
+      title: `${shop.name} plan expires soon`,
+      body: `Pro plan expires on ${shop.plan_expires_at}.`,
+    })),
+    ...inactivePaidShops.map(shop => ({
+      type: 'inactive_paid',
+      severity: 'medium',
+      shop_id: shop.id,
+      shop_name: shop.name,
+      title: `${shop.name} is a quiet paid shop`,
+      body: shop.last_activity_at
+        ? `No staff activity recorded since ${shop.last_activity_at}.`
+        : 'No recent shop activity recorded for this paid shop.',
+    })),
+    ...seatLimitShops.map(shop => ({
+      type: 'seat_limit',
+      severity: String(shop.plan || 'free').toLowerCase() === 'pro' ? 'medium' : 'high',
+      shop_id: shop.id,
+      shop_name: shop.name,
+      title: `${shop.name} reached the ${planStaffLimit(String(shop.plan || 'free'))}-user seat limit`,
+      body: `${shop.active_users || 0} active users on ${String(shop.plan || 'free').toLowerCase() === 'pro' ? 'Pro' : 'Starter'}.`,
+    })),
+    ...highSessionShops.map(shop => ({
+      type: 'high_sessions',
+      severity: 'medium',
+      shop_id: shop.id,
+      shop_name: shop.name,
+      title: `${shop.name} has unusually high live sessions`,
+      body: `${shop.live_sessions || 0} live sessions across ${shop.live_users || 0} signed-in users.`,
+    })),
+    ...noAdminShops.map(shop => ({
+      type: 'no_admin',
+      severity: 'high',
+      shop_id: shop.id,
+      shop_name: shop.name,
+      title: `${shop.name} has no shop admin`,
+      body: 'No Admin role is currently linked to this shop.',
+    })),
+  ]
+    .sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || String(a.shop_name || '').localeCompare(String(b.shop_name || '')))
+    .slice(0, 12);
+  const billingGrowth = {
+    estimated_mrr: estimatedMrr,
+    estimated_arr: estimatedArr,
+    pro_monthly_shops: proMonthlyShops.length,
+    pro_annual_shops: proAnnualShops.length,
+    new_shops_7d: newShops7d.length,
+    new_shops_30d: newShops30d.length,
+    pro_conversions_30d: proConversions30d,
+    subscription_events_30d: subscriptionEvents30d,
+    expiring_paid_shops_7d: expiringPaidShops.length,
+    inactive_paid_shops: inactivePaidShops.length,
+    conversion_rate: conversionRate,
+  };
   const ownerAuditLog = (ownerAuditLogsRes.data || []).map(row => {
     const changes = parseChanges(row.changes) as Record<string, unknown>;
     const targetType = changes?.target_type ? String(changes.target_type) : null;
@@ -429,10 +618,16 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
       paid_shops: paidShops.length,
       active_sessions: totalActiveSessions,
       signed_in_users: signedInUsers.length,
+      estimated_mrr: estimatedMrr,
+      new_shops_30d: newShops30d.length,
+      pro_conversions_30d: proConversions30d,
+      expiring_paid_shops_7d: expiringPaidShops.length,
       recent_signups: users.slice(0, 8),
     },
     users,
     signed_in_users: signedInUsers,
+    billing_growth: billingGrowth,
+    alerts,
     owner_audit_log: ownerAuditLog,
     shops: shopRows,
     generated_at: new Date().toISOString(),
@@ -587,6 +782,117 @@ async function setShopSuspended(adminClient: ReturnType<typeof createClient>, ow
   };
 }
 
+async function setShopPlan(adminClient: ReturnType<typeof createClient>, ownerId: string, shopId: string, plan: string, billingCycle: string) {
+  const { data: shop, error: shopError } = await adminClient
+    .from('shops')
+    .select('id, name, plan, plan_billing_cycle, created_at, plan_expires_at')
+    .eq('id', shopId)
+    .maybeSingle();
+
+  if (shopError) throw new Error(shopError.message);
+  if (!shop) throw new Error('Shop not found.');
+
+  const nextPlan = normalizePlan(plan);
+  const nextCycle = normalizeBillingCycle(billingCycle);
+  const currentExpiryMs = shop.plan_expires_at ? new Date(String(shop.plan_expires_at)).getTime() : 0;
+  const hasActivePaidPeriod = currentExpiryMs > Date.now();
+  let nextExpiry: string | null = null;
+
+  if (nextPlan === 'pro') {
+    if (hasActivePaidPeriod) nextExpiry = String(shop.plan_expires_at);
+    else nextExpiry = addBillingCycle(new Date(), nextCycle).toISOString();
+  }
+
+  const updatePayload = nextPlan === 'pro'
+    ? {
+        plan: 'pro',
+        plan_billing_cycle: nextCycle,
+        plan_expires_at: nextExpiry,
+      }
+    : {
+        plan: 'free',
+        plan_billing_cycle: null,
+        plan_expires_at: null,
+      };
+
+  const { error: updateError } = await adminClient
+    .from('shops')
+    .update(updatePayload)
+    .eq('id', shopId);
+
+  if (updateError) throw new Error(updateError.message);
+
+  await logOwnerAction(adminClient, ownerId, SHOP_PLAN_UPDATE_ACTION, shopId, {
+    target_type: 'shop',
+    target_id: shopId,
+    target_name: shop.name || 'Unnamed Shop',
+    shop_id: shopId,
+    shop_name: shop.name || 'Unnamed Shop',
+    previous_plan: shop.plan || 'free',
+    previous_billing_cycle: shop.plan_billing_cycle || null,
+    previous_plan_expires_at: shop.plan_expires_at || null,
+    next_plan: updatePayload.plan,
+    next_billing_cycle: updatePayload.plan_billing_cycle,
+    next_plan_expires_at: updatePayload.plan_expires_at,
+  });
+
+  return {
+    success: true,
+    shop_id: shopId,
+    plan: updatePayload.plan,
+    billing_cycle: updatePayload.plan_billing_cycle,
+    plan_expires_at: updatePayload.plan_expires_at,
+  };
+}
+
+async function extendShopPlan(adminClient: ReturnType<typeof createClient>, ownerId: string, shopId: string, days: number) {
+  const { data: shop, error: shopError } = await adminClient
+    .from('shops')
+    .select('id, name, plan, plan_billing_cycle, created_at, plan_expires_at')
+    .eq('id', shopId)
+    .maybeSingle();
+
+  if (shopError) throw new Error(shopError.message);
+  if (!shop) throw new Error('Shop not found.');
+  if (normalizePlan(shop.plan) !== 'pro') throw new Error('Only Pro shops can have their plan expiry extended.');
+
+  const extensionDays = positiveWholeNumber(days);
+  if (!extensionDays) throw new Error('A valid number of extension days is required.');
+  if (extensionDays > 3650) throw new Error('Extension is too large. Please use 3650 days or fewer.');
+
+  const baseDate = shop.plan_expires_at && new Date(String(shop.plan_expires_at)).getTime() > Date.now()
+    ? new Date(String(shop.plan_expires_at))
+    : new Date();
+  const nextExpiry = addDays(baseDate, extensionDays).toISOString();
+
+  const { error: updateError } = await adminClient
+    .from('shops')
+    .update({ plan_expires_at: nextExpiry })
+    .eq('id', shopId);
+
+  if (updateError) throw new Error(updateError.message);
+
+  await logOwnerAction(adminClient, ownerId, SHOP_PLAN_EXTEND_ACTION, shopId, {
+    target_type: 'shop',
+    target_id: shopId,
+    target_name: shop.name || 'Unnamed Shop',
+    shop_id: shopId,
+    shop_name: shop.name || 'Unnamed Shop',
+    plan: shop.plan || 'free',
+    billing_cycle: shop.plan_billing_cycle || null,
+    days_extended: extensionDays,
+    previous_plan_expires_at: shop.plan_expires_at || null,
+    next_plan_expires_at: nextExpiry,
+  });
+
+  return {
+    success: true,
+    shop_id: shopId,
+    days_extended: extensionDays,
+    plan_expires_at: nextExpiry,
+  };
+}
+
 async function countRows(queryPromise: Promise<{ count: number | null; error: { message: string } | null }>) {
   const { count, error } = await queryPromise;
   if (error) throw new Error(error.message);
@@ -596,14 +902,14 @@ async function countRows(queryPromise: Promise<{ count: number | null; error: { 
 async function getShopDetail(adminClient: ReturnType<typeof createClient>, shopId: string) {
   const { data: shop, error: shopError } = await adminClient
     .from('shops')
-    .select('id, name, address, phone, email, plan, created_at, plan_expires_at')
+    .select('id, name, address, phone, email, plan, plan_billing_cycle, created_at, plan_expires_at')
     .eq('id', shopId)
     .maybeSingle();
 
   if (shopError) throw new Error(shopError.message);
   if (!shop) throw new Error('Shop not found.');
 
-  const [profilesRes, shopStatusLogsRes, sessionLogsRes, recentOwnerActionsRes, customerCount, workOrderCount, invoiceCount, appointmentCount, inventoryCount, supplierCount, purchaseOrderCount, unreadNotificationCount] = await Promise.all([
+  const [profilesRes, shopStatusLogsRes, sessionLogsRes, recentOwnerActionsRes, subscriptionTransactionsRes, customerCount, workOrderCount, invoiceCount, appointmentCount, inventoryCount, supplierCount, purchaseOrderCount, unreadNotificationCount] = await Promise.all([
     adminClient.from('profiles').select('id, full_name, role, email, active').eq('shop_id', shopId).order('full_name'),
     adminClient.from('audit_logs')
       .select('record_id, changed_by, action, created_at, changes')
@@ -620,6 +926,12 @@ async function getShopDetail(adminClient: ReturnType<typeof createClient>, shopI
       .eq('table_name', PLATFORM_AUDIT_TABLE)
       .order('created_at', { ascending: false })
       .limit(20),
+    adminClient.from('billing_transactions')
+      .select('gross_amount, plan_cycle, created_at, status, type')
+      .eq('shop_id', shopId)
+      .eq('type', 'subscription')
+      .eq('status', 'success')
+      .order('created_at', { ascending: false }),
     countRows(adminClient.from('customers').select('id', { count: 'exact', head: true }).eq('shop_id', shopId)),
     countRows(adminClient.from('work_orders').select('id', { count: 'exact', head: true }).eq('shop_id', shopId)),
     countRows(adminClient.from('invoices').select('id', { count: 'exact', head: true }).eq('shop_id', shopId)),
@@ -634,6 +946,7 @@ async function getShopDetail(adminClient: ReturnType<typeof createClient>, shopI
   if (shopStatusLogsRes.error) throw new Error(shopStatusLogsRes.error.message);
   if (sessionLogsRes.error) throw new Error(sessionLogsRes.error.message);
   if (recentOwnerActionsRes.error) throw new Error(recentOwnerActionsRes.error.message);
+  if (subscriptionTransactionsRes.error) throw new Error(subscriptionTransactionsRes.error.message);
 
   const staffProfiles = profilesRes.data || [];
   const staffIds = staffProfiles.map(profile => String(profile.id));
@@ -708,6 +1021,65 @@ async function getShopDetail(adminClient: ReturnType<typeof createClient>, shopI
     })
     .filter(Boolean);
 
+  const liveUserCount = staff.filter(profile => (profile.session_count || 0) > 0).length;
+  const liveSessionCount = staff.reduce((sum, profile) => sum + Number(profile.session_count || 0), 0);
+  const adminCount = staff.filter(profile => profile.role === 'Admin' && profile.active).length;
+  const lastShopActivityAt = recentShopActivity[0]?.created_at ? String(recentShopActivity[0].created_at) : null;
+  const seatLimit = planStaffLimit(shop.plan);
+  const remainingSeats = Math.max(seatLimit - staff.filter(profile => profile.active).length, 0);
+  const subscriptionTransactions = subscriptionTransactionsRes.data || [];
+  const lastSubscription = subscriptionTransactions[0] || null;
+  const totalSubscriptionRevenue = subscriptionTransactions.reduce((sum, row) => sum + Number(row.gross_amount || 0), 0);
+  const estimatedMonthlyValue = normalizePlan(shop.plan) === 'pro'
+    ? (normalizeBillingCycle(shop.plan_billing_cycle) === 'annual'
+      ? PRO_ANNUAL_PRICE_NAIRA / 12
+      : PRO_MONTHLY_PRICE_NAIRA)
+    : 0;
+  const isPaid = isActiveProShop(shop);
+  const nowMs = Date.now();
+  const expiryMs = shop.plan_expires_at ? new Date(String(shop.plan_expires_at)).getTime() : 0;
+  const expiringSoon = isPaid && expiryMs > nowMs && expiryMs <= (nowMs + (PLAN_EXPIRY_WARNING_DAYS * 24 * 60 * 60 * 1000));
+  const quietPaid = isPaid && (
+    suspensionState.suspended
+    || !lastShopActivityAt
+    || (nowMs - new Date(lastShopActivityAt).getTime()) > (INACTIVE_PAID_SHOP_DAYS * 24 * 60 * 60 * 1000)
+  );
+  const atSeatLimit = staff.filter(profile => profile.active).length >= seatLimit;
+  const riskAlerts = [
+    ...(expiringSoon ? [{
+      type: 'plan_expiry',
+      severity: 'high',
+      title: 'Plan expires soon',
+      body: `This Pro plan is due to expire on ${shop.plan_expires_at}.`,
+    }] : []),
+    ...(quietPaid ? [{
+      type: 'inactive_paid',
+      severity: 'medium',
+      title: 'Quiet paid shop',
+      body: lastShopActivityAt
+        ? `No staff activity recorded since ${lastShopActivityAt}.`
+        : 'No recent staff activity has been recorded for this paid shop.',
+    }] : []),
+    ...(atSeatLimit ? [{
+      type: 'seat_limit',
+      severity: normalizePlan(shop.plan) === 'pro' ? 'medium' : 'high',
+      title: 'Seat limit reached',
+      body: `${staff.filter(profile => profile.active).length} active users are already on this ${normalizePlan(shop.plan) === 'pro' ? 'Pro' : 'Starter'} plan.`,
+    }] : []),
+    ...(liveSessionCount >= HIGH_SESSION_ALERT_THRESHOLD ? [{
+      type: 'high_sessions',
+      severity: 'medium',
+      title: 'High session activity',
+      body: `${liveSessionCount} live sessions are currently active for this shop.`,
+    }] : []),
+    ...(adminCount === 0 ? [{
+      type: 'no_admin',
+      severity: 'high',
+      title: 'No shop admin linked',
+      body: 'This shop currently has no active Admin account.',
+    }] : []),
+  ];
+
   return {
     shop: {
       ...shop,
@@ -719,6 +1091,7 @@ async function getShopDetail(adminClient: ReturnType<typeof createClient>, shopI
       staff_accounts: staff.length,
       active_staff: staff.filter(profile => profile.active).length,
       signed_in_users: staff.filter(profile => (profile.session_count || 0) > 0).length,
+      live_sessions: liveSessionCount,
       customers: customerCount,
       work_orders: workOrderCount,
       invoices: invoiceCount,
@@ -728,7 +1101,22 @@ async function getShopDetail(adminClient: ReturnType<typeof createClient>, shopI
       purchase_orders: purchaseOrderCount,
       unread_notifications: unreadNotificationCount,
     },
+    billing: {
+      is_paid: isPaid,
+      plan: normalizePlan(shop.plan),
+      billing_cycle: normalizeBillingCycle(shop.plan_billing_cycle),
+      plan_expires_at: shop.plan_expires_at || null,
+      estimated_monthly_value: estimatedMonthlyValue,
+      estimated_annual_value: estimatedMonthlyValue * 12,
+      successful_subscription_payments: subscriptionTransactions.length,
+      total_subscription_revenue: totalSubscriptionRevenue,
+      last_subscription_at: lastSubscription?.created_at ? String(lastSubscription.created_at) : null,
+      seat_limit: seatLimit,
+      remaining_seats: remainingSeats,
+      at_seat_limit: atSeatLimit,
+    },
     staff,
+    alerts: riskAlerts,
     recent_activity: recentShopActivity,
     recent_owner_actions: recentOwnerActions,
   };
@@ -799,6 +1187,29 @@ Deno.serve(async (req) => {
       const shopId = String(body?.shop_id || '').trim();
       if (!shopId) return json({ error: 'shop_id is required' }, 400);
       return json(await setShopSuspended(adminClient, user.id, shopId, !!body?.suspended, String(body?.reason || '').trim()));
+    }
+
+    if (action === 'set_shop_plan') {
+      const shopId = String(body?.shop_id || '').trim();
+      if (!shopId) return json({ error: 'shop_id is required' }, 400);
+      return json(await setShopPlan(
+        adminClient,
+        user.id,
+        shopId,
+        String(body?.plan || 'free'),
+        String(body?.billing_cycle || 'monthly'),
+      ));
+    }
+
+    if (action === 'extend_shop_plan') {
+      const shopId = String(body?.shop_id || '').trim();
+      if (!shopId) return json({ error: 'shop_id is required' }, 400);
+      return json(await extendShopPlan(
+        adminClient,
+        user.id,
+        shopId,
+        positiveWholeNumber(body?.days),
+      ));
     }
 
     return json({ error: 'Unsupported action' }, 400);

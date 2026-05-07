@@ -59,6 +59,25 @@
 .owner-stat-sub {
   margin-top:8px; font-size:12px; color:var(--app-muted);
 }
+.owner-kpi-grid {
+  display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px;
+  padding:18px;
+}
+.owner-kpi-card {
+  border:1px solid var(--app-border);
+  border-radius:var(--r-sm);
+  padding:14px;
+  background:rgba(255,255,255,0.02);
+}
+.owner-kpi-label {
+  font-size:10px; color:var(--app-muted); font-family:var(--ff-mono); letter-spacing:.12em; text-transform:uppercase;
+}
+.owner-kpi-value {
+  margin-top:8px; font-size:24px; font-weight:800; color:var(--app-text);
+}
+.owner-kpi-sub {
+  margin-top:7px; font-size:11px; color:var(--app-muted); line-height:1.5;
+}
 .owner-panels {
   display:grid; grid-template-columns:1.45fr 1fr; gap:16px;
 }
@@ -151,6 +170,15 @@
 .owner-badge-live {
   background:rgba(34,197,94,0.12); color:#4ade80; border-color:rgba(34,197,94,0.24);
 }
+.owner-badge-high {
+  background:rgba(239,68,68,0.12); color:#fca5a5; border-color:rgba(239,68,68,0.28);
+}
+.owner-badge-medium {
+  background:rgba(232,160,32,0.12); color:var(--amber); border-color:rgba(232,160,32,0.26);
+}
+.owner-badge-low {
+  background:rgba(96,165,250,0.12); color:#93c5fd; border-color:rgba(96,165,250,0.24);
+}
 .owner-muted {
   color:var(--app-muted);
 }
@@ -190,6 +218,16 @@
 }
 .owner-detail-sub {
   margin-top:8px; color:var(--app-muted); font-size:13px; line-height:1.7;
+}
+.owner-control-grid {
+  display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; align-items:end;
+  margin-top:14px;
+}
+.owner-plan-actions {
+  display:flex; gap:8px; flex-wrap:wrap; margin-top:14px;
+}
+.owner-mini-note {
+  margin-top:10px; color:var(--app-muted); font-size:11px; line-height:1.6;
 }
 .owner-note {
   padding:14px 16px; border-radius:var(--r-sm);
@@ -231,16 +269,18 @@
 }
 @media (max-width: 1200px) {
   .owner-stat-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .owner-kpi-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
   .owner-panels { grid-template-columns:1fr; }
   .owner-metric-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
   .owner-detail-sections { grid-template-columns:1fr; }
 }
 @media (max-width: 900px) {
   .owner-toolbar { grid-template-columns:1fr 1fr; }
+  .owner-control-grid { grid-template-columns:1fr; }
 }
 @media (max-width: 640px) {
   .owner-title { font-size:24px; }
-  .owner-stat-grid, .owner-toolbar { grid-template-columns:1fr; }
+  .owner-stat-grid, .owner-toolbar, .owner-kpi-grid { grid-template-columns:1fr; }
   .owner-mobile-nav { display:grid; }
   .owner-metric-grid { grid-template-columns:1fr; }
 }
@@ -323,6 +363,28 @@
               </div>
             </div>
             <div class="owner-feed" id="platformSnapshot"></div>
+          </div>
+        </section>
+
+        <section class="owner-panels">
+          <div class="owner-panel">
+            <div class="owner-panel-head">
+              <div>
+                <div class="owner-panel-title">Billing & Growth Metrics</div>
+                <div class="owner-panel-sub">Live SaaS signals for plan revenue, growth, and conversions.</div>
+              </div>
+            </div>
+            <div class="owner-kpi-grid" id="billingGrowthGrid"></div>
+          </div>
+
+          <div class="owner-panel">
+            <div class="owner-panel-head">
+              <div>
+                <div class="owner-panel-title">Risk Watchlist</div>
+                <div class="owner-panel-sub">Shops that need owner attention soon.</div>
+              </div>
+            </div>
+            <div class="owner-feed" id="riskAlerts"></div>
           </div>
         </section>
 
@@ -482,6 +544,8 @@ let ownerUsers = [];
 let ownerSignedInUsers = [];
 let ownerAuditRows = [];
 let ownerShops = [];
+let ownerBillingGrowth = null;
+let ownerAlerts = [];
 let ownerGeneratedAt = null;
 let ownerShopDetail = null;
 
@@ -512,6 +576,14 @@ function fmtDateTime(value) {
   });
 }
 
+function fmtCurrency(value) {
+  return new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency: 'NGN',
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+}
+
 function fmtRelative(value) {
   if (!value) return '—';
   const ms = Date.now() - new Date(value).getTime();
@@ -529,6 +601,10 @@ function planLabel(plan) {
   return String(plan || 'free').toLowerCase() === 'pro' ? 'Pro' : 'Starter';
 }
 
+function cycleLabel(cycle) {
+  return String(cycle || 'monthly').toLowerCase() === 'annual' ? 'Annual' : 'Monthly';
+}
+
 function planBadge(plan) {
   return `<span class="owner-badge ${String(plan || 'free').toLowerCase() === 'pro' ? 'owner-badge-pro' : 'owner-badge-starter'}">${escapeHtml(planLabel(plan))}</span>`;
 }
@@ -540,6 +616,16 @@ function statusBadge(active, isOwner) {
 
 function shopStatusBadge(suspended) {
   return `<span class="owner-badge ${suspended ? 'owner-badge-suspended' : 'owner-badge-live'}">${suspended ? 'Suspended' : 'Live'}</span>`;
+}
+
+function severityBadge(severity) {
+  const value = String(severity || 'low').toLowerCase();
+  const label = value.charAt(0).toUpperCase() + value.slice(1);
+  return `<span class="owner-badge owner-badge-${value}">${escapeHtml(label)}</span>`;
+}
+
+function getShopById(shopId) {
+  return ownerShops.find(shop => String(shop.id) === String(shopId)) || null;
 }
 
 function setPlatformError(message) {
@@ -590,6 +676,8 @@ async function loadPlatformData(silent = false) {
     ownerSignedInUsers = data.signed_in_users || [];
     ownerAuditRows = data.owner_audit_log || [];
     ownerShops = data.shops || [];
+    ownerBillingGrowth = data.billing_growth || null;
+    ownerAlerts = data.alerts || [];
     ownerGeneratedAt = data.generated_at || new Date().toISOString();
     renderOverview();
   } catch (err) {
@@ -603,6 +691,8 @@ function renderOverview() {
   renderStats();
   renderRecentSignups();
   renderSnapshot();
+  renderBillingGrowth();
+  renderRiskAlerts();
   renderSignedInUsers();
   renderOwnerAuditLog();
   renderUserTable();
@@ -613,10 +703,13 @@ function renderOverview() {
 
 function renderStats() {
   const summary = ownerSummary || {};
+  const growth = ownerBillingGrowth || {};
   const cards = [
     ['Shop Admins', summary.total_shop_admins || 0, `${summary.total_shops || 0} total shops on the platform`],
     ['Active Shops', summary.active_shops || 0, `${summary.suspended_shops || 0} suspended shops right now`],
-    ['Paid Shops', summary.paid_shops || 0, `${summary.starter_shops || 0} still on Starter`],
+    ['Estimated MRR', fmtCurrency(summary.estimated_mrr || 0), `${summary.paid_shops || 0} paid shops · ${growth.conversion_rate || 0}% conversion rate`],
+    ['New Shops (30d)', summary.new_shops_30d || 0, `${summary.pro_conversions_30d || 0} converted to Pro in the last 30 days`],
+    ['Expiring Paid', summary.expiring_paid_shops_7d || 0, 'Paid shops expiring within the next 7 days'],
     ['Staff Accounts', summary.total_staff_accounts || 0, `${summary.signed_in_users || 0} users signed in now · ${summary.active_sessions || 0} sessions active in last 30 mins`],
   ];
   document.getElementById('ownerStats').innerHTML = cards.map(([label, value, sub]) => `
@@ -652,12 +745,13 @@ function renderRecentSignups() {
 
 function renderSnapshot() {
   const summary = ownerSummary || {};
+  const growth = ownerBillingGrowth || {};
   const rows = [
     ['Registered users', summary.total_users || 0],
     ['Active users', summary.active_users || 0],
-    ['Inactive users', summary.inactive_users || 0],
-    ['Owner accounts', summary.owner_users || 0],
-    ['Users signed in now', summary.signed_in_users || 0],
+    ['Starter shops', summary.starter_shops || 0],
+    ['Paid shops', summary.paid_shops || 0],
+    ['Projected ARR', fmtCurrency(growth.estimated_arr || 0)],
     ['Suspended shops', summary.suspended_shops || 0],
   ];
   document.getElementById('platformSnapshot').innerHTML = rows.map(([label, value]) => `
@@ -669,6 +763,61 @@ function renderSnapshot() {
       <div class="owner-feed-time">${escapeHtml(value)}</div>
     </div>
   `).join('');
+}
+
+function renderBillingGrowth() {
+  const growth = ownerBillingGrowth || {};
+  const root = document.getElementById('billingGrowthGrid');
+  const cards = [
+    ['Projected MRR', fmtCurrency(growth.estimated_mrr || 0), `${growth.pro_monthly_shops || 0} monthly Pro · ${growth.pro_annual_shops || 0} annual Pro`],
+    ['Projected ARR', fmtCurrency(growth.estimated_arr || 0), `${growth.conversion_rate || 0}% of shops are currently paid`],
+    ['New Shops', `${growth.new_shops_7d || 0} / ${growth.new_shops_30d || 0}`, '7 days / 30 days'],
+    ['Pro Conversions', growth.pro_conversions_30d || 0, `${growth.subscription_events_30d || 0} subscription payments recorded in 30 days`],
+    ['Paid Shops Expiring', growth.expiring_paid_shops_7d || 0, 'Need renewal attention within 7 days'],
+    ['Quiet Paid Shops', growth.inactive_paid_shops || 0, 'Paid shops with little or no recent activity'],
+  ];
+
+  root.innerHTML = cards.map(([label, value, sub]) => `
+    <div class="owner-kpi-card">
+      <div class="owner-kpi-label">${escapeHtml(label)}</div>
+      <div class="owner-kpi-value">${escapeHtml(value)}</div>
+      <div class="owner-kpi-sub">${escapeHtml(sub)}</div>
+    </div>
+  `).join('');
+}
+
+function renderRiskAlerts() {
+  const root = document.getElementById('riskAlerts');
+  if (!ownerAlerts.length) {
+    root.innerHTML = '<div class="owner-empty">No elevated shop risks detected right now.</div>';
+    return;
+  }
+
+  root.innerHTML = ownerAlerts.map(alert => {
+    const shop = getShopById(alert.shop_id);
+    const action = shop
+      ? `<div class="owner-actions">
+          <button class="app-btn app-btn-ghost app-btn-xs" onclick="openShopDetail('${escapeHtml(alert.shop_id)}')">View Shop</button>
+          ${shop.suspended
+            ? `<button class="app-btn app-btn-primary app-btn-xs" onclick="togglePlatformShopSuspended('${escapeHtml(alert.shop_id)}', false, this)">Unsuspend</button>`
+            : `<button class="app-btn app-btn-danger app-btn-xs" onclick="togglePlatformShopSuspended('${escapeHtml(alert.shop_id)}', true, this)">Suspend</button>`}
+        </div>`
+      : '';
+
+    return `
+      <div class="owner-feed-item">
+        <div>
+          <div class="owner-feed-name">${severityBadge(alert.severity)} ${escapeHtml(alert.title || 'Platform alert')}</div>
+          <div class="owner-feed-meta">
+            ${escapeHtml(alert.shop_name || 'Unknown shop')}<br>
+            ${escapeHtml(alert.body || 'Owner attention needed.')}
+          </div>
+          ${action}
+        </div>
+        <div class="owner-feed-time">${escapeHtml(String(alert.type || '').replace(/_/g, ' '))}</div>
+      </div>
+    `;
+  }).join('');
 }
 
 function renderOwnerAuditLog() {
@@ -795,6 +944,7 @@ function getFilteredShops() {
     shop.name,
     shop.id,
     planLabel(shop.plan),
+    cycleLabel(shop.plan_billing_cycle),
     shop.suspended ? 'suspended' : 'live',
     shop.suspension_reason,
   ].join(' ').toLowerCase().includes(q));
@@ -817,9 +967,12 @@ function renderShopTable() {
     <tr>
       <td>
         <div class="owner-user-name">${escapeHtml(shop.name || 'Unnamed Shop')}</div>
-        <div class="owner-user-meta">${escapeHtml(shop.id || '')}</div>
+        <div class="owner-user-meta">
+          ${escapeHtml(shop.id || '')}<br>
+          ${escapeHtml(shop.last_activity_at ? `Last activity ${fmtRelative(shop.last_activity_at)}` : 'No recent activity')} · ${escapeHtml(shop.live_sessions || 0)} live session(s)
+        </div>
       </td>
-      <td>${planBadge(shop.plan)}</td>
+      <td>${planBadge(shop.plan)}<div class="owner-user-meta">${escapeHtml(String(shop.plan || 'free').toLowerCase() === 'pro' ? `${cycleLabel(shop.plan_billing_cycle)} billing` : 'Starter plan')}</div></td>
       <td>${shopStatusBadge(!!shop.suspended)}</td>
       <td>${escapeHtml(shop.total_users || 0)}</td>
       <td>${escapeHtml(shop.active_users || 0)}</td>
@@ -858,10 +1011,14 @@ function renderShopDetail() {
 
   const shop = detail.shop;
   const metrics = detail.metrics || {};
+  const billing = detail.billing || {};
   const staff = detail.staff || [];
+  const shopAlerts = detail.alerts || [];
   const liveUsers = staff.filter(member => (member.session_count || 0) > 0);
   const recentActivity = detail.recent_activity || [];
   const recentOwnerActions = detail.recent_owner_actions || [];
+  const selectedPlan = String(billing.plan || shop.plan || 'free').toLowerCase() === 'pro' ? 'pro' : 'free';
+  const selectedCycle = String(billing.billing_cycle || shop.plan_billing_cycle || 'monthly').toLowerCase() === 'annual' ? 'annual' : 'monthly';
 
   title.textContent = `${shop.name || 'Shop Detail'} Overview`;
   body.innerHTML = `
@@ -880,14 +1037,73 @@ function renderShopDetail() {
       <div class="owner-metric-grid">
         <div class="owner-metric-card"><div class="owner-metric-label">Staff Accounts</div><div class="owner-metric-value">${escapeHtml(metrics.staff_accounts || 0)}</div></div>
         <div class="owner-metric-card"><div class="owner-metric-label">Signed In Now</div><div class="owner-metric-value">${escapeHtml(metrics.signed_in_users || 0)}</div></div>
+        <div class="owner-metric-card"><div class="owner-metric-label">Live Sessions</div><div class="owner-metric-value">${escapeHtml(metrics.live_sessions || 0)}</div></div>
         <div class="owner-metric-card"><div class="owner-metric-label">Customers</div><div class="owner-metric-value">${escapeHtml(metrics.customers || 0)}</div></div>
         <div class="owner-metric-card"><div class="owner-metric-label">Work Orders</div><div class="owner-metric-value">${escapeHtml(metrics.work_orders || 0)}</div></div>
         <div class="owner-metric-card"><div class="owner-metric-label">Invoices</div><div class="owner-metric-value">${escapeHtml(metrics.invoices || 0)}</div></div>
         <div class="owner-metric-card"><div class="owner-metric-label">Appointments</div><div class="owner-metric-value">${escapeHtml(metrics.appointments || 0)}</div></div>
         <div class="owner-metric-card"><div class="owner-metric-label">Inventory Items</div><div class="owner-metric-value">${escapeHtml(metrics.inventory_items || 0)}</div></div>
+        <div class="owner-metric-card"><div class="owner-metric-label">Suppliers</div><div class="owner-metric-value">${escapeHtml(metrics.suppliers || 0)}</div></div>
+        <div class="owner-metric-card"><div class="owner-metric-label">Purchase Orders</div><div class="owner-metric-value">${escapeHtml(metrics.purchase_orders || 0)}</div></div>
         <div class="owner-metric-card"><div class="owner-metric-label">Unread Notifications</div><div class="owner-metric-value">${escapeHtml(metrics.unread_notifications || 0)}</div></div>
       </div>
       <div class="owner-detail-sections">
+        <section class="owner-detail-section">
+          <h4>Plan & Billing Control</h4>
+          <div class="owner-detail-list">
+            <div class="owner-detail-list-item">
+              <div>
+                <div class="owner-user-name">${escapeHtml(planLabel(selectedPlan))} ${selectedPlan === 'pro' ? `· ${escapeHtml(cycleLabel(selectedCycle))}` : ''}</div>
+                <div class="owner-user-meta">
+                  ${escapeHtml(billing.is_paid ? 'Paid shop is currently active.' : 'Starter or inactive paid period.')}<br>
+                  Expires ${escapeHtml(shop.plan_expires_at ? fmtDateTime(shop.plan_expires_at) : '—')} · ${escapeHtml(billing.remaining_seats || 0)} seat(s) remaining
+                </div>
+              </div>
+              <div style="text-align:right">
+                <div class="owner-user-name">${escapeHtml(fmtCurrency(billing.estimated_monthly_value || 0))}</div>
+                <div class="owner-user-meta">Estimated monthly value</div>
+              </div>
+            </div>
+            <div class="owner-detail-list-item">
+              <div>
+                <div class="owner-user-name">${escapeHtml(billing.successful_subscription_payments || 0)} successful subscription payment(s)</div>
+                <div class="owner-user-meta">
+                  Last subscription ${escapeHtml(billing.last_subscription_at ? fmtRelative(billing.last_subscription_at) : 'not recorded')}<br>
+                  Lifetime subscription revenue ${escapeHtml(fmtCurrency(billing.total_subscription_revenue || 0))}
+                </div>
+              </div>
+              <div style="text-align:right">
+                <div class="owner-user-name">${escapeHtml(fmtCurrency(billing.estimated_annual_value || 0))}</div>
+                <div class="owner-user-meta">Estimated annual value</div>
+              </div>
+            </div>
+          </div>
+          <div class="owner-control-grid">
+            <div>
+              <label class="app-label">Plan</label>
+              <select class="app-input" id="shopPlanSelect" onchange="syncShopPlanControls()">
+                <option value="free" ${selectedPlan === 'free' ? 'selected' : ''}>Starter</option>
+                <option value="pro" ${selectedPlan === 'pro' ? 'selected' : ''}>Pro</option>
+              </select>
+            </div>
+            <div>
+              <label class="app-label">Billing Cycle</label>
+              <select class="app-input" id="shopBillingCycleSelect">
+                <option value="monthly" ${selectedCycle === 'monthly' ? 'selected' : ''}>Monthly</option>
+                <option value="annual" ${selectedCycle === 'annual' ? 'selected' : ''}>Annual</option>
+              </select>
+            </div>
+            <div>
+              <button class="app-btn app-btn-primary" onclick="saveShopPlan('${escapeHtml(shop.id)}', this)">Save Plan</button>
+            </div>
+          </div>
+          <div class="owner-plan-actions">
+            <button class="app-btn app-btn-ghost app-btn-sm" onclick="extendShopPlanByDays('${escapeHtml(shop.id)}', 7, this)">Extend +7 Days</button>
+            <button class="app-btn app-btn-ghost app-btn-sm" onclick="extendShopPlanByDays('${escapeHtml(shop.id)}', 30, this)">Extend +30 Days</button>
+            <button class="app-btn app-btn-ghost app-btn-sm" onclick="extendShopPlanByDays('${escapeHtml(shop.id)}', 90, this)">Extend +90 Days</button>
+          </div>
+          <div class="owner-mini-note">Downgrading to Starter clears the shop’s paid expiry. Upgrading to Pro starts a fresh cycle only when the shop has no active paid period left.</div>
+        </section>
         <section class="owner-detail-section">
           <h4>Team</h4>
           <div class="owner-detail-list">
@@ -917,6 +1133,19 @@ function renderShopDetail() {
                 <div class="owner-feed-time">${escapeHtml(member.last_active_at ? fmtRelative(member.last_active_at) : '—')}</div>
               </div>
             `).join('') : '<div class="owner-empty">No active user sessions for this shop right now.</div>'}
+          </div>
+        </section>
+        <section class="owner-detail-section">
+          <h4>Risk Notes</h4>
+          <div class="owner-detail-list">
+            ${shopAlerts.length ? shopAlerts.map(alert => `
+              <div class="owner-detail-list-item">
+                <div>
+                  <div class="owner-user-name">${severityBadge(alert.severity)} ${escapeHtml(alert.title || 'Risk')}</div>
+                  <div class="owner-user-meta">${escapeHtml(alert.body || 'Owner attention needed.')}</div>
+                </div>
+              </div>
+            `).join('') : '<div class="owner-empty">No elevated risks for this shop right now.</div>'}
           </div>
         </section>
         <section class="owner-detail-section">
@@ -958,6 +1187,80 @@ function renderShopDetail() {
       ? `<button class="app-btn app-btn-primary" onclick="togglePlatformShopSuspended('${escapeHtml(shop.id)}', false, this)">Unsuspend Shop</button>`
       : `<button class="app-btn app-btn-danger" onclick="togglePlatformShopSuspended('${escapeHtml(shop.id)}', true, this)">Suspend Shop</button>`}
   `;
+  syncShopPlanControls();
+}
+
+function syncShopPlanControls() {
+  const planSelect = document.getElementById('shopPlanSelect');
+  const cycleSelect = document.getElementById('shopBillingCycleSelect');
+  if (!planSelect || !cycleSelect) return;
+  cycleSelect.disabled = planSelect.value !== 'pro';
+}
+
+async function saveShopPlan(shopId, buttonEl) {
+  const planSelect = document.getElementById('shopPlanSelect');
+  const cycleSelect = document.getElementById('shopBillingCycleSelect');
+  if (!planSelect || !cycleSelect) return;
+
+  const plan = planSelect.value === 'pro' ? 'pro' : 'free';
+  const billingCycle = cycleSelect.value === 'annual' ? 'annual' : 'monthly';
+  const original = buttonEl?.textContent || 'Save Plan';
+
+  if (buttonEl) {
+    buttonEl.disabled = true;
+    buttonEl.textContent = 'Saving…';
+  }
+
+  try {
+    const result = await GS.setPlatformShopPlan(shopId, plan, billingCycle);
+    Toast.show(
+      plan === 'pro'
+        ? `Shop plan updated to Pro (${cycleLabel(result?.billing_cycle || billingCycle)})`
+        : 'Shop downgraded to Starter',
+      'success'
+    );
+    await loadPlatformData(true);
+    await openShopDetail(shopId);
+  } catch (err) {
+    Toast.show(err.message || 'Could not update shop plan', 'error');
+    if (buttonEl) {
+      buttonEl.disabled = false;
+      buttonEl.textContent = original;
+    }
+    return;
+  }
+
+  if (buttonEl) {
+    buttonEl.disabled = false;
+    buttonEl.textContent = original;
+  }
+}
+
+async function extendShopPlanByDays(shopId, days, buttonEl) {
+  const original = buttonEl?.textContent || `Extend +${days} Days`;
+  if (buttonEl) {
+    buttonEl.disabled = true;
+    buttonEl.textContent = 'Extending…';
+  }
+
+  try {
+    const result = await GS.extendPlatformShopPlan(shopId, days);
+    Toast.show(`Plan extended by ${result?.days_extended || days} day(s)`, 'success');
+    await loadPlatformData(true);
+    await openShopDetail(shopId);
+  } catch (err) {
+    Toast.show(err.message || 'Could not extend plan expiry', 'error');
+    if (buttonEl) {
+      buttonEl.disabled = false;
+      buttonEl.textContent = original;
+    }
+    return;
+  }
+
+  if (buttonEl) {
+    buttonEl.disabled = false;
+    buttonEl.textContent = original;
+  }
 }
 
 function resetShopFilters() {

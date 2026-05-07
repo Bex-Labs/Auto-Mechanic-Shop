@@ -2517,6 +2517,21 @@ const GS = (() => {
     });
   }
 
+  async function setPlatformShopPlan(shopId, plan, billingCycle = 'monthly') {
+    return _invokePlatformAdmin('set_shop_plan', {
+      shop_id: shopId,
+      plan: String(plan || 'free'),
+      billing_cycle: String(billingCycle || 'monthly'),
+    });
+  }
+
+  async function extendPlatformShopPlan(shopId, days) {
+    return _invokePlatformAdmin('extend_shop_plan', {
+      shop_id: shopId,
+      days: Number(days || 0),
+    });
+  }
+
   /* ---------------------------------------------------------------
      PUBLIC API
      --------------------------------------------------------------- */
@@ -2539,6 +2554,7 @@ const GS = (() => {
     getShopActivity, logPageView, logActivity,
     getSettings, updateSettings, resetDemoData,
     getPlatformAdminOverview, getPlatformAdminShopDetail, setPlatformUserActive, revokePlatformUserSessions, setPlatformShopSuspended,
+    setPlatformShopPlan, extendPlatformShopPlan,
   };
 })();
 
