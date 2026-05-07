@@ -90,6 +90,13 @@ type SessionState = {
   locationLabel: string | null;
 };
 
+type ActiveSessionSummary = {
+  session_count: number;
+  last_active_at: string | null;
+  device_labels: string[];
+  location_labels: string[];
+};
+
 function buildSessionStates(rows: Array<Record<string, unknown>>) {
   const sessionMap = new Map<string, SessionState>();
   const now = Date.now();
@@ -168,16 +175,41 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
   const shopById = new Map(shops.map(shop => [shop.id, shop]));
   const authUserIds = new Set(authUsers.map(user => user.id));
 
-  const activeSessionCountByUser = new Map<string, number>();
+  const activeSessionSummaryByUser = new Map<string, ActiveSessionSummary>();
   sessionStates.forEach(session => {
     if (!session.active || !session.userId) return;
-    activeSessionCountByUser.set(session.userId, (activeSessionCountByUser.get(session.userId) || 0) + 1);
+    const current = activeSessionSummaryByUser.get(session.userId) || {
+      session_count: 0,
+      last_active_at: null,
+      device_labels: [],
+      location_labels: [],
+    };
+
+    current.session_count += 1;
+
+    if (
+      session.latestAt
+      && (!current.last_active_at || new Date(session.latestAt).getTime() > new Date(current.last_active_at).getTime())
+    ) {
+      current.last_active_at = session.latestAt;
+    }
+
+    if (session.deviceLabel && !current.device_labels.includes(session.deviceLabel)) {
+      current.device_labels.push(session.deviceLabel);
+    }
+
+    if (session.locationLabel && !current.location_labels.includes(session.locationLabel)) {
+      current.location_labels.push(session.locationLabel);
+    }
+
+    activeSessionSummaryByUser.set(session.userId, current);
   });
 
   const users = authUsers.map(user => {
     const profile = profileById.get(user.id) || null;
     const shop = profile?.shop_id ? shopById.get(profile.shop_id) : null;
     const owner = isPlatformOwner(user, profile);
+    const sessionSummary = activeSessionSummaryByUser.get(user.id);
     return {
       id: user.id,
       full_name: profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Unknown User',
@@ -190,7 +222,10 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
       created_at: user.created_at || null,
       last_sign_in_at: user.last_sign_in_at || null,
       email_confirmed_at: user.email_confirmed_at || null,
-      session_count: activeSessionCountByUser.get(user.id) || 0,
+      session_count: sessionSummary?.session_count || 0,
+      last_active_at: sessionSummary?.last_active_at || null,
+      device_labels: sessionSummary?.device_labels || [],
+      location_labels: sessionSummary?.location_labels || [],
       is_owner: owner,
     };
   });
@@ -199,6 +234,7 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
     if (authUserIds.has(profile.id)) continue;
     const shop = profile?.shop_id ? shopById.get(profile.shop_id) : null;
     const owner = isPlatformOwner(null, profile);
+    const sessionSummary = activeSessionSummaryByUser.get(profile.id);
     users.push({
       id: profile.id,
       full_name: profile.full_name || profile.email || 'Unknown User',
@@ -211,12 +247,23 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
       created_at: null,
       last_sign_in_at: null,
       email_confirmed_at: null,
-      session_count: activeSessionCountByUser.get(profile.id) || 0,
+      session_count: sessionSummary?.session_count || 0,
+      last_active_at: sessionSummary?.last_active_at || null,
+      device_labels: sessionSummary?.device_labels || [],
+      location_labels: sessionSummary?.location_labels || [],
       is_owner: owner,
     });
   }
 
   users.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+
+  const signedInUsers = users
+    .filter(user => (user.session_count || 0) > 0)
+    .sort((a, b) => {
+      const timeDiff = new Date(b.last_active_at || 0).getTime() - new Date(a.last_active_at || 0).getTime();
+      if (timeDiff !== 0) return timeDiff;
+      return String(a.full_name || a.email || '').localeCompare(String(b.full_name || b.email || ''));
+    });
 
   const shopUserStats = new Map<string, { total_users: number; active_users: number; inactive_users: number; admin_users: number }>();
   users.forEach(user => {
@@ -268,9 +315,11 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
       inactive_or_empty_shops: inactiveOrEmptyShops.length,
       paid_shops: paidShops.length,
       active_sessions: totalActiveSessions,
+      signed_in_users: signedInUsers.length,
       recent_signups: users.slice(0, 8),
     },
     users,
+    signed_in_users: signedInUsers,
     shops: shopRows,
     generated_at: new Date().toISOString(),
   };

@@ -266,6 +266,31 @@
             <div class="owner-feed" id="platformSnapshot"></div>
           </div>
         </section>
+
+        <section class="owner-panel">
+          <div class="owner-panel-head">
+            <div>
+              <div class="owner-panel-title">Currently Signed In Users</div>
+              <div class="owner-panel-sub">Accounts active in the app within the last 30 minutes.</div>
+            </div>
+          </div>
+          <div class="owner-table-wrap">
+            <table class="owner-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Role</th>
+                  <th>Shop</th>
+                  <th>Sessions</th>
+                  <th>Last Active</th>
+                  <th>Devices / Location</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="signedInUsersTableBody"></tbody>
+            </table>
+          </div>
+        </section>
       </section>
 
       <section class="owner-pane" id="ownerPaneUsers" data-owner-pane-section="users">
@@ -363,6 +388,7 @@
 <script>
 let ownerSummary = null;
 let ownerUsers = [];
+let ownerSignedInUsers = [];
 let ownerShops = [];
 let ownerGeneratedAt = null;
 
@@ -464,6 +490,7 @@ async function loadPlatformData(silent = false) {
     const data = await GS.getPlatformAdminOverview();
     ownerSummary = data.summary || null;
     ownerUsers = data.users || [];
+    ownerSignedInUsers = data.signed_in_users || [];
     ownerShops = data.shops || [];
     ownerGeneratedAt = data.generated_at || new Date().toISOString();
     renderOverview();
@@ -478,6 +505,7 @@ function renderOverview() {
   renderStats();
   renderRecentSignups();
   renderSnapshot();
+  renderSignedInUsers();
   renderUserTable();
   renderShopTable();
   const generatedEl = document.getElementById('generatedAt');
@@ -490,7 +518,7 @@ function renderStats() {
     ['Shop Admins', summary.total_shop_admins || 0, `${summary.total_shops || 0} total shops on the platform`],
     ['Active Shops', summary.active_shops || 0, `${summary.inactive_or_empty_shops || 0} inactive or empty shops`],
     ['Paid Shops', summary.paid_shops || 0, `${summary.starter_shops || 0} still on Starter`],
-    ['Staff Accounts', summary.total_staff_accounts || 0, `${summary.active_sessions || 0} sessions active in last 30 mins`],
+    ['Staff Accounts', summary.total_staff_accounts || 0, `${summary.signed_in_users || 0} users signed in now · ${summary.active_sessions || 0} sessions active in last 30 mins`],
   ];
   document.getElementById('ownerStats').innerHTML = cards.map(([label, value, sub]) => `
     <div class="owner-stat">
@@ -530,6 +558,7 @@ function renderSnapshot() {
     ['Active users', summary.active_users || 0],
     ['Inactive users', summary.inactive_users || 0],
     ['Owner accounts', summary.owner_users || 0],
+    ['Users signed in now', summary.signed_in_users || 0],
   ];
   document.getElementById('platformSnapshot').innerHTML = rows.map(([label, value]) => `
     <div class="owner-feed-item">
@@ -540,6 +569,41 @@ function renderSnapshot() {
       <div class="owner-feed-time">${escapeHtml(value)}</div>
     </div>
   `).join('');
+}
+
+function renderSignedInUsers() {
+  const tbody = document.getElementById('signedInUsersTableBody');
+  if (!ownerSignedInUsers.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="owner-empty">No active user sessions right now.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = ownerSignedInUsers.map(user => {
+    const deviceText = Array.isArray(user.device_labels) && user.device_labels.length
+      ? user.device_labels.join(', ')
+      : 'Unknown device';
+    const locationText = Array.isArray(user.location_labels) && user.location_labels.length
+      ? user.location_labels.join(', ')
+      : 'Unknown location';
+    const action = user.is_owner
+      ? '<span class="owner-protected">Owner protected</span>'
+      : `<button class="app-btn app-btn-ghost app-btn-xs" onclick="forcePlatformSignOut('${escapeHtml(user.id)}', this)">Force Sign Out</button>`;
+
+    return `
+      <tr>
+        <td>
+          <div class="owner-user-name">${escapeHtml(user.full_name || user.email || 'Unknown User')}</div>
+          <div class="owner-user-meta">${escapeHtml(user.email || 'No email')}<br>${escapeHtml(user.last_sign_in_at ? 'Signed in ' + fmtDateTime(user.last_sign_in_at) : 'Sign-in time unavailable')}</div>
+        </td>
+        <td>${escapeHtml(user.role || '—')}</td>
+        <td>${escapeHtml(user.shop_name || 'No shop linked')}</td>
+        <td>${escapeHtml(user.session_count || 0)}</td>
+        <td>${escapeHtml(user.last_active_at ? `${fmtRelative(user.last_active_at)} (${fmtDateTime(user.last_active_at)})` : '—')}</td>
+        <td><div class="owner-user-meta" style="margin-top:0">${escapeHtml(deviceText)}<br>${escapeHtml(locationText)}</div></td>
+        <td>${action}</td>
+      </tr>
+    `;
+  }).join('');
 }
 
 function getFilteredUsers() {
