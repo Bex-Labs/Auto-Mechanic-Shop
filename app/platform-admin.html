@@ -78,6 +78,18 @@
 .owner-kpi-sub {
   margin-top:7px; font-size:11px; color:var(--app-muted); line-height:1.5;
 }
+.owner-stack {
+  display:grid; gap:12px; padding:18px;
+}
+.owner-export-grid {
+  display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px;
+}
+.owner-field-grid {
+  display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px;
+}
+.owner-helper {
+  color:var(--app-muted); font-size:11px; line-height:1.6;
+}
 .owner-panels {
   display:grid; grid-template-columns:1.45fr 1fr; gap:16px;
 }
@@ -270,17 +282,19 @@
 @media (max-width: 1200px) {
   .owner-stat-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
   .owner-kpi-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .owner-export-grid { grid-template-columns:1fr 1fr; }
   .owner-panels { grid-template-columns:1fr; }
   .owner-metric-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
   .owner-detail-sections { grid-template-columns:1fr; }
 }
 @media (max-width: 900px) {
   .owner-toolbar { grid-template-columns:1fr 1fr; }
+  .owner-field-grid { grid-template-columns:1fr; }
   .owner-control-grid { grid-template-columns:1fr; }
 }
 @media (max-width: 640px) {
   .owner-title { font-size:24px; }
-  .owner-stat-grid, .owner-toolbar, .owner-kpi-grid { grid-template-columns:1fr; }
+  .owner-stat-grid, .owner-toolbar, .owner-kpi-grid, .owner-export-grid { grid-template-columns:1fr; }
   .owner-mobile-nav { display:grid; }
   .owner-metric-grid { grid-template-columns:1fr; }
 }
@@ -385,6 +399,67 @@
               </div>
             </div>
             <div class="owner-feed" id="riskAlerts"></div>
+          </div>
+        </section>
+
+        <section class="owner-panels">
+          <div class="owner-panel">
+            <div class="owner-panel-head">
+              <div>
+                <div class="owner-panel-title">Broadcast Notice Tool</div>
+                <div class="owner-panel-sub">Send an in-app platform notice to one shop or a whole audience at once.</div>
+              </div>
+            </div>
+            <div class="owner-stack">
+              <div class="owner-field-grid">
+                <div>
+                  <label class="app-label">Audience</label>
+                  <select class="app-input" id="broadcastAudience" onchange="syncBroadcastAudienceControls()">
+                    <option value="all_shops">All Shops</option>
+                    <option value="paid_shops">Paid Shops</option>
+                    <option value="starter_shops">Starter Shops</option>
+                    <option value="suspended_shops">Suspended Shops</option>
+                    <option value="single_shop">Single Shop</option>
+                  </select>
+                </div>
+                <div id="broadcastShopWrap" style="display:none">
+                  <label class="app-label">Target Shop</label>
+                  <select class="app-input" id="broadcastShopSelect"></select>
+                </div>
+              </div>
+              <div>
+                <label class="app-label">Notice Title</label>
+                <input class="app-input" id="broadcastTitle" maxlength="120" placeholder="Planned maintenance, billing reminder, feature release…">
+              </div>
+              <div>
+                <label class="app-label">Message</label>
+                <textarea class="app-input" id="broadcastBody" rows="5" placeholder="Write the notice that shops should see inside their app notifications."></textarea>
+              </div>
+              <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
+                <div class="owner-helper">Notices are sent as in-app notifications and will also appear in your owner audit log.</div>
+                <button class="app-btn app-btn-primary" onclick="sendOwnerBroadcast(this)">Send Notice</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="owner-panel">
+            <div class="owner-panel-head">
+              <div>
+                <div class="owner-panel-title">Export Center</div>
+                <div class="owner-panel-sub">Download owner-side CSVs for reporting, review, or offline analysis.</div>
+              </div>
+            </div>
+            <div class="owner-stack">
+              <div class="owner-export-grid">
+                <button class="app-btn app-btn-ghost" onclick="exportOwnerUsersCsv()">Export Users CSV</button>
+                <button class="app-btn app-btn-ghost" onclick="exportOwnerShopsCsv()">Export Shops CSV</button>
+                <button class="app-btn app-btn-ghost" onclick="exportSignedInUsersCsv()">Export Signed-In CSV</button>
+                <button class="app-btn app-btn-ghost" onclick="exportRecentRegistrationsCsv()">Export Recent Registrations CSV</button>
+                <button class="app-btn app-btn-ghost" onclick="exportRiskAlertsCsv()">Export Risk Watchlist CSV</button>
+                <button class="app-btn app-btn-ghost" onclick="exportOwnerAuditCsv()">Export Owner Audit Log CSV</button>
+              </div>
+              <div class="owner-helper">User and shop exports respect the current filters/search where applicable. Signed-in, risk, and audit exports use the live owner dashboard data now on screen.</div>
+            </div>
           </div>
         </section>
 
@@ -628,6 +703,34 @@ function getShopById(shopId) {
   return ownerShops.find(shop => String(shop.id) === String(shopId)) || null;
 }
 
+function csvEscape(value) {
+  const stringValue = value == null ? '' : String(value);
+  if (/[",\n]/.test(stringValue)) return `"${stringValue.replace(/"/g, '""')}"`;
+  return stringValue;
+}
+
+function downloadCsvFile(filename, rows, columns) {
+  const header = columns.map(col => csvEscape(col.label)).join(',');
+  const lines = rows.map(row => columns.map(col => {
+    const value = typeof col.fn === 'function' ? col.fn(row) : row[col.key];
+    return csvEscape(value);
+  }).join(','));
+  const csv = [header].concat(lines.length ? lines : ['(no data)']).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function ownerFileStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function setPlatformError(message) {
   const el = document.getElementById('platformAdminError');
   if (!el) return;
@@ -693,6 +796,7 @@ function renderOverview() {
   renderSnapshot();
   renderBillingGrowth();
   renderRiskAlerts();
+  renderBroadcastOptions();
   renderSignedInUsers();
   renderOwnerAuditLog();
   renderUserTable();
@@ -818,6 +922,167 @@ function renderRiskAlerts() {
       </div>
     `;
   }).join('');
+}
+
+function renderBroadcastOptions() {
+  const select = document.getElementById('broadcastShopSelect');
+  if (!select) return;
+  select.innerHTML = ownerShops.map(shop => `
+    <option value="${escapeHtml(shop.id)}">${escapeHtml(shop.name || 'Unnamed Shop')} · ${escapeHtml(planLabel(shop.plan))}</option>
+  `).join('');
+  syncBroadcastAudienceControls();
+}
+
+function syncBroadcastAudienceControls() {
+  const audienceEl = document.getElementById('broadcastAudience');
+  const wrap = document.getElementById('broadcastShopWrap');
+  if (!audienceEl || !wrap) return;
+  wrap.style.display = audienceEl.value === 'single_shop' ? '' : 'none';
+}
+
+async function sendOwnerBroadcast(buttonEl) {
+  const audienceEl = document.getElementById('broadcastAudience');
+  const shopEl = document.getElementById('broadcastShopSelect');
+  const titleEl = document.getElementById('broadcastTitle');
+  const bodyEl = document.getElementById('broadcastBody');
+  if (!audienceEl || !shopEl || !titleEl || !bodyEl) return;
+
+  const audience = audienceEl.value || 'all_shops';
+  const shopId = audience === 'single_shop' ? String(shopEl.value || '') : '';
+  const title = String(titleEl.value || '').trim();
+  const body = String(bodyEl.value || '').trim();
+  if (!title) {
+    Toast.show('Please enter a notice title', 'error');
+    titleEl.focus();
+    return;
+  }
+  if (!body) {
+    Toast.show('Please enter the notice message', 'error');
+    bodyEl.focus();
+    return;
+  }
+  if (audience === 'single_shop' && !shopId) {
+    Toast.show('Please choose the target shop', 'error');
+    shopEl.focus();
+    return;
+  }
+
+  const original = buttonEl?.textContent || 'Send Notice';
+  if (buttonEl) {
+    buttonEl.disabled = true;
+    buttonEl.textContent = 'Sending…';
+  }
+
+  try {
+    const result = await GS.sendPlatformBroadcast(audience, title, body, shopId);
+    Toast.show(`Notice sent to ${result?.delivered_shops || 0} shop${Number(result?.delivered_shops || 0) === 1 ? '' : 's'}`, 'success');
+    bodyEl.value = '';
+    titleEl.value = '';
+    await loadPlatformData(true);
+  } catch (err) {
+    Toast.show(err.message || 'Could not send platform notice', 'error');
+    if (buttonEl) {
+      buttonEl.disabled = false;
+      buttonEl.textContent = original;
+    }
+    return;
+  }
+
+  if (buttonEl) {
+    buttonEl.disabled = false;
+    buttonEl.textContent = original;
+  }
+}
+
+function exportOwnerUsersCsv() {
+  const rows = getFilteredUsers();
+  downloadCsvFile(`platform-users-${ownerFileStamp()}.csv`, rows, [
+    { label: 'Full Name', key: 'full_name' },
+    { label: 'Email', key: 'email' },
+    { label: 'Role', key: 'role' },
+    { label: 'Shop', key: 'shop_name' },
+    { label: 'Plan', fn: row => planLabel(row.plan) },
+    { label: 'Status', fn: row => row.is_owner ? 'Owner' : (row.active ? 'Active' : 'Inactive') },
+    { label: 'Session Count', key: 'session_count' },
+    { label: 'Last Active', fn: row => row.last_active_at ? fmtDateTime(row.last_active_at) : '' },
+    { label: 'Registered At', fn: row => row.created_at ? fmtDateTime(row.created_at) : '' },
+  ]);
+  Toast.show('Users CSV downloaded', 'success');
+}
+
+function exportOwnerShopsCsv() {
+  const rows = getFilteredShops();
+  downloadCsvFile(`platform-shops-${ownerFileStamp()}.csv`, rows, [
+    { label: 'Shop Name', key: 'name' },
+    { label: 'Shop ID', key: 'id' },
+    { label: 'Plan', fn: row => planLabel(row.plan) },
+    { label: 'Billing Cycle', fn: row => row.plan === 'pro' ? cycleLabel(row.plan_billing_cycle) : '' },
+    { label: 'Paid', fn: row => row.paid ? 'Yes' : 'No' },
+    { label: 'Suspended', fn: row => row.suspended ? 'Yes' : 'No' },
+    { label: 'Total Users', key: 'total_users' },
+    { label: 'Active Users', key: 'active_users' },
+    { label: 'Admin Users', key: 'admin_users' },
+    { label: 'Live Sessions', key: 'live_sessions' },
+    { label: 'Registered At', fn: row => row.created_at ? fmtDateTime(row.created_at) : '' },
+    { label: 'Plan Expires At', fn: row => row.plan_expires_at ? fmtDateTime(row.plan_expires_at) : '' },
+    { label: 'Last Activity', fn: row => row.last_activity_at ? fmtDateTime(row.last_activity_at) : '' },
+  ]);
+  Toast.show('Shops CSV downloaded', 'success');
+}
+
+function exportSignedInUsersCsv() {
+  downloadCsvFile(`platform-signed-in-users-${ownerFileStamp()}.csv`, ownerSignedInUsers, [
+    { label: 'Full Name', key: 'full_name' },
+    { label: 'Email', key: 'email' },
+    { label: 'Role', key: 'role' },
+    { label: 'Shop', key: 'shop_name' },
+    { label: 'Sessions', key: 'session_count' },
+    { label: 'Last Active', fn: row => row.last_active_at ? fmtDateTime(row.last_active_at) : '' },
+    { label: 'Devices', fn: row => (row.device_labels || []).join(' | ') },
+    { label: 'Locations', fn: row => (row.location_labels || []).join(' | ') },
+  ]);
+  Toast.show('Signed-in users CSV downloaded', 'success');
+}
+
+function exportRecentRegistrationsCsv() {
+  const rows = ownerUsers
+    .slice()
+    .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+    .slice(0, 50);
+  downloadCsvFile(`platform-recent-registrations-${ownerFileStamp()}.csv`, rows, [
+    { label: 'Registered At', fn: row => row.created_at ? fmtDateTime(row.created_at) : '' },
+    { label: 'Full Name', key: 'full_name' },
+    { label: 'Email', key: 'email' },
+    { label: 'Role', key: 'role' },
+    { label: 'Shop', key: 'shop_name' },
+    { label: 'Plan', fn: row => planLabel(row.plan) },
+    { label: 'Email Confirmed At', fn: row => row.email_confirmed_at ? fmtDateTime(row.email_confirmed_at) : '' },
+  ]);
+  Toast.show('Recent registrations CSV downloaded', 'success');
+}
+
+function exportRiskAlertsCsv() {
+  downloadCsvFile(`platform-risk-watchlist-${ownerFileStamp()}.csv`, ownerAlerts, [
+    { label: 'Severity', fn: row => String(row.severity || '').toUpperCase() },
+    { label: 'Alert Type', key: 'type' },
+    { label: 'Shop', key: 'shop_name' },
+    { label: 'Title', key: 'title' },
+    { label: 'Message', key: 'body' },
+  ]);
+  Toast.show('Risk watchlist CSV downloaded', 'success');
+}
+
+function exportOwnerAuditCsv() {
+  downloadCsvFile(`platform-owner-audit-${ownerFileStamp()}.csv`, ownerAuditRows, [
+    { label: 'Created At', fn: row => row.created_at ? fmtDateTime(row.created_at) : '' },
+    { label: 'Action', fn: row => row.action_label || row.action || '' },
+    { label: 'Actor', key: 'actor_name' },
+    { label: 'Target Type', key: 'target_type' },
+    { label: 'Target', fn: row => row.target_name || row.target_id || '' },
+    { label: 'Shop', key: 'shop_name' },
+    { label: 'Reason', key: 'reason' },
+  ]);
+  Toast.show('Owner audit CSV downloaded', 'success');
 }
 
 function renderOwnerAuditLog() {

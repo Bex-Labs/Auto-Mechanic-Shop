@@ -27,6 +27,7 @@ const PLATFORM_USER_REACTIVATE_ACTION = 'PLATFORM_USER_REACTIVATE';
 const PLATFORM_REVOKE_USER_SESSIONS_ACTION = 'PLATFORM_REVOKE_USER_SESSIONS';
 const SHOP_PLAN_UPDATE_ACTION = 'SHOP_PLAN_UPDATE';
 const SHOP_PLAN_EXTEND_ACTION = 'SHOP_PLAN_EXTEND';
+const PLATFORM_BROADCAST_ACTION = 'PLATFORM_BROADCAST';
 
 function json(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -252,6 +253,7 @@ function actionLabel(action: string) {
     case PLATFORM_REVOKE_USER_SESSIONS_ACTION: return 'Forced sign-out';
     case SHOP_PLAN_UPDATE_ACTION: return 'Updated shop plan';
     case SHOP_PLAN_EXTEND_ACTION: return 'Extended plan expiry';
+    case PLATFORM_BROADCAST_ACTION: return 'Sent platform notice';
     default: return action.replace(/_/g, ' ').toLowerCase();
   }
 }
@@ -893,6 +895,102 @@ async function extendShopPlan(adminClient: ReturnType<typeof createClient>, owne
   };
 }
 
+async function sendPlatformBroadcast(
+  adminClient: ReturnType<typeof createClient>,
+  ownerId: string,
+  audience: string,
+  title: string,
+  body: string,
+  shopId = '',
+) {
+  const noticeTitle = String(title || '').trim();
+  const noticeBody = String(body || '').trim();
+  if (!noticeTitle) throw new Error('Broadcast title is required.');
+  if (!noticeBody) throw new Error('Broadcast message is required.');
+
+  const [shopsRes, shopStatusLogsRes] = await Promise.all([
+    adminClient
+      .from('shops')
+      .select('id, name, plan, plan_billing_cycle, created_at, plan_expires_at')
+      .order('name'),
+    adminClient.from('audit_logs')
+      .select('record_id, changed_by, action, created_at, changes')
+      .eq('table_name', 'shops')
+      .in('action', [SHOP_SUSPEND_ACTION, SHOP_UNSUSPEND_ACTION])
+      .order('created_at', { ascending: false }),
+  ]);
+
+  if (shopsRes.error) throw new Error(shopsRes.error.message);
+  if (shopStatusLogsRes.error) throw new Error(shopStatusLogsRes.error.message);
+
+  const shops = shopsRes.data || [];
+  const suspensionByShopId = buildShopSuspensionMap(shopStatusLogsRes.data || []);
+  const normalizedAudience = String(audience || 'all_shops').trim().toLowerCase();
+
+  const targets = shops.filter(shop => {
+    const suspended = !!suspensionByShopId.get(String(shop.id))?.suspended;
+    switch (normalizedAudience) {
+      case 'single_shop':
+        return !!shopId && String(shop.id) === String(shopId);
+      case 'starter_shops':
+        return normalizePlan(shop.plan) === 'free';
+      case 'paid_shops':
+        return isActiveProShop(shop);
+      case 'suspended_shops':
+        return suspended;
+      case 'all_shops':
+      default:
+        return true;
+    }
+  });
+
+  if (!targets.length) throw new Error('No shops matched the selected notice audience.');
+
+  const rows = targets.map(shop => ({
+    shop_id: shop.id,
+    type: 'platform_notice',
+    title: noticeTitle,
+    body: noticeBody,
+    related_id: null,
+    related_type: 'platform_admin',
+    for_user_id: null,
+    read: false,
+  }));
+
+  const { error: insertError } = await adminClient.from('notifications').insert(rows);
+  if (insertError) throw new Error(insertError.message);
+
+  const audienceLabel = normalizedAudience === 'single_shop'
+    ? (targets[0]?.name || 'Selected shop')
+    : normalizedAudience === 'starter_shops'
+      ? 'Starter shops'
+      : normalizedAudience === 'paid_shops'
+        ? 'Paid shops'
+        : normalizedAudience === 'suspended_shops'
+          ? 'Suspended shops'
+          : 'All shops';
+
+  await logOwnerAction(adminClient, ownerId, PLATFORM_BROADCAST_ACTION, `broadcast:${Date.now()}`, {
+    target_type: 'broadcast',
+    target_id: normalizedAudience === 'single_shop' ? (targets[0]?.id || shopId || null) : normalizedAudience,
+    target_name: audienceLabel,
+    audience: normalizedAudience,
+    shop_id: normalizedAudience === 'single_shop' ? (targets[0]?.id || shopId || null) : null,
+    shop_name: normalizedAudience === 'single_shop' ? (targets[0]?.name || null) : null,
+    title: noticeTitle,
+    body: noticeBody,
+    delivered_shops: targets.length,
+  });
+
+  return {
+    success: true,
+    audience: normalizedAudience,
+    audience_label: audienceLabel,
+    delivered_shops: targets.length,
+    shop_ids: targets.map(shop => shop.id),
+  };
+}
+
 async function countRows(queryPromise: Promise<{ count: number | null; error: { message: string } | null }>) {
   const { count, error } = await queryPromise;
   if (error) throw new Error(error.message);
@@ -1209,6 +1307,17 @@ Deno.serve(async (req) => {
         user.id,
         shopId,
         positiveWholeNumber(body?.days),
+      ));
+    }
+
+    if (action === 'send_platform_broadcast') {
+      return json(await sendPlatformBroadcast(
+        adminClient,
+        user.id,
+        String(body?.audience || 'all_shops'),
+        String(body?.title || ''),
+        String(body?.body || ''),
+        String(body?.shop_id || '').trim(),
       ));
     }
 

@@ -2532,6 +2532,15 @@ const GS = (() => {
     });
   }
 
+  async function sendPlatformBroadcast(audience, title, body, shopId = '') {
+    return _invokePlatformAdmin('send_platform_broadcast', {
+      audience: String(audience || 'all_shops'),
+      title: String(title || ''),
+      body: String(body || ''),
+      shop_id: String(shopId || ''),
+    });
+  }
+
   /* ---------------------------------------------------------------
      PUBLIC API
      --------------------------------------------------------------- */
@@ -2554,7 +2563,7 @@ const GS = (() => {
     getShopActivity, logPageView, logActivity,
     getSettings, updateSettings, resetDemoData,
     getPlatformAdminOverview, getPlatformAdminShopDetail, setPlatformUserActive, revokePlatformUserSessions, setPlatformShopSuspended,
-    setPlatformShopPlan, extendPlatformShopPlan,
+    setPlatformShopPlan, extendPlatformShopPlan, sendPlatformBroadcast,
   };
 })();
 
