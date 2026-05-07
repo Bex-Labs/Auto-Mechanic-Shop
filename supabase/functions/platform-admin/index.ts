@@ -948,7 +948,7 @@ async function sendPlatformBroadcast(
 
   const rows = targets.map(shop => ({
     shop_id: shop.id,
-    type: 'platform_notice',
+    type: 'system',
     title: noticeTitle,
     body: noticeBody,
     related_id: null,

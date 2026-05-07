@@ -26,6 +26,7 @@
 .notif-icon-wrap.po_update   { background:rgba(139,92,246,0.15); }
 .notif-icon-wrap.payment     { background:rgba(232,160,32,0.15); }
 .notif-icon-wrap.appointment { background:rgba(31,122,74,0.15); }
+.notif-icon-wrap.system      { background:rgba(201,75,30,0.15); }
 .notif-content { flex:1; min-width:0; }
 .notif-title { font-size:13px; font-weight:600; color:var(--app-text); margin-bottom:4px; }
 .notif-row.unread .notif-title { color:var(--white); }
@@ -107,6 +108,7 @@
         <div class="filter-pill"        data-filter="po_update"   onclick="filterNotifs('po_update',this)">🚚 Supply Chain</div>
         <div class="filter-pill"        data-filter="payment"     onclick="filterNotifs('payment',this)">💰 Payments</div>
         <div class="filter-pill"        data-filter="appointment" onclick="filterNotifs('appointment',this)">🗓️ Appointments</div>
+        <div class="filter-pill"        data-filter="system"      onclick="filterNotifs('system',this)">📣 System</div>
       </div>
 
       <!-- NOTIFICATION LIST -->
@@ -156,6 +158,7 @@ const NOTIF_ICONS = {
   po_update:   '🚚',
   payment:     '💰',
   appointment: '🗓️',
+  system:      '📣',
 };
 
 function timeAgo(iso) {
@@ -171,8 +174,8 @@ function timeAgo(iso) {
 }
 
 function renderSummary() {
-  const types = ['low_stock','wo_update','po_update','payment','appointment'];
-  const labels = { low_stock:'Low Stock', wo_update:'Work Orders', po_update:'Supply Chain', payment:'Payments', appointment:'Appointments' };
+  const types = ['low_stock','wo_update','po_update','payment','appointment','system'];
+  const labels = { low_stock:'Low Stock', wo_update:'Work Orders', po_update:'Supply Chain', payment:'Payments', appointment:'Appointments', system:'System' };
   const total   = notifData.length;
   const unread  = notifData.filter(n => !n.read).length;
 
