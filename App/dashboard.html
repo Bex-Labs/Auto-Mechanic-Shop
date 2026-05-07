@@ -470,6 +470,9 @@ function showLogin() {
   if (notice === 'timeout') {
     err.textContent = 'You were signed out after 30 minutes of inactivity. Please sign in again.';
     err.style.display = 'block';
+  } else if (notice === 'shop_suspended') {
+    err.textContent = 'This shop has been suspended by the platform owner. Contact support to restore access.';
+    err.style.display = 'block';
   } else {
     err.style.display = 'none';
   }
@@ -483,6 +486,10 @@ function showRegister() {
 
 async function showApp(session) {
   const profile = await RBAC.getCurrentUser();
+  if (!profile) {
+    showLogin();
+    return;
+  }
   if (RBAC.isPlatformOwner(profile)) {
     window.location.href = 'platform-admin.html';
     return;

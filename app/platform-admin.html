@@ -145,6 +145,12 @@
 .owner-badge-owner {
   background:rgba(167,139,250,0.12); color:#c4b5fd; border-color:rgba(167,139,250,0.24);
 }
+.owner-badge-suspended {
+  background:rgba(239,68,68,0.12); color:#fca5a5; border-color:rgba(239,68,68,0.28);
+}
+.owner-badge-live {
+  background:rgba(34,197,94,0.12); color:#4ade80; border-color:rgba(34,197,94,0.24);
+}
 .owner-muted {
   color:var(--app-muted);
 }
@@ -173,9 +179,61 @@
   color:var(--amber); border-color:rgba(232,160,32,0.35);
   background:rgba(232,160,32,0.08);
 }
+.owner-detail-grid {
+  display:grid; gap:18px;
+}
+.owner-detail-top {
+  display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
+}
+.owner-detail-title {
+  font-size:22px; color:var(--app-text); font-family:var(--ff-display); letter-spacing:.06em;
+}
+.owner-detail-sub {
+  margin-top:8px; color:var(--app-muted); font-size:13px; line-height:1.7;
+}
+.owner-note {
+  padding:14px 16px; border-radius:var(--r-sm);
+  border:1px solid rgba(239,68,68,0.28); background:rgba(239,68,68,0.08);
+  color:#fecaca; font-size:13px; line-height:1.6;
+}
+.owner-metric-grid {
+  display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px;
+}
+.owner-metric-card {
+  border:1px solid var(--app-border); border-radius:var(--r-sm);
+  padding:14px; background:rgba(255,255,255,0.02);
+}
+.owner-metric-label {
+  font-size:10px; color:var(--app-muted); font-family:var(--ff-mono); letter-spacing:.12em; text-transform:uppercase;
+}
+.owner-metric-value {
+  margin-top:8px; font-size:24px; font-weight:800; color:var(--app-text);
+}
+.owner-detail-sections {
+  display:grid; grid-template-columns:1.1fr .9fr; gap:16px;
+}
+.owner-detail-section {
+  border:1px solid var(--app-border); border-radius:var(--r-sm);
+  padding:16px; background:rgba(255,255,255,0.02);
+}
+.owner-detail-section h4 {
+  margin:0; font-size:13px; color:var(--app-text); font-family:var(--ff-display); letter-spacing:.08em; text-transform:uppercase;
+}
+.owner-detail-list {
+  display:flex; flex-direction:column; gap:12px; margin-top:14px;
+}
+.owner-detail-list-item {
+  display:flex; justify-content:space-between; gap:12px; padding-bottom:12px;
+  border-bottom:1px solid rgba(48,54,61,0.42);
+}
+.owner-detail-list-item:last-child {
+  padding-bottom:0; border-bottom:none;
+}
 @media (max-width: 1200px) {
   .owner-stat-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
   .owner-panels { grid-template-columns:1fr; }
+  .owner-metric-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .owner-detail-sections { grid-template-columns:1fr; }
 }
 @media (max-width: 900px) {
   .owner-toolbar { grid-template-columns:1fr 1fr; }
@@ -184,6 +242,7 @@
   .owner-title { font-size:24px; }
   .owner-stat-grid, .owner-toolbar { grid-template-columns:1fr; }
   .owner-mobile-nav { display:grid; }
+  .owner-metric-grid { grid-template-columns:1fr; }
 }
 </style>
 </head>
@@ -291,6 +350,16 @@
             </table>
           </div>
         </section>
+
+        <section class="owner-panel">
+          <div class="owner-panel-head">
+            <div>
+              <div class="owner-panel-title">Owner Audit Log</div>
+              <div class="owner-panel-sub">Recent platform-wide control actions taken from this owner dashboard.</div>
+            </div>
+          </div>
+          <div class="owner-feed" id="ownerAuditLog"></div>
+        </section>
       </section>
 
       <section class="owner-pane" id="ownerPaneUsers" data-owner-pane-section="users">
@@ -361,12 +430,14 @@
               <tr>
                 <th>Shop</th>
                 <th>Plan</th>
+                <th>Status</th>
                 <th>Total Users</th>
                 <th>Active Users</th>
                 <th>Inactive Users</th>
                 <th>Admins</th>
                 <th>Registered</th>
                 <th>Plan Expires</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="ownerShopTableBody"></tbody>
@@ -380,6 +451,17 @@
 
 <div class="toast-container" id="toastContainer"></div>
 
+<div class="modal-backdrop" id="shopDetailModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="shopDetailTitle">Shop Detail</span>
+      <button class="modal-close" onclick="Modal.close('shopDetailModal')">✕</button>
+    </div>
+    <div class="modal-body" id="shopDetailBody"></div>
+    <div class="modal-footer" id="shopDetailFooter"></div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../js/theme.js"></script>
 <script src="../js/main.js"></script>
@@ -389,8 +471,10 @@
 let ownerSummary = null;
 let ownerUsers = [];
 let ownerSignedInUsers = [];
+let ownerAuditRows = [];
 let ownerShops = [];
 let ownerGeneratedAt = null;
+let ownerShopDetail = null;
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({
@@ -445,6 +529,10 @@ function statusBadge(active, isOwner) {
   return `<span class="owner-badge ${active ? 'owner-badge-active' : 'owner-badge-inactive'}">${active ? 'Active' : 'Inactive'}</span>`;
 }
 
+function shopStatusBadge(suspended) {
+  return `<span class="owner-badge ${suspended ? 'owner-badge-suspended' : 'owner-badge-live'}">${suspended ? 'Suspended' : 'Live'}</span>`;
+}
+
 function setPlatformError(message) {
   const el = document.getElementById('platformAdminError');
   if (!el) return;
@@ -491,6 +579,7 @@ async function loadPlatformData(silent = false) {
     ownerSummary = data.summary || null;
     ownerUsers = data.users || [];
     ownerSignedInUsers = data.signed_in_users || [];
+    ownerAuditRows = data.owner_audit_log || [];
     ownerShops = data.shops || [];
     ownerGeneratedAt = data.generated_at || new Date().toISOString();
     renderOverview();
@@ -506,6 +595,7 @@ function renderOverview() {
   renderRecentSignups();
   renderSnapshot();
   renderSignedInUsers();
+  renderOwnerAuditLog();
   renderUserTable();
   renderShopTable();
   const generatedEl = document.getElementById('generatedAt');
@@ -516,7 +606,7 @@ function renderStats() {
   const summary = ownerSummary || {};
   const cards = [
     ['Shop Admins', summary.total_shop_admins || 0, `${summary.total_shops || 0} total shops on the platform`],
-    ['Active Shops', summary.active_shops || 0, `${summary.inactive_or_empty_shops || 0} inactive or empty shops`],
+    ['Active Shops', summary.active_shops || 0, `${summary.suspended_shops || 0} suspended shops right now`],
     ['Paid Shops', summary.paid_shops || 0, `${summary.starter_shops || 0} still on Starter`],
     ['Staff Accounts', summary.total_staff_accounts || 0, `${summary.signed_in_users || 0} users signed in now · ${summary.active_sessions || 0} sessions active in last 30 mins`],
   ];
@@ -559,6 +649,7 @@ function renderSnapshot() {
     ['Inactive users', summary.inactive_users || 0],
     ['Owner accounts', summary.owner_users || 0],
     ['Users signed in now', summary.signed_in_users || 0],
+    ['Suspended shops', summary.suspended_shops || 0],
   ];
   document.getElementById('platformSnapshot').innerHTML = rows.map(([label, value]) => `
     <div class="owner-feed-item">
@@ -567,6 +658,27 @@ function renderSnapshot() {
         <div class="owner-feed-meta">Platform-wide count</div>
       </div>
       <div class="owner-feed-time">${escapeHtml(value)}</div>
+    </div>
+  `).join('');
+}
+
+function renderOwnerAuditLog() {
+  const root = document.getElementById('ownerAuditLog');
+  if (!ownerAuditRows.length) {
+    root.innerHTML = '<div class="owner-empty">No owner actions recorded yet.</div>';
+    return;
+  }
+
+  root.innerHTML = ownerAuditRows.map(row => `
+    <div class="owner-feed-item">
+      <div>
+        <div class="owner-feed-name">${escapeHtml(row.action_label || row.action || 'Owner action')}</div>
+        <div class="owner-feed-meta">
+          ${escapeHtml(row.actor_name || 'Platform Owner')} · ${escapeHtml(row.target_name || row.target_id || 'Unknown target')}<br>
+          ${escapeHtml(row.shop_name || (row.target_type === 'shop' ? 'Platform shop' : 'Platform user'))}${row.reason ? `<br>Reason: ${escapeHtml(row.reason)}` : ''}
+        </div>
+      </div>
+      <div class="owner-feed-time">${escapeHtml(fmtRelative(row.created_at))}</div>
     </div>
   `).join('');
 }
@@ -669,7 +781,7 @@ function renderUserTable() {
 function renderShopTable() {
   const tbody = document.getElementById('ownerShopTableBody');
   if (!ownerShops.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="owner-empty">No shops registered yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="owner-empty">No shops registered yet.</td></tr>';
     return;
   }
 
@@ -680,14 +792,199 @@ function renderShopTable() {
         <div class="owner-user-meta">${escapeHtml(shop.id || '')}</div>
       </td>
       <td>${planBadge(shop.plan)}</td>
+      <td>${shopStatusBadge(!!shop.suspended)}</td>
       <td>${escapeHtml(shop.total_users || 0)}</td>
       <td>${escapeHtml(shop.active_users || 0)}</td>
       <td>${escapeHtml(shop.inactive_users || 0)}</td>
       <td>${escapeHtml(shop.admin_users || 0)}</td>
       <td>${escapeHtml(fmtDate(shop.created_at))}</td>
       <td>${escapeHtml(shop.plan_expires_at ? fmtDate(shop.plan_expires_at) : '—')}</td>
+      <td>
+        <div class="owner-actions">
+          <button class="app-btn app-btn-ghost app-btn-xs" onclick="openShopDetail('${escapeHtml(shop.id)}')">View</button>
+          ${shop.suspended
+            ? `<button class="app-btn app-btn-primary app-btn-xs" onclick="togglePlatformShopSuspended('${escapeHtml(shop.id)}', false, this)">Unsuspend</button>`
+            : `<button class="app-btn app-btn-danger app-btn-xs" onclick="togglePlatformShopSuspended('${escapeHtml(shop.id)}', true, this)">Suspend</button>`}
+        </div>
+      </td>
     </tr>
   `).join('');
+}
+
+function humanizeAction(action) {
+  const value = String(action || '').replace(/_/g, ' ').toLowerCase();
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : 'Activity';
+}
+
+function renderShopDetail() {
+  const detail = ownerShopDetail;
+  const body = document.getElementById('shopDetailBody');
+  const footer = document.getElementById('shopDetailFooter');
+  const title = document.getElementById('shopDetailTitle');
+  if (!detail?.shop) {
+    body.innerHTML = '<div class="owner-empty">No shop detail available.</div>';
+    footer.innerHTML = '<button class="app-btn app-btn-ghost" onclick="Modal.close(\'shopDetailModal\')">Close</button>';
+    title.textContent = 'Shop Detail';
+    return;
+  }
+
+  const shop = detail.shop;
+  const metrics = detail.metrics || {};
+  const staff = detail.staff || [];
+  const liveUsers = staff.filter(member => (member.session_count || 0) > 0);
+  const recentActivity = detail.recent_activity || [];
+  const recentOwnerActions = detail.recent_owner_actions || [];
+
+  title.textContent = `${shop.name || 'Shop Detail'} Overview`;
+  body.innerHTML = `
+    <div class="owner-detail-grid">
+      <div class="owner-detail-top">
+        <div>
+          <div class="owner-detail-title">${escapeHtml(shop.name || 'Unnamed Shop')}</div>
+          <div class="owner-detail-sub">
+            ${planBadge(shop.plan)} ${shopStatusBadge(!!shop.suspended)}<br>
+            Registered ${escapeHtml(fmtDate(shop.created_at))} · Plan expires ${escapeHtml(shop.plan_expires_at ? fmtDate(shop.plan_expires_at) : '—')}<br>
+            ${escapeHtml(shop.email || 'No email')} · ${escapeHtml(shop.phone || 'No phone')}
+          </div>
+        </div>
+      </div>
+      ${shop.suspended ? `<div class="owner-note">This shop is currently suspended.${shop.suspension_reason ? ` Reason: ${escapeHtml(shop.suspension_reason)}` : ''}</div>` : ''}
+      <div class="owner-metric-grid">
+        <div class="owner-metric-card"><div class="owner-metric-label">Staff Accounts</div><div class="owner-metric-value">${escapeHtml(metrics.staff_accounts || 0)}</div></div>
+        <div class="owner-metric-card"><div class="owner-metric-label">Signed In Now</div><div class="owner-metric-value">${escapeHtml(metrics.signed_in_users || 0)}</div></div>
+        <div class="owner-metric-card"><div class="owner-metric-label">Customers</div><div class="owner-metric-value">${escapeHtml(metrics.customers || 0)}</div></div>
+        <div class="owner-metric-card"><div class="owner-metric-label">Work Orders</div><div class="owner-metric-value">${escapeHtml(metrics.work_orders || 0)}</div></div>
+        <div class="owner-metric-card"><div class="owner-metric-label">Invoices</div><div class="owner-metric-value">${escapeHtml(metrics.invoices || 0)}</div></div>
+        <div class="owner-metric-card"><div class="owner-metric-label">Appointments</div><div class="owner-metric-value">${escapeHtml(metrics.appointments || 0)}</div></div>
+        <div class="owner-metric-card"><div class="owner-metric-label">Inventory Items</div><div class="owner-metric-value">${escapeHtml(metrics.inventory_items || 0)}</div></div>
+        <div class="owner-metric-card"><div class="owner-metric-label">Unread Notifications</div><div class="owner-metric-value">${escapeHtml(metrics.unread_notifications || 0)}</div></div>
+      </div>
+      <div class="owner-detail-sections">
+        <section class="owner-detail-section">
+          <h4>Team</h4>
+          <div class="owner-detail-list">
+            ${staff.length ? staff.map(member => `
+              <div class="owner-detail-list-item">
+                <div>
+                  <div class="owner-user-name">${escapeHtml(member.full_name || member.email || 'Unknown User')}</div>
+                  <div class="owner-user-meta">${escapeHtml(member.email || 'No email')}<br>${escapeHtml(member.role || '—')}</div>
+                </div>
+                <div style="text-align:right">
+                  ${statusBadge(!!member.active, false)}
+                  <div class="owner-user-meta">${escapeHtml(member.last_sign_in_at ? `Last sign in ${fmtRelative(member.last_sign_in_at)}` : 'No sign-in yet')}</div>
+                </div>
+              </div>
+            `).join('') : '<div class="owner-empty">No staff linked to this shop yet.</div>'}
+          </div>
+        </section>
+        <section class="owner-detail-section">
+          <h4>Signed In Now</h4>
+          <div class="owner-detail-list">
+            ${liveUsers.length ? liveUsers.map(member => `
+              <div class="owner-detail-list-item">
+                <div>
+                  <div class="owner-user-name">${escapeHtml(member.full_name || member.email || 'Unknown User')}</div>
+                  <div class="owner-user-meta">${escapeHtml(member.role || '—')} · ${escapeHtml(member.session_count || 0)} session(s)</div>
+                </div>
+                <div class="owner-feed-time">${escapeHtml(member.last_active_at ? fmtRelative(member.last_active_at) : '—')}</div>
+              </div>
+            `).join('') : '<div class="owner-empty">No active user sessions for this shop right now.</div>'}
+          </div>
+        </section>
+        <section class="owner-detail-section">
+          <h4>Recent Shop Activity</h4>
+          <div class="owner-detail-list">
+            ${recentActivity.length ? recentActivity.map(item => `
+              <div class="owner-detail-list-item">
+                <div>
+                  <div class="owner-user-name">${escapeHtml(humanizeAction(item.action))}</div>
+                  <div class="owner-user-meta">${escapeHtml(item.actor_name || 'Unknown User')} · ${escapeHtml(String(item.table_name || '').replace(/_/g, ' '))}</div>
+                </div>
+                <div class="owner-feed-time">${escapeHtml(fmtRelative(item.created_at))}</div>
+              </div>
+            `).join('') : '<div class="owner-empty">No recent staff activity recorded for this shop.</div>'}
+          </div>
+        </section>
+        <section class="owner-detail-section">
+          <h4>Owner Actions</h4>
+          <div class="owner-detail-list">
+            ${recentOwnerActions.length ? recentOwnerActions.map(item => `
+              <div class="owner-detail-list-item">
+                <div>
+                  <div class="owner-user-name">${escapeHtml(item.action_label || humanizeAction(item.action))}</div>
+                  <div class="owner-user-meta">${escapeHtml(item.actor_name || 'Platform Owner')}${item.reason ? `<br>Reason: ${escapeHtml(item.reason)}` : ''}</div>
+                </div>
+                <div class="owner-feed-time">${escapeHtml(fmtRelative(item.created_at))}</div>
+              </div>
+            `).join('') : '<div class="owner-empty">No owner actions recorded for this shop yet.</div>'}
+          </div>
+        </section>
+      </div>
+    </div>
+  `;
+
+  footer.innerHTML = `
+    <button class="app-btn app-btn-ghost" onclick="Modal.close('shopDetailModal')">Close</button>
+    <button class="app-btn app-btn-ghost" onclick="openShopDetail('${escapeHtml(shop.id)}')">Refresh Detail</button>
+    ${shop.suspended
+      ? `<button class="app-btn app-btn-primary" onclick="togglePlatformShopSuspended('${escapeHtml(shop.id)}', false, this)">Unsuspend Shop</button>`
+      : `<button class="app-btn app-btn-danger" onclick="togglePlatformShopSuspended('${escapeHtml(shop.id)}', true, this)">Suspend Shop</button>`}
+  `;
+}
+
+async function openShopDetail(shopId) {
+  ownerShopDetail = null;
+  document.getElementById('shopDetailTitle').textContent = 'Shop Detail';
+  document.getElementById('shopDetailBody').innerHTML = '<div class="owner-empty">Loading shop detail…</div>';
+  document.getElementById('shopDetailFooter').innerHTML = '<button class="app-btn app-btn-ghost" onclick="Modal.close(\'shopDetailModal\')">Close</button>';
+  Modal.open('shopDetailModal');
+  try {
+    ownerShopDetail = await GS.getPlatformAdminShopDetail(shopId);
+    renderShopDetail();
+  } catch (err) {
+    document.getElementById('shopDetailBody').innerHTML = `<div class="owner-empty">${escapeHtml(err.message || 'Could not load shop detail.')}</div>`;
+  }
+}
+
+async function togglePlatformShopSuspended(shopId, suspended, buttonEl) {
+  const original = buttonEl?.textContent || (suspended ? 'Suspend Shop' : 'Unsuspend Shop');
+  let reason = '';
+  if (suspended) {
+    const response = window.prompt('Optional reason for suspending this shop:', ownerShopDetail?.shop?.id === shopId ? (ownerShopDetail.shop.suspension_reason || '') : '');
+    if (response === null) return;
+    reason = response.trim();
+  }
+
+  if (buttonEl) {
+    buttonEl.disabled = true;
+    buttonEl.textContent = suspended ? 'Suspending…' : 'Unsuspending…';
+  }
+
+  try {
+    const result = await GS.setPlatformShopSuspended(shopId, suspended, reason);
+    Toast.show(
+      suspended
+        ? `Shop suspended${result?.revoked_sessions ? ` and ${result.revoked_sessions} active session${result.revoked_sessions === 1 ? '' : 's'} revoked` : ''}`
+        : 'Shop unsuspended successfully',
+      'success'
+    );
+    await loadPlatformData(true);
+    if (document.getElementById('shopDetailModal')?.classList.contains('open')) {
+      await openShopDetail(shopId);
+    }
+  } catch (err) {
+    Toast.show(err.message || 'Could not update shop status', 'error');
+    if (buttonEl) {
+      buttonEl.disabled = false;
+      buttonEl.textContent = original;
+    }
+    return;
+  }
+
+  if (buttonEl) {
+    buttonEl.disabled = false;
+    buttonEl.textContent = original;
+  }
 }
 
 function resetOwnerFilters() {

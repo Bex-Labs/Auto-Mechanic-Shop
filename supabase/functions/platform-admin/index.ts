@@ -7,9 +7,15 @@ const corsHeaders = {
 };
 
 const SESSION_TABLE = 'auth_sessions';
+const PLATFORM_AUDIT_TABLE = 'platform_admin';
 const ACTION_REVOKE = 'SESSION_REVOKE';
 const ACTIVE_ACTIONS = new Set(['SESSION_START', 'SESSION_HEARTBEAT', 'SESSION_END']);
 const ACTIVE_SESSION_WINDOW_MS = 35 * 60 * 1000;
+const SHOP_SUSPEND_ACTION = 'SHOP_SUSPEND';
+const SHOP_UNSUSPEND_ACTION = 'SHOP_UNSUSPEND';
+const PLATFORM_USER_DEACTIVATE_ACTION = 'PLATFORM_USER_DEACTIVATE';
+const PLATFORM_USER_REACTIVATE_ACTION = 'PLATFORM_USER_REACTIVATE';
+const PLATFORM_REVOKE_USER_SESSIONS_ACTION = 'PLATFORM_REVOKE_USER_SESSIONS';
 
 function json(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -97,7 +103,12 @@ type ActiveSessionSummary = {
   location_labels: string[];
 };
 
-function buildSessionStates(rows: Array<Record<string, unknown>>) {
+type EnrichedSessionState = SessionState & {
+  status: string;
+  active: boolean;
+};
+
+function buildSessionStates(rows: Array<Record<string, unknown>>): EnrichedSessionState[] {
   const sessionMap = new Map<string, SessionState>();
   const now = Date.now();
 
@@ -155,30 +166,12 @@ function buildSessionStates(rows: Array<Record<string, unknown>>) {
   });
 }
 
-async function getOverview(adminClient: ReturnType<typeof createClient>) {
-  const [authUsers, profilesRes, shopsRes, sessionLogsRes] = await Promise.all([
-    listAllAuthUsers(adminClient),
-    adminClient.from('profiles').select('id, full_name, role, email, shop_id, active'),
-    adminClient.from('shops').select('id, name, plan, created_at, plan_expires_at').order('created_at', { ascending: false }),
-    adminClient.from('audit_logs').select('record_id, changed_by, action, created_at, changes').eq('table_name', SESSION_TABLE).order('created_at', { ascending: false }),
-  ]);
+function buildActiveSessionSummaryByUser(sessionStates: EnrichedSessionState[]) {
+  const summaryByUser = new Map<string, ActiveSessionSummary>();
 
-  if (profilesRes.error) throw new Error(profilesRes.error.message);
-  if (shopsRes.error) throw new Error(shopsRes.error.message);
-  if (sessionLogsRes.error) throw new Error(sessionLogsRes.error.message);
-
-  const profiles = profilesRes.data || [];
-  const shops = shopsRes.data || [];
-  const sessionStates = buildSessionStates(sessionLogsRes.data || []);
-
-  const profileById = new Map(profiles.map(profile => [profile.id, profile]));
-  const shopById = new Map(shops.map(shop => [shop.id, shop]));
-  const authUserIds = new Set(authUsers.map(user => user.id));
-
-  const activeSessionSummaryByUser = new Map<string, ActiveSessionSummary>();
   sessionStates.forEach(session => {
     if (!session.active || !session.userId) return;
-    const current = activeSessionSummaryByUser.get(session.userId) || {
+    const current = summaryByUser.get(session.userId) || {
       session_count: 0,
       last_active_at: null,
       device_labels: [],
@@ -202,8 +195,87 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
       current.location_labels.push(session.locationLabel);
     }
 
-    activeSessionSummaryByUser.set(session.userId, current);
+    summaryByUser.set(session.userId, current);
   });
+
+  return summaryByUser;
+}
+
+function buildShopSuspensionMap(rows: Array<Record<string, unknown>>) {
+  const latestByShop = new Map<string, {
+    suspended: boolean;
+    action: string | null;
+    updated_at: string | null;
+    changed_by: string | null;
+    reason: string | null;
+  }>();
+
+  for (const row of rows || []) {
+    const shopId = String(row.record_id || '').trim();
+    if (!shopId || latestByShop.has(shopId)) continue;
+    const changes = parseChanges(row.changes) as Record<string, unknown>;
+    latestByShop.set(shopId, {
+      suspended: String(row.action || '') === SHOP_SUSPEND_ACTION,
+      action: row.action ? String(row.action) : null,
+      updated_at: row.created_at ? String(row.created_at) : null,
+      changed_by: row.changed_by ? String(row.changed_by) : null,
+      reason: changes?.reason ? String(changes.reason) : null,
+    });
+  }
+
+  return latestByShop;
+}
+
+async function insertAuditRows(adminClient: ReturnType<typeof createClient>, rows: Array<Record<string, unknown>>) {
+  if (!rows.length) return;
+  const { error } = await adminClient.from('audit_logs').insert(rows);
+  if (error) throw new Error(error.message);
+}
+
+function actionLabel(action: string) {
+  switch (action) {
+    case SHOP_SUSPEND_ACTION: return 'Suspended shop';
+    case SHOP_UNSUSPEND_ACTION: return 'Unsuspended shop';
+    case PLATFORM_USER_DEACTIVATE_ACTION: return 'Deactivated user';
+    case PLATFORM_USER_REACTIVATE_ACTION: return 'Reactivated user';
+    case PLATFORM_REVOKE_USER_SESSIONS_ACTION: return 'Forced sign-out';
+    default: return action.replace(/_/g, ' ').toLowerCase();
+  }
+}
+
+async function getOverview(adminClient: ReturnType<typeof createClient>) {
+  const [authUsers, profilesRes, shopsRes, sessionLogsRes, shopStatusLogsRes, ownerAuditLogsRes] = await Promise.all([
+    listAllAuthUsers(adminClient),
+    adminClient.from('profiles').select('id, full_name, role, email, shop_id, active'),
+    adminClient.from('shops').select('id, name, plan, created_at, plan_expires_at').order('created_at', { ascending: false }),
+    adminClient.from('audit_logs').select('record_id, changed_by, action, created_at, changes').eq('table_name', SESSION_TABLE).order('created_at', { ascending: false }),
+    adminClient.from('audit_logs')
+      .select('record_id, changed_by, action, created_at, changes')
+      .eq('table_name', 'shops')
+      .in('action', [SHOP_SUSPEND_ACTION, SHOP_UNSUSPEND_ACTION])
+      .order('created_at', { ascending: false }),
+    adminClient.from('audit_logs')
+      .select('id, record_id, changed_by, action, created_at, changes')
+      .eq('table_name', PLATFORM_AUDIT_TABLE)
+      .order('created_at', { ascending: false })
+      .limit(12),
+  ]);
+
+  if (profilesRes.error) throw new Error(profilesRes.error.message);
+  if (shopsRes.error) throw new Error(shopsRes.error.message);
+  if (sessionLogsRes.error) throw new Error(sessionLogsRes.error.message);
+  if (shopStatusLogsRes.error) throw new Error(shopStatusLogsRes.error.message);
+  if (ownerAuditLogsRes.error) throw new Error(ownerAuditLogsRes.error.message);
+
+  const profiles = profilesRes.data || [];
+  const shops = shopsRes.data || [];
+  const sessionStates = buildSessionStates(sessionLogsRes.data || []);
+  const activeSessionSummaryByUser = buildActiveSessionSummaryByUser(sessionStates);
+  const suspensionByShopId = buildShopSuspensionMap(shopStatusLogsRes.data || []);
+
+  const profileById = new Map(profiles.map(profile => [profile.id, profile]));
+  const shopById = new Map(shops.map(shop => [shop.id, shop]));
+  const authUserIds = new Set(authUsers.map(user => user.id));
 
   const users = authUsers.map(user => {
     const profile = profileById.get(user.id) || null;
@@ -256,6 +328,7 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
   }
 
   users.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  const userNameById = new Map(users.map(user => [user.id, user.full_name || user.email || 'Unknown User']));
 
   const signedInUsers = users
     .filter(user => (user.session_count || 0) > 0)
@@ -276,29 +349,68 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
     shopUserStats.set(user.shop_id, current);
   });
 
-  const shopRows = shops.map(shop => ({
-    id: shop.id,
-    name: shop.name || 'Unnamed Shop',
-    plan: shop.plan || 'free',
-    created_at: shop.created_at || null,
-    plan_expires_at: shop.plan_expires_at || null,
-    total_users: shopUserStats.get(shop.id)?.total_users || 0,
-    active_users: shopUserStats.get(shop.id)?.active_users || 0,
-    inactive_users: shopUserStats.get(shop.id)?.inactive_users || 0,
-    admin_users: shopUserStats.get(shop.id)?.admin_users || 0,
-  }));
+  const shopRows = shops.map(shop => {
+    const suspension = suspensionByShopId.get(shop.id);
+    return {
+      id: shop.id,
+      name: shop.name || 'Unnamed Shop',
+      plan: shop.plan || 'free',
+      created_at: shop.created_at || null,
+      plan_expires_at: shop.plan_expires_at || null,
+      total_users: shopUserStats.get(shop.id)?.total_users || 0,
+      active_users: shopUserStats.get(shop.id)?.active_users || 0,
+      inactive_users: shopUserStats.get(shop.id)?.inactive_users || 0,
+      admin_users: shopUserStats.get(shop.id)?.admin_users || 0,
+      suspended: !!suspension?.suspended,
+      suspended_at: suspension?.updated_at || null,
+      suspension_reason: suspension?.reason || null,
+      suspended_by: suspension?.changed_by || null,
+      suspended_by_name: suspension?.changed_by ? (userNameById.get(suspension.changed_by) || null) : null,
+    };
+  });
 
   const nonOwnerUsers = users.filter(user => !user.is_owner);
   const shopAdminUsers = nonOwnerUsers.filter(user => user.role === 'Admin' && user.shop_id);
   const staffAccounts = nonOwnerUsers.filter(user => ['Mechanic', 'Service Advisor', 'Parts Manager'].includes(String(user.role || '')));
   const paidShops = shopRows.filter(shop => shop.plan === 'pro');
-  const activeShops = shopRows.filter(shop => shop.active_users > 0);
-  const inactiveOrEmptyShops = shopRows.filter(shop => shop.active_users === 0);
+  const suspendedShops = shopRows.filter(shop => shop.suspended);
+  const activeShops = shopRows.filter(shop => shop.active_users > 0 && !shop.suspended);
+  const inactiveOrEmptyShops = shopRows.filter(shop => shop.active_users === 0 || shop.suspended);
   const totalActiveSessions = sessionStates.filter(session => session.active).length;
   const activeUsers = users.filter(user => user.active).length;
   const inactiveUsers = users.length - activeUsers;
   const starterShops = shopRows.filter(shop => (shop.plan || 'free') !== 'pro').length;
   const proShops = shopRows.filter(shop => shop.plan === 'pro').length;
+  const ownerAuditLog = (ownerAuditLogsRes.data || []).map(row => {
+    const changes = parseChanges(row.changes) as Record<string, unknown>;
+    const targetType = changes?.target_type ? String(changes.target_type) : null;
+    const targetId = changes?.target_id ? String(changes.target_id) : String(row.record_id || '');
+    const resolvedShopId = changes?.shop_id
+      ? String(changes.shop_id)
+      : (targetType === 'shop' ? targetId : null);
+    const resolvedShopName = resolvedShopId
+      ? (shopById.get(resolvedShopId)?.name || null)
+      : (changes?.shop_name ? String(changes.shop_name) : null);
+    const targetName = changes?.target_name
+      ? String(changes.target_name)
+      : (resolvedShopName || targetId || 'Unknown target');
+
+    return {
+      id: row.id,
+      action: String(row.action || ''),
+      action_label: actionLabel(String(row.action || '')),
+      created_at: row.created_at ? String(row.created_at) : null,
+      actor_id: row.changed_by ? String(row.changed_by) : null,
+      actor_name: row.changed_by ? (userNameById.get(String(row.changed_by)) || 'Platform Owner') : 'Platform Owner',
+      target_type: targetType,
+      target_id: targetId || null,
+      target_name: targetName,
+      shop_id: resolvedShopId,
+      shop_name: resolvedShopName,
+      reason: changes?.reason ? String(changes.reason) : null,
+      parsed_changes: changes,
+    };
+  });
 
   return {
     summary: {
@@ -313,6 +425,7 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
       total_staff_accounts: staffAccounts.length,
       active_shops: activeShops.length,
       inactive_or_empty_shops: inactiveOrEmptyShops.length,
+      suspended_shops: suspendedShops.length,
       paid_shops: paidShops.length,
       active_sessions: totalActiveSessions,
       signed_in_users: signedInUsers.length,
@@ -320,12 +433,16 @@ async function getOverview(adminClient: ReturnType<typeof createClient>) {
     },
     users,
     signed_in_users: signedInUsers,
+    owner_audit_log: ownerAuditLog,
     shops: shopRows,
     generated_at: new Date().toISOString(),
   };
 }
 
-async function revokeUserSessions(adminClient: ReturnType<typeof createClient>, ownerId: string, targetUserId: string) {
+async function revokeActiveSessions(adminClient: ReturnType<typeof createClient>, ownerId: string, targetUserIds: string[]) {
+  const ids = [...new Set(targetUserIds.map(value => String(value || '').trim()).filter(Boolean))];
+  if (!ids.length) return 0;
+
   const { data: rows, error } = await adminClient
     .from('audit_logs')
     .select('record_id, changed_by, action, created_at, changes')
@@ -334,14 +451,15 @@ async function revokeUserSessions(adminClient: ReturnType<typeof createClient>, 
 
   if (error) throw new Error(error.message);
 
+  const idSet = new Set(ids);
   const sessions = buildSessionStates(rows || []);
   const targetSessionIds = sessions
-    .filter(session => session.userId === targetUserId && session.active)
+    .filter(session => session.userId && idSet.has(session.userId) && session.active)
     .map(session => session.sessionId);
 
   if (!targetSessionIds.length) return 0;
 
-  const revokeRows = targetSessionIds.map(sessionId => ({
+  await insertAuditRows(adminClient, targetSessionIds.map(sessionId => ({
     table_name: SESSION_TABLE,
     record_id: sessionId,
     action: ACTION_REVOKE,
@@ -350,18 +468,29 @@ async function revokeUserSessions(adminClient: ReturnType<typeof createClient>, 
       revoked_at: new Date().toISOString(),
       revoked_by_owner: true,
     }),
-  }));
-
-  const { error: insertError } = await adminClient.from('audit_logs').insert(revokeRows);
-  if (insertError) throw new Error(insertError.message);
+  })));
 
   return targetSessionIds.length;
+}
+
+async function logOwnerAction(adminClient: ReturnType<typeof createClient>, ownerId: string, action: string, recordId: string, changes: Record<string, unknown>) {
+  await insertAuditRows(adminClient, [{
+    table_name: PLATFORM_AUDIT_TABLE,
+    record_id: recordId,
+    action,
+    changed_by: ownerId,
+    changes: JSON.stringify(changes),
+  }]);
+}
+
+async function revokeUserSessions(adminClient: ReturnType<typeof createClient>, ownerId: string, targetUserId: string) {
+  return revokeActiveSessions(adminClient, ownerId, [targetUserId]);
 }
 
 async function updateUserActive(adminClient: ReturnType<typeof createClient>, ownerId: string, targetUserId: string, active: boolean) {
   const { data: profile, error: profileError } = await adminClient
     .from('profiles')
-    .select('id, email, role, full_name, active')
+    .select('id, email, role, full_name, active, shop_id')
     .eq('id', targetUserId)
     .maybeSingle();
 
@@ -372,6 +501,10 @@ async function updateUserActive(adminClient: ReturnType<typeof createClient>, ow
   if (authUserError) throw new Error(authUserError.message);
   if (isPlatformOwner(authUserRes?.user || null, profile)) throw new Error('Owner accounts cannot be changed from this panel.');
 
+  const { data: shop } = profile.shop_id
+    ? await adminClient.from('shops').select('name').eq('id', profile.shop_id).maybeSingle()
+    : { data: null };
+
   const { error: updateError } = await adminClient
     .from('profiles')
     .update({ active })
@@ -380,12 +513,224 @@ async function updateUserActive(adminClient: ReturnType<typeof createClient>, ow
   if (updateError) throw new Error(updateError.message);
 
   const revokedSessions = active ? 0 : await revokeUserSessions(adminClient, ownerId, targetUserId);
+  const auditAction = active ? PLATFORM_USER_REACTIVATE_ACTION : PLATFORM_USER_DEACTIVATE_ACTION;
+
+  await logOwnerAction(adminClient, ownerId, auditAction, targetUserId, {
+    target_type: 'user',
+    target_id: targetUserId,
+    target_name: profile.full_name || profile.email || targetUserId,
+    target_email: profile.email || null,
+    shop_id: profile.shop_id || null,
+    shop_name: shop?.name || null,
+    active,
+    revoked_sessions: revokedSessions,
+  });
 
   return {
     success: true,
     user_id: targetUserId,
     active,
     revoked_sessions: revokedSessions,
+  };
+}
+
+async function setShopSuspended(adminClient: ReturnType<typeof createClient>, ownerId: string, shopId: string, suspended: boolean, reason = '') {
+  const { data: shop, error: shopError } = await adminClient
+    .from('shops')
+    .select('id, name, plan, created_at, plan_expires_at')
+    .eq('id', shopId)
+    .maybeSingle();
+
+  if (shopError) throw new Error(shopError.message);
+  if (!shop) throw new Error('Shop not found.');
+
+  const { data: profiles, error: profilesError } = await adminClient
+    .from('profiles')
+    .select('id, full_name, role, email, active')
+    .eq('shop_id', shopId);
+
+  if (profilesError) throw new Error(profilesError.message);
+
+  const staffProfiles = (profiles || []).filter(profile => !isPlatformOwner(null, profile));
+  const revokedSessions = suspended
+    ? await revokeActiveSessions(adminClient, ownerId, staffProfiles.map(profile => String(profile.id)))
+    : 0;
+
+  const action = suspended ? SHOP_SUSPEND_ACTION : SHOP_UNSUSPEND_ACTION;
+  const changes = {
+    target_type: 'shop',
+    target_id: shopId,
+    target_name: shop.name || 'Unnamed Shop',
+    shop_id: shopId,
+    shop_name: shop.name || 'Unnamed Shop',
+    reason: reason ? String(reason).trim() : null,
+    suspended,
+    affected_users: staffProfiles.length,
+    revoked_sessions: revokedSessions,
+  };
+
+  await insertAuditRows(adminClient, [{
+    table_name: 'shops',
+    record_id: shopId,
+    action,
+    changed_by: ownerId,
+    changes: JSON.stringify(changes),
+  }]);
+
+  await logOwnerAction(adminClient, ownerId, action, shopId, changes);
+
+  return {
+    success: true,
+    shop_id: shopId,
+    suspended,
+    revoked_sessions: revokedSessions,
+  };
+}
+
+async function countRows(queryPromise: Promise<{ count: number | null; error: { message: string } | null }>) {
+  const { count, error } = await queryPromise;
+  if (error) throw new Error(error.message);
+  return count || 0;
+}
+
+async function getShopDetail(adminClient: ReturnType<typeof createClient>, shopId: string) {
+  const { data: shop, error: shopError } = await adminClient
+    .from('shops')
+    .select('id, name, address, phone, email, plan, created_at, plan_expires_at')
+    .eq('id', shopId)
+    .maybeSingle();
+
+  if (shopError) throw new Error(shopError.message);
+  if (!shop) throw new Error('Shop not found.');
+
+  const [profilesRes, shopStatusLogsRes, sessionLogsRes, recentOwnerActionsRes, customerCount, workOrderCount, invoiceCount, appointmentCount, inventoryCount, supplierCount, purchaseOrderCount, unreadNotificationCount] = await Promise.all([
+    adminClient.from('profiles').select('id, full_name, role, email, active').eq('shop_id', shopId).order('full_name'),
+    adminClient.from('audit_logs')
+      .select('record_id, changed_by, action, created_at, changes')
+      .eq('table_name', 'shops')
+      .eq('record_id', shopId)
+      .in('action', [SHOP_SUSPEND_ACTION, SHOP_UNSUSPEND_ACTION])
+      .order('created_at', { ascending: false }),
+    adminClient.from('audit_logs')
+      .select('record_id, changed_by, action, created_at, changes')
+      .eq('table_name', SESSION_TABLE)
+      .order('created_at', { ascending: false }),
+    adminClient.from('audit_logs')
+      .select('id, record_id, changed_by, action, created_at, changes')
+      .eq('table_name', PLATFORM_AUDIT_TABLE)
+      .order('created_at', { ascending: false })
+      .limit(20),
+    countRows(adminClient.from('customers').select('id', { count: 'exact', head: true }).eq('shop_id', shopId)),
+    countRows(adminClient.from('work_orders').select('id', { count: 'exact', head: true }).eq('shop_id', shopId)),
+    countRows(adminClient.from('invoices').select('id', { count: 'exact', head: true }).eq('shop_id', shopId)),
+    countRows(adminClient.from('appointments').select('id', { count: 'exact', head: true }).eq('shop_id', shopId)),
+    countRows(adminClient.from('inventory').select('id', { count: 'exact', head: true }).eq('shop_id', shopId)),
+    countRows(adminClient.from('suppliers').select('id', { count: 'exact', head: true }).eq('shop_id', shopId)),
+    countRows(adminClient.from('purchase_orders').select('id', { count: 'exact', head: true }).eq('shop_id', shopId)),
+    countRows(adminClient.from('notifications').select('id', { count: 'exact', head: true }).eq('shop_id', shopId).eq('read', false)),
+  ]);
+
+  if (profilesRes.error) throw new Error(profilesRes.error.message);
+  if (shopStatusLogsRes.error) throw new Error(shopStatusLogsRes.error.message);
+  if (sessionLogsRes.error) throw new Error(sessionLogsRes.error.message);
+  if (recentOwnerActionsRes.error) throw new Error(recentOwnerActionsRes.error.message);
+
+  const staffProfiles = profilesRes.data || [];
+  const staffIds = staffProfiles.map(profile => String(profile.id));
+  const authUsers = await listAllAuthUsers(adminClient);
+  const authUserById = new Map(authUsers.map(user => [user.id, user]));
+  const sessionStates = buildSessionStates(sessionLogsRes.data || []);
+  const sessionSummaryByUser = buildActiveSessionSummaryByUser(sessionStates);
+  const suspensionState = buildShopSuspensionMap(shopStatusLogsRes.data || []).get(shopId) || {
+    suspended: false,
+    action: null,
+    updated_at: null,
+    changed_by: null,
+    reason: null,
+  };
+
+  const staff = staffProfiles
+    .map(profile => {
+      const authUser = authUserById.get(profile.id);
+      const sessionSummary = sessionSummaryByUser.get(profile.id);
+      return {
+        id: profile.id,
+        full_name: profile.full_name || profile.email || 'Unknown User',
+        email: profile.email || null,
+        role: isPlatformOwner(authUser || null, profile) ? 'Owner' : (profile.role || 'User'),
+        active: profile.active !== false,
+        last_sign_in_at: authUser?.last_sign_in_at || null,
+        session_count: sessionSummary?.session_count || 0,
+        last_active_at: sessionSummary?.last_active_at || null,
+      };
+    })
+    .sort((a, b) => String(a.full_name || '').localeCompare(String(b.full_name || '')));
+
+  const userNameById = new Map(staff.map(profile => [profile.id, profile.full_name || profile.email || 'Unknown User']));
+  let recentShopActivity: Array<Record<string, unknown>> = [];
+  if (staffIds.length) {
+    const { data: activityRows, error: activityError } = await adminClient
+      .from('audit_logs')
+      .select('id, table_name, record_id, action, changed_by, changes, created_at')
+      .in('changed_by', staffIds)
+      .neq('table_name', SESSION_TABLE)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    if (activityError) throw new Error(activityError.message);
+    recentShopActivity = (activityRows || []).map(row => ({
+      id: row.id,
+      table_name: row.table_name,
+      record_id: row.record_id,
+      action: row.action,
+      created_at: row.created_at,
+      actor_id: row.changed_by,
+      actor_name: row.changed_by ? (userNameById.get(String(row.changed_by)) || 'Unknown User') : 'Unknown User',
+      parsed_changes: parseChanges(row.changes),
+    }));
+  }
+
+  const recentOwnerActions = (recentOwnerActionsRes.data || [])
+    .map(row => {
+      const changes = parseChanges(row.changes) as Record<string, unknown>;
+      const targetShopId = changes?.shop_id ? String(changes.shop_id) : (changes?.target_type === 'shop' ? String(changes?.target_id || row.record_id || '') : null);
+      if (targetShopId !== shopId) return null;
+      return {
+        id: row.id,
+        action: String(row.action || ''),
+        action_label: actionLabel(String(row.action || '')),
+        created_at: row.created_at ? String(row.created_at) : null,
+        actor_id: row.changed_by ? String(row.changed_by) : null,
+        actor_name: row.changed_by ? (userNameById.get(String(row.changed_by)) || 'Platform Owner') : 'Platform Owner',
+        target_name: changes?.target_name ? String(changes.target_name) : (shop.name || 'Unnamed Shop'),
+        reason: changes?.reason ? String(changes.reason) : null,
+        parsed_changes: changes,
+      };
+    })
+    .filter(Boolean);
+
+  return {
+    shop: {
+      ...shop,
+      suspended: !!suspensionState.suspended,
+      suspended_at: suspensionState.updated_at || null,
+      suspension_reason: suspensionState.reason || null,
+    },
+    metrics: {
+      staff_accounts: staff.length,
+      active_staff: staff.filter(profile => profile.active).length,
+      signed_in_users: staff.filter(profile => (profile.session_count || 0) > 0).length,
+      customers: customerCount,
+      work_orders: workOrderCount,
+      invoices: invoiceCount,
+      appointments: appointmentCount,
+      inventory_items: inventoryCount,
+      suppliers: supplierCount,
+      purchase_orders: purchaseOrderCount,
+      unread_notifications: unreadNotificationCount,
+    },
+    staff,
+    recent_activity: recentShopActivity,
+    recent_owner_actions: recentOwnerActions,
   };
 }
 
@@ -407,6 +752,12 @@ Deno.serve(async (req) => {
       return json(await getOverview(adminClient));
     }
 
+    if (action === 'shop_detail') {
+      const shopId = String(body?.shop_id || '').trim();
+      if (!shopId) return json({ error: 'shop_id is required' }, 400);
+      return json(await getShopDetail(adminClient, shopId));
+    }
+
     if (action === 'set_user_active') {
       const userId = String(body?.user_id || '').trim();
       if (!userId) return json({ error: 'user_id is required' }, 400);
@@ -421,7 +772,7 @@ Deno.serve(async (req) => {
       if (authUserError) throw new Error(authUserError.message);
       const { data: profile } = await adminClient
         .from('profiles')
-        .select('email, role')
+        .select('email, full_name, role, shop_id')
         .eq('id', userId)
         .maybeSingle();
       if (isPlatformOwner(authUserRes?.user || null, profile || null)) {
@@ -429,7 +780,25 @@ Deno.serve(async (req) => {
       }
 
       const revokedCount = await revokeUserSessions(adminClient, user.id, userId);
+      const { data: shop } = profile?.shop_id
+        ? await adminClient.from('shops').select('name').eq('id', profile.shop_id).maybeSingle()
+        : { data: null };
+      await logOwnerAction(adminClient, user.id, PLATFORM_REVOKE_USER_SESSIONS_ACTION, userId, {
+        target_type: 'user',
+        target_id: userId,
+        target_name: profile?.full_name || profile?.email || userId,
+        target_email: profile?.email || null,
+        shop_id: profile?.shop_id || null,
+        shop_name: shop?.name || null,
+        revoked_sessions: revokedCount,
+      });
       return json({ success: true, user_id: userId, revoked_sessions: revokedCount });
+    }
+
+    if (action === 'set_shop_suspended') {
+      const shopId = String(body?.shop_id || '').trim();
+      if (!shopId) return json({ error: 'shop_id is required' }, 400);
+      return json(await setShopSuspended(adminClient, user.id, shopId, !!body?.suspended, String(body?.reason || '').trim()));
     }
 
     return json({ error: 'Unsupported action' }, 400);

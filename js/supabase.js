@@ -29,7 +29,10 @@ const SESSION_ID_STORAGE_KEY = 'gs_device_session_id';
 const SESSION_STARTED_STORAGE_KEY = 'gs_device_session_started';
 const SESSION_HEARTBEAT_INTERVAL_MS = 60 * 1000;
 const SESSION_ACTIVE_WINDOW_MS = 3 * 60 * 1000;
+const SHOP_STATUS_CACHE_TTL_MS = 30 * 1000;
 const PLATFORM_OWNER_EMAILS = ['abbassani94@gmail.com'];
+const SHOP_SUSPEND_ACTION = 'SHOP_SUSPEND';
+const SHOP_UNSUSPEND_ACTION = 'SHOP_UNSUSPEND';
 
 function _normalizedOwnerEmails() {
   return PLATFORM_OWNER_EMAILS
@@ -111,9 +114,17 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
    Cache is cleared on sign-out so switching accounts works cleanly.
    ================================================================= */
 let _cachedShopId = null;
+let _cachedShopStatus = {
+  shopId: null,
+  fetchedAt: 0,
+  state: null,
+};
 
 async function _shopId() {
-  if (_cachedShopId) return _cachedShopId;
+  if (_cachedShopId) {
+    await _enforceShopStatusForCurrentSession(_cachedShopId);
+    return _cachedShopId;
+  }
 
   const { data: { user: authUser } } = await sb.auth.getUser();
   if (!authUser) throw new Error('Not authenticated');
@@ -128,12 +139,90 @@ async function _shopId() {
   const shopId = rows[0].shop_id;
   if (!shopId) throw new Error('Your account is not linked to a shop yet. Please complete registration.');
 
+  await _enforceShopStatusForCurrentSession(shopId, true);
   _cachedShopId = shopId;
   return _cachedShopId;
 }
 
 function _clearShopCache() {
   _cachedShopId = null;
+  _cachedShopStatus = { shopId: null, fetchedAt: 0, state: null };
+}
+
+async function _getShopStatus(shopId, force = false) {
+  const normalizedId = String(shopId || '').trim();
+  if (!normalizedId) {
+    return {
+      suspended: false,
+      action: null,
+      updated_at: null,
+      reason: null,
+    };
+  }
+
+  if (
+    !force
+    && _cachedShopStatus.shopId === normalizedId
+    && _cachedShopStatus.state
+    && (Date.now() - _cachedShopStatus.fetchedAt) < SHOP_STATUS_CACHE_TTL_MS
+  ) {
+    return _cachedShopStatus.state;
+  }
+
+  const { data, error } = await sb.from('audit_logs')
+    .select('action, changes, created_at')
+    .eq('table_name', 'shops')
+    .eq('record_id', normalizedId)
+    .in('action', [SHOP_SUSPEND_ACTION, SHOP_UNSUSPEND_ACTION])
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+
+  const row = data?.[0] || null;
+  const parsed = row ? (() => {
+    try { return typeof row.changes === 'object' ? row.changes : JSON.parse(row.changes || '{}'); }
+    catch { return {}; }
+  })() : {};
+
+  const state = {
+    suspended: !!row && row.action === SHOP_SUSPEND_ACTION,
+    action: row?.action || null,
+    updated_at: row?.created_at || null,
+    reason: parsed?.reason ? String(parsed.reason) : null,
+  };
+
+  _cachedShopStatus = {
+    shopId: normalizedId,
+    fetchedAt: Date.now(),
+    state,
+  };
+
+  return state;
+}
+
+async function _enforceShopStatusForCurrentSession(shopId, force = false) {
+  const normalizedId = String(shopId || '').trim();
+  if (!normalizedId) return;
+
+  const { data: { user: sessionUser } } = await sb.auth.getUser();
+  if (!sessionUser || _isPlatformOwnerRecord(sessionUser)) return;
+
+  const state = await _getShopStatus(normalizedId, force);
+  if (!state?.suspended) return;
+
+  _setLoginNotice('shop_suspended');
+  try {
+    if (typeof Auth !== 'undefined' && Auth?.signOut) {
+      await Auth.signOut({ reason: 'shop_suspended' });
+    } else {
+      _clearShopCache();
+      await sb.auth.signOut();
+      _clearLegacySupabaseStorage();
+    }
+  } catch {}
+
+  throw new Error('This shop has been suspended by the platform owner. Contact support to restore access.');
 }
 
 const SessionSecurity = (() => {
@@ -645,6 +734,60 @@ const SessionRegistry = (() => {
    ================================================================= */
 const Auth = (() => {
 
+  function _fallbackProfile(sessionUser) {
+    return _decoratePlatformOwner({
+      id: sessionUser.id,
+      full_name: sessionUser.user_metadata?.full_name || sessionUser.email.split('@')[0],
+      role: sessionUser.user_metadata?.role || 'Admin',
+      shop_id: null,
+      email: sessionUser.email,
+    }, sessionUser);
+  }
+
+  async function _resolveUser(sessionUser, options = {}) {
+    const {
+      signOutOnSuspended = true,
+      throwOnSuspended = false,
+      forceShopStatusRefresh = false,
+    } = options;
+
+    const { data: rows, error } = await sb.from('profiles')
+      .select('id, full_name, role, email, shop_id, avatar_url, speciality, active')
+      .eq('id', sessionUser.id)
+      .limit(1);
+
+    const profile = rows?.[0] || null;
+    let user = profile ? _decoratePlatformOwner(profile, sessionUser) : _fallbackProfile(sessionUser);
+
+    if (error || !profile) return user;
+
+    if (user.shop_id) {
+      _cachedShopId = user.shop_id;
+      const ownerUser = _isPlatformOwnerRecord(user, user);
+      const [{ data: shop }, shopStatus] = await Promise.all([
+        sb.from('shops').select('name').eq('id', user.shop_id).single(),
+        ownerUser ? Promise.resolve({ suspended: false, action: null, updated_at: null, reason: null }) : _getShopStatus(user.shop_id, forceShopStatusRefresh),
+      ]);
+
+      user.shop_name = shop?.name || null;
+      user.shop_suspended = !!shopStatus?.suspended;
+      user.shop_suspended_at = shopStatus?.updated_at || null;
+      user.shop_suspension_reason = shopStatus?.reason || null;
+
+      if (shopStatus?.suspended && !ownerUser) {
+        if (signOutOnSuspended) {
+          await signOut({ reason: 'shop_suspended' });
+        }
+        if (throwOnSuspended) {
+          throw new Error('This shop has been suspended by the platform owner. Contact support to restore access.');
+        }
+        return null;
+      }
+    }
+
+    return user;
+  }
+
   async function signIn(email, password) {
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) throw error;
@@ -652,6 +795,14 @@ const Auth = (() => {
     _setLoginNotice(null);
     SessionSecurity.start();
     await SessionRegistry.start();
+    const session = data?.session || (await sb.auth.getSession()).data.session;
+    if (session?.user) {
+      await _resolveUser(session.user, {
+        signOutOnSuspended: true,
+        throwOnSuspended: true,
+        forceShopStatusRefresh: true,
+      });
+    }
     return data;
   }
 
@@ -678,7 +829,7 @@ const Auth = (() => {
     _clearShopCache();
     await SessionRegistry.stop(reason || 'signed_out');
     SessionSecurity.stop();
-    _setLoginNotice(reason === 'timeout' ? 'timeout' : null);
+    _setLoginNotice(reason === 'timeout' || reason === 'shop_suspended' ? reason : null);
     await sb.auth.signOut();
     _clearLegacySupabaseStorage();
   }
@@ -699,31 +850,11 @@ const Auth = (() => {
   async function getUser() {
     const session = await getSession();
     if (!session) return null;
-
-    const { data: rows, error } = await sb.from('profiles')
-      .select('id, full_name, role, email, shop_id, avatar_url, speciality, active')
-      .eq('id', session.user.id)
-      .limit(1);
-
-    const profile = rows?.[0] || null;
-    if (error || !profile) {
-      return _decoratePlatformOwner({
-        id: session.user.id,
-        full_name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
-        role: session.user.user_metadata?.role || 'Admin',
-        shop_id: null,
-        email: session.user.email,
-      }, session.user);
-    }
-
-    if (profile.shop_id) {
-      _cachedShopId = profile.shop_id; // prime cache
-      const { data: shop } = await sb.from('shops')
-        .select('name').eq('id', profile.shop_id).single();
-      profile.shop_name = shop?.name || null;
-    }
-
-    return _decoratePlatformOwner(profile, session.user);
+    return _resolveUser(session.user, {
+      signOutOnSuspended: true,
+      throwOnSuspended: false,
+      forceShopStatusRefresh: true,
+    });
   }
 
   async function resetPassword(email) {
@@ -2359,6 +2490,12 @@ const GS = (() => {
     return _invokePlatformAdmin('overview');
   }
 
+  async function getPlatformAdminShopDetail(shopId) {
+    return _invokePlatformAdmin('shop_detail', {
+      shop_id: shopId,
+    });
+  }
+
   async function setPlatformUserActive(userId, active) {
     return _invokePlatformAdmin('set_user_active', {
       user_id: userId,
@@ -2369,6 +2506,14 @@ const GS = (() => {
   async function revokePlatformUserSessions(userId) {
     return _invokePlatformAdmin('revoke_user_sessions', {
       user_id: userId,
+    });
+  }
+
+  async function setPlatformShopSuspended(shopId, suspended, reason = '') {
+    return _invokePlatformAdmin('set_shop_suspended', {
+      shop_id: shopId,
+      suspended: !!suspended,
+      reason: reason || '',
     });
   }
 
@@ -2393,7 +2538,7 @@ const GS = (() => {
     getStaff, updateProfile,
     getShopActivity, logPageView, logActivity,
     getSettings, updateSettings, resetDemoData,
-    getPlatformAdminOverview, setPlatformUserActive, revokePlatformUserSessions,
+    getPlatformAdminOverview, getPlatformAdminShopDetail, setPlatformUserActive, revokePlatformUserSessions, setPlatformShopSuspended,
   };
 })();
 
