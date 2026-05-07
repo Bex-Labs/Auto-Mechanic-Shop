@@ -9,7 +9,7 @@ const corsHeaders = {
 const SESSION_TABLE = 'auth_sessions';
 const ACTION_REVOKE = 'SESSION_REVOKE';
 const ACTIVE_ACTIONS = new Set(['SESSION_START', 'SESSION_HEARTBEAT', 'SESSION_END']);
-const ACTIVE_SESSION_WINDOW_MS = 3 * 60 * 1000;
+const ACTIVE_SESSION_WINDOW_MS = 35 * 60 * 1000;
 
 function json(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {

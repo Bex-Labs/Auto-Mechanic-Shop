@@ -490,7 +490,7 @@ function renderStats() {
     ['Shop Admins', summary.total_shop_admins || 0, `${summary.total_shops || 0} total shops on the platform`],
     ['Active Shops', summary.active_shops || 0, `${summary.inactive_or_empty_shops || 0} inactive or empty shops`],
     ['Paid Shops', summary.paid_shops || 0, `${summary.starter_shops || 0} still on Starter`],
-    ['Staff Accounts', summary.total_staff_accounts || 0, `${summary.active_sessions || 0} live sessions right now`],
+    ['Staff Accounts', summary.total_staff_accounts || 0, `${summary.active_sessions || 0} sessions active in last 30 mins`],
   ];
   document.getElementById('ownerStats').innerHTML = cards.map(([label, value, sub]) => `
     <div class="owner-stat">
