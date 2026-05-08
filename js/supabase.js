@@ -2527,6 +2527,12 @@ const GS = (() => {
     });
   }
 
+  async function deletePlatformUser(userId) {
+    return _invokePlatformAdmin('delete_user', {
+      user_id: userId,
+    });
+  }
+
   async function setPlatformShopSuspended(shopId, suspended, reason = '') {
     return _invokePlatformAdmin('set_shop_suspended', {
       shop_id: shopId,
@@ -2581,7 +2587,7 @@ const GS = (() => {
     getShopActivity, logPageView, logActivity,
     getSettings, updateSettings, resetDemoData,
     getPlatformAdminOverview, getPlatformAdminShopDetail, setPlatformUserActive, revokePlatformUserSessions, setPlatformShopSuspended,
-    setPlatformShopPlan, extendPlatformShopPlan, sendPlatformBroadcast,
+    setPlatformShopPlan, extendPlatformShopPlan, sendPlatformBroadcast, deletePlatformUser,
   };
 })();
 

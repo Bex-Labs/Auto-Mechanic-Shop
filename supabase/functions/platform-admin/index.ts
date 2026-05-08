@@ -25,6 +25,7 @@ const SHOP_UNSUSPEND_ACTION = 'SHOP_UNSUSPEND';
 const PLATFORM_USER_DEACTIVATE_ACTION = 'PLATFORM_USER_DEACTIVATE';
 const PLATFORM_USER_REACTIVATE_ACTION = 'PLATFORM_USER_REACTIVATE';
 const PLATFORM_REVOKE_USER_SESSIONS_ACTION = 'PLATFORM_REVOKE_USER_SESSIONS';
+const PLATFORM_USER_DELETE_ACTION = 'PLATFORM_USER_DELETE';
 const SHOP_PLAN_UPDATE_ACTION = 'SHOP_PLAN_UPDATE';
 const SHOP_PLAN_EXTEND_ACTION = 'SHOP_PLAN_EXTEND';
 const PLATFORM_BROADCAST_ACTION = 'PLATFORM_BROADCAST';
@@ -257,6 +258,7 @@ function actionLabel(action: string) {
     case PLATFORM_USER_DEACTIVATE_ACTION: return 'Deactivated user';
     case PLATFORM_USER_REACTIVATE_ACTION: return 'Reactivated user';
     case PLATFORM_REVOKE_USER_SESSIONS_ACTION: return 'Forced sign-out';
+    case PLATFORM_USER_DELETE_ACTION: return 'Deleted user permanently';
     case SHOP_PLAN_UPDATE_ACTION: return 'Updated shop plan';
     case SHOP_PLAN_EXTEND_ACTION: return 'Extended plan expiry';
     case PLATFORM_BROADCAST_ACTION: return 'Sent platform notice';
@@ -739,6 +741,72 @@ async function updateUserActive(adminClient: ReturnType<typeof createClient>, ow
     user_id: targetUserId,
     active,
     revoked_sessions: revokedSessions,
+  };
+}
+
+async function deletePlatformUser(adminClient: ReturnType<typeof createClient>, ownerId: string, targetUserId: string) {
+  const { data: profile, error: profileError } = await adminClient
+    .from('profiles')
+    .select('id, email, role, full_name, active, shop_id')
+    .eq('id', targetUserId)
+    .maybeSingle();
+
+  if (profileError) throw new Error(profileError.message);
+
+  const { data: authUserRes, error: authUserError } = await adminClient.auth.admin.getUserById(targetUserId);
+  if (authUserError && profile) throw new Error(authUserError.message);
+  if (isPlatformOwner(authUserRes?.user || null, profile || null)) {
+    throw new Error('Owner accounts cannot be deleted from this panel.');
+  }
+
+  const { data: shop } = profile?.shop_id
+    ? await adminClient.from('shops').select('name').eq('id', profile.shop_id).maybeSingle()
+    : { data: null };
+
+  const revokedSessions = await revokeUserSessions(adminClient, ownerId, targetUserId);
+
+  if (profile?.shop_id) {
+    const [workOrdersUpdate, appointmentsUpdate, invitesDelete] = await Promise.all([
+      adminClient.from('work_orders').update({ mechanic_id: null }).eq('mechanic_id', targetUserId).eq('shop_id', profile.shop_id),
+      adminClient.from('appointments').update({ mechanic_id: null }).eq('mechanic_id', targetUserId).eq('shop_id', profile.shop_id),
+      adminClient.from('staff_invites').delete().eq('invited_by', targetUserId).eq('shop_id', profile.shop_id),
+    ]);
+    if (workOrdersUpdate.error) throw new Error(workOrdersUpdate.error.message);
+    if (appointmentsUpdate.error) throw new Error(appointmentsUpdate.error.message);
+    if (invitesDelete.error) throw new Error(invitesDelete.error.message);
+  }
+
+  const [notificationsDelete, auditDelete, profileDelete] = await Promise.all([
+    adminClient.from('notifications').delete().eq('for_user_id', targetUserId),
+    adminClient.from('audit_logs').delete().eq('changed_by', targetUserId),
+    adminClient.from('profiles').delete().eq('id', targetUserId),
+  ]);
+
+  if (notificationsDelete.error) throw new Error(notificationsDelete.error.message);
+  if (auditDelete.error) throw new Error(auditDelete.error.message);
+  if (profileDelete.error) throw new Error(profileDelete.error.message);
+
+  if (authUserRes?.user) {
+    const { error: deleteUserError } = await adminClient.auth.admin.deleteUser(targetUserId);
+    if (deleteUserError) throw new Error(deleteUserError.message);
+  }
+
+  await logOwnerAction(adminClient, ownerId, PLATFORM_USER_DELETE_ACTION, targetUserId, {
+    target_type: 'user',
+    target_id: targetUserId,
+    target_name: profile?.full_name || profile?.email || authUserRes?.user?.email || targetUserId,
+    target_email: profile?.email || authUserRes?.user?.email || null,
+    shop_id: profile?.shop_id || null,
+    shop_name: shop?.name || null,
+    revoked_sessions: revokedSessions,
+    deleted: true,
+  });
+
+  return {
+    success: true,
+    user_id: targetUserId,
+    revoked_sessions: revokedSessions,
+    deleted: true,
   };
 }
 
@@ -1294,6 +1362,12 @@ Deno.serve(async (req) => {
         revoked_sessions: revokedCount,
       });
       return json({ success: true, user_id: userId, revoked_sessions: revokedCount });
+    }
+
+    if (action === 'delete_user') {
+      const userId = String(body?.user_id || '').trim();
+      if (!userId) return json({ error: 'user_id is required' }, 400);
+      return json(await deletePlatformUser(adminClient, user.id, userId));
     }
 
     if (action === 'set_shop_suspended') {

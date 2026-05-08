@@ -1185,6 +1185,7 @@ function renderUserTable() {
             ? `<button class="app-btn app-btn-danger app-btn-xs" onclick="togglePlatformUser('${escapeHtml(user.id)}', false, this)">Deactivate</button>`
             : `<button class="app-btn app-btn-primary app-btn-xs" onclick="togglePlatformUser('${escapeHtml(user.id)}', true, this)">Reactivate</button>`}
           <button class="app-btn app-btn-ghost app-btn-xs" onclick="forcePlatformSignOut('${escapeHtml(user.id)}', this)">Force Sign Out</button>
+          <button class="app-btn app-btn-ghost app-btn-xs" style="color:var(--danger)" onclick="deletePlatformUserAccount('${escapeHtml(user.id)}', '${escapeHtml(user.full_name || user.email || 'This user')}', this)">Delete</button>
         </div>`;
 
     return `
@@ -1385,6 +1386,12 @@ function renderShopDetail() {
                 <div style="text-align:right">
                   ${statusBadge(!!member.active, false)}
                   <div class="owner-user-meta">${escapeHtml(member.last_sign_in_at ? `Last sign in ${fmtRelative(member.last_sign_in_at)}` : 'No sign-in yet')}</div>
+                  <div class="owner-actions" style="justify-content:flex-end;margin-top:8px">
+                    ${member.active
+                      ? `<button class="app-btn app-btn-danger app-btn-xs" onclick="togglePlatformUser('${escapeHtml(member.id)}', false, this)">Deactivate</button>`
+                      : `<button class="app-btn app-btn-primary app-btn-xs" onclick="togglePlatformUser('${escapeHtml(member.id)}', true, this)">Reactivate</button>`}
+                    <button class="app-btn app-btn-ghost app-btn-xs" style="color:var(--danger)" onclick="deletePlatformUserAccount('${escapeHtml(member.id)}', '${escapeHtml(member.full_name || member.email || 'This user')}', this, '${escapeHtml(shop.id)}')">Delete</button>
+                  </div>
                 </div>
               </div>
             `).join('') : '<div class="owner-empty">No staff linked to this shop yet.</div>'}
@@ -1653,6 +1660,44 @@ async function forcePlatformSignOut(userId, buttonEl) {
     }
     return;
   }
+  if (buttonEl) {
+    buttonEl.disabled = false;
+    buttonEl.textContent = original;
+  }
+}
+
+async function deletePlatformUserAccount(userId, userName, buttonEl, shopId = '') {
+  const label = userName || 'this user';
+  const confirmed = window.confirm(
+    `Permanently delete ${label}?\n\nThis removes their login account, profile, assigned notifications, audit trail entries created by them, and unassigns them from work orders or appointments. This cannot be undone.`
+  );
+  if (!confirmed) return;
+
+  const original = buttonEl?.textContent || 'Delete';
+  if (buttonEl) {
+    buttonEl.disabled = true;
+    buttonEl.textContent = 'Deleting…';
+  }
+
+  try {
+    const result = await GS.deletePlatformUser(userId);
+    Toast.show(
+      `User deleted permanently${result?.revoked_sessions ? ` and ${result.revoked_sessions} active session${result.revoked_sessions === 1 ? '' : 's'} revoked` : ''}`,
+      'success'
+    );
+    await loadPlatformData(true);
+    if (shopId && document.getElementById('shopDetailModal')?.classList.contains('open')) {
+      await openShopDetail(shopId);
+    }
+  } catch (err) {
+    Toast.show(err.message || 'Could not delete user', 'error');
+    if (buttonEl) {
+      buttonEl.disabled = false;
+      buttonEl.textContent = original;
+    }
+    return;
+  }
+
   if (buttonEl) {
     buttonEl.disabled = false;
     buttonEl.textContent = original;
