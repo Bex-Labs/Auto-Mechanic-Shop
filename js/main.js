@@ -4,6 +4,38 @@
    ================================================================= */
 
 /* -----------------------------------------------------------------
+   BRANDED PAGE LOADER
+   ----------------------------------------------------------------- */
+const GearShiftLoader = (() => {
+  let hideTimer = null;
+
+  function show() {
+    document.documentElement.classList.remove('gs-loader-complete');
+    document.documentElement.classList.add('gs-loader-active');
+  }
+
+  function hide() {
+    const root = document.documentElement;
+    if (!root.classList.contains('gs-loader-active')) return;
+    root.classList.add('gs-loader-complete');
+    clearTimeout(hideTimer);
+    hideTimer = window.setTimeout(() => {
+      root.classList.remove('gs-loader-active', 'gs-loader-complete');
+    }, 380);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    window.setTimeout(hide, 120);
+  }, { once: true });
+
+  window.addEventListener('load', hide, { once: true });
+
+  return { show, hide };
+})();
+
+window.GearShiftLoader = GearShiftLoader;
+
+/* -----------------------------------------------------------------
    NAV SCROLL EFFECT
    ----------------------------------------------------------------- */
 (function () {

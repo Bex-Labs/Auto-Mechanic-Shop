@@ -161,6 +161,123 @@ body {
   line-height: 1.6;
 }
 
+html.gs-loader-active,
+html.gs-loader-active body {
+  overflow: hidden;
+}
+
+html.gs-loader-active::before,
+html.gs-loader-complete::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(232, 160, 32, 0.14), transparent 24%),
+    radial-gradient(circle at 50% 62%, rgba(201, 75, 30, 0.18), transparent 34%),
+    linear-gradient(180deg, rgba(12, 13, 15, 0.95), rgba(28, 33, 40, 0.92));
+  opacity: 1;
+  transition: opacity var(--t-slow), visibility var(--t-slow);
+  pointer-events: all;
+}
+
+html.gs-loader-active::after,
+html.gs-loader-complete::after {
+  content: 'GEARSHIFT';
+  position: fixed;
+  top: calc(50% + 82px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10001;
+  font-family: var(--ff-display);
+  font-size: clamp(28px, 4vw, 44px);
+  letter-spacing: 6px;
+  color: var(--white);
+  text-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+  opacity: 1;
+  transition: opacity var(--t-slow), transform var(--t-slow);
+  pointer-events: none;
+}
+
+html.gs-loader-active body::before,
+html.gs-loader-complete body::before {
+  content: '';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 124px;
+  height: 124px;
+  transform: translate(-50%, -56%);
+  z-index: 10000;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, rgba(244, 241, 235, 0.96) 0 22px, transparent 22px),
+    radial-gradient(circle at center, rgba(15, 18, 24, 0.98) 0 34px, transparent 35px),
+    repeating-conic-gradient(
+      from 0deg,
+      var(--rust) 0 13deg,
+      rgba(255, 255, 255, 0.08) 13deg 18deg,
+      transparent 18deg 30deg
+    ),
+    radial-gradient(circle at center, rgba(232, 160, 32, 0.35) 0 58px, rgba(232, 160, 32, 0) 59px);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 18px 50px rgba(0, 0, 0, 0.35);
+  animation: gs-loader-spin 1.6s linear infinite;
+  opacity: 1;
+  transition: opacity var(--t-slow), transform var(--t-slow);
+  pointer-events: none;
+}
+
+html.gs-loader-active body::after,
+html.gs-loader-complete body::after {
+  content: 'GS';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -58%);
+  z-index: 10001;
+  font-family: var(--ff-display);
+  font-size: 52px;
+  letter-spacing: 3px;
+  color: var(--white);
+  text-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  opacity: 1;
+  transition: opacity var(--t-slow), transform var(--t-slow);
+  pointer-events: none;
+}
+
+html.gs-loader-complete::before,
+html.gs-loader-complete::after,
+html.gs-loader-complete body::before,
+html.gs-loader-complete body::after {
+  opacity: 0;
+}
+
+html.gs-loader-complete::after {
+  transform: translate(-50%, 8px);
+}
+
+html.gs-loader-complete body::before {
+  transform: translate(-50%, -56%) scale(1.08);
+}
+
+html.gs-loader-complete body::after {
+  transform: translate(-50%, -58%) scale(0.96);
+}
+
+@keyframes gs-loader-spin {
+  from { transform: translate(-50%, -56%) rotate(0deg); }
+  to { transform: translate(-50%, -56%) rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.gs-loader-active body::before,
+  html.gs-loader-complete body::before {
+    animation: none;
+  }
+}
+
 a { text-decoration: none; color: inherit; }
 img { max-width: 100%; display: block; }
 button { cursor: pointer; font-family: var(--ff-body); }
